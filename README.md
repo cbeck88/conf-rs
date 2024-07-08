@@ -18,7 +18,7 @@ First add `conf` to the dependencies in your `Cargo.toml` file:
 conf = "0.1"
 ```
 
-NOTE: Not actually published to crates.io yet...
+NOTE: Not actually published to crates.io yet... there are a few issues that should be worked out first.
 
 Then, create a `struct` which represents the configuration data your application needs to read on startup.
 This struct should derive the `Conf` trait, and the `conf` attributes should be used to describe how each field can be read.
