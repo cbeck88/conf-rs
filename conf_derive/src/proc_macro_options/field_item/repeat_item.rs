@@ -105,12 +105,14 @@ impl RepeatItem {
         &self,
         program_options_ident: &Ident,
     ) -> Result<TokenStream, syn::Error> {
-        let description = quote_opt_string(&self.description);
-        let long_form = quote_opt_string(&self.long_switch);
-        let env_form = quote_opt_string(&self.env_name);
+        let id = self.field_name.to_string();
+        let description = quote_opt_into(&self.description);
+        let long_form = quote_opt_into(&self.long_switch);
+        let env_form = quote_opt_into(&self.env_name);
 
         Ok(quote! {
             #program_options_ident.push(conf::ProgramOption {
+                id: #id.into(),
                 parse_type: conf::ParseType::Repeat,
                 description: #description,
                 short_form: None,
@@ -129,27 +131,18 @@ impl RepeatItem {
 
         let field_name = &self.field_name;
         let field_type = &self.field_type;
+        let id = self.field_name.to_string();
 
-        let long_form = quote_opt(&self.long_switch);
-        // Argument to conf_context.get_repeat_opt includes both the env form and any configured delimiter to split on
-        let env_form = if let Some(name) = self.env_name.as_ref() {
-            if self.no_env_delimiter {
-                quote! {
-                    Some((#name, None))
-                }
-            } else {
-                // delimiter defaults to char if not specified
-                let delim = self
-                    .env_delimiter
-                    .clone()
-                    .unwrap_or_else(|| LitChar::new(',', name.span()));
-                quote! {
-                    Some((#name, Some(#delim)))
-                }
-            }
+        let delimiter = quote_opt(&if self.no_env_delimiter {
+            None
         } else {
-            quote! { None }
-        };
+            Some(
+                self.env_delimiter
+                    .clone()
+                    .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
+            )
+        });
+
         // Value parser is FromStr::from_str if not specified
         let value_parser = self
             .value_parser
@@ -164,7 +157,7 @@ impl RepeatItem {
         // Or, they can use a custom type that has `Default` and `.push()`.
         Ok(quote! {
             #field_name: {
-                let (value_source, strs): (conf::ValueSource, Vec<&str>) = #conf_context_ident.get_repeat_opt(#long_form, #env_form)?;
+                let (value_source, strs): (conf::ValueSource, Vec<&str>) = #conf_context_ident.get_repeat_opt(#id, #delimiter)?;
                 let mut result: #field_type = Default::default();
                 result.reserve(strs.len());
                 for arg in strs {

@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use conf::{Conf, ParseType, Parser};
-use std::str::from_utf8;
+use conf::{Conf, Parser};
 
 mod common;
 use common::assert_multiline_eq;
@@ -22,78 +21,23 @@ struct SubsystemOptions {
 }
 
 #[test]
-fn test_subsystem_options_print() {
-    let (_parser_config, opts) = SubsystemOptions::get_program_options().unwrap();
-
-    let mut iter = opts.iter();
-
-    let opt = iter.next().unwrap();
-    assert_eq!(opt.parse_type, ParseType::Flag);
-    assert_eq!(opt.long_form.as_deref(), Some("my-flag"));
-    let mut buffer = Vec::<u8>::new();
-    opt.print(&mut buffer, None).unwrap();
-    let expected = &"
-      --my-flag
-          Flag description
-"[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
-
-    let opt = iter.next().unwrap();
-    assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.long_form.as_deref(), Some("my-param"));
-    let mut buffer = Vec::<u8>::new();
-    opt.print(&mut buffer, None).unwrap();
-    let expected = &"
-      --my-param <MY_PARAM>
-          Param description
-          [env: MY_PARAM]
-"[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
-
-    let opt = iter.next().unwrap();
-    assert_eq!(opt.parse_type, ParseType::Repeat);
-    assert_eq!(opt.long_form.as_deref(), Some("my-list"));
-    let mut buffer = Vec::<u8>::new();
-    opt.print(&mut buffer, None).unwrap();
-    let expected = &"
-      --my-list <MY_LIST>
-          Values description
-          [env: MY_LIST]
-"[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
-
-    assert_eq!(iter.next(), None);
-}
-
-#[test]
 fn test_subsystem_options_help() {
     let (parser_config, opts) = SubsystemOptions::get_program_options().unwrap();
 
     let env = Default::default();
     let parser = Parser::new(parser_config, &opts, &env).unwrap();
 
-    let mut buffer = Vec::<u8>::new();
-    parser
-        .render_help(&mut buffer, &("subsystem".into()))
-        .unwrap();
+    let clap_help = parser.render_clap_help();
     let expected = &"
-Usage: subsystem [FLAGS] [OPTIONS] --my-param <MY_PARAM>
+Usage: . [OPTIONS] --my-param <my_param>
 
 Options:
-      --my-param <MY_PARAM>
-          Param description
-          [env: MY_PARAM=]
-      --my-list <MY_LIST>
-          Values description
-          [env: MY_LIST=]
-
-Flags:
-      --my-flag
-          Flag description
-  -h, --help
-          Print help
+      --my-flag              Flag description
+      --my-param <my_param>  Param description [env: MY_PARAM=]
+      --my-list <my_list>    Values description [env: MY_LIST=]
+  -h, --help                 Print help
 "[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
+    assert_multiline_eq!(&clap_help, expected);
 }
 
 #[derive(Conf)]
@@ -123,30 +67,20 @@ fn test_other_subsystem_options_help() {
     let env = Default::default();
     let parser = Parser::new(parser_config, &opts, &env).unwrap();
 
-    let mut buffer = Vec::<u8>::new();
-    parser
-        .render_help(&mut buffer, &("other_subsystem".into()))
-        .unwrap();
+    let clap_help = parser.render_clap_help();
     let expected = &"
 Launches other subsystem
 
-Usage: other_subsystem [FLAGS]
+Usage: . [OPTIONS]
 
-Flags:
-  -a
-          Alpha
-  -b, --beta
-          Beta
-  -g
-          Gamma
-          [env: GAMMA=]
-      --delta
-          Delta
-          [env: DELTA=]
-  -h, --help
-          Print help
+Options:
+  -a           Alpha
+  -b, --beta   Beta
+  -g           Gamma [env: GAMMA=]
+      --delta  Delta [env: DELTA=]
+  -h, --help   Print help
 "[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
+    assert_multiline_eq!(&clap_help, expected);
 }
 
 /// Launches a system
@@ -192,55 +126,42 @@ fn test_system_options_help() {
     let env = Default::default();
     let parser = Parser::new(parser_config, &opts, &env).unwrap();
 
-    let mut buffer = Vec::<u8>::new();
-    parser.render_help(&mut buffer, &("system".into())).unwrap();
+    let clap_help = parser.render_clap_help();
     let expected = &"
 Launches a system
 
-Usage: system [FLAGS] [OPTIONS] --my-param <MY_PARAM> --subsystem-my-param <SUBSYSTEM_MY_PARAM>
+Usage: . [OPTIONS] --my-param <my_param> --subsystem-my-param <subsystem.my_param> <required>
+
+Arguments:
+  <required>  Required value [env: REQUIRED=]
 
 Options:
-      --my-param <MY_PARAM>
-          Param
-          [env: MY_PARAM=]
-      --subsystem-my-param <SUBSYSTEM_MY_PARAM>
-          Subsystem Param description
-          [env: SUBSYSTEM_MY_PARAM=]
-      --other-param <OTHER_PARAM>
-          Other Param
-          [env: OTHER_PARAM=]
-          [default: foo]
-      --my-list <MY_LIST>
-          Values
-          [env: MY_LIST=]
-      --subsystem-my-list <SUBSYSTEM_MY_LIST>
-          Subsystem Values description
-          [env: SUBSYSTEM_MY_LIST=]
-
-Flags:
   -m
           Flag
   -o, --my-other-flag
           Other flag
+      --my-param <my_param>
+          Param [env: MY_PARAM=]
+      --other-param <other_param>
+          Other Param [env: OTHER_PARAM=] [default: foo]
+      --my-list <my_list>
+          Values [env: MY_LIST=]
       --subsystem-my-flag
           Subsystem Flag description
+      --subsystem-my-param <subsystem.my_param>
+          Subsystem Param description [env: SUBSYSTEM_MY_PARAM=]
+      --subsystem-my-list <subsystem.my_list>
+          Subsystem Values description [env: SUBSYSTEM_MY_LIST=]
   -a
           Alpha
   -b, --beta
           Beta
   -g
-          Gamma
-          [env: GAMMA=]
+          Gamma [env: GAMMA=]
       --delta
-          Delta
-          [env: DELTA=]
+          Delta [env: DELTA=]
   -h, --help
           Print help
-
-Required env:
-
-          Required value
-          [env: REQUIRED=]
 "[1..];
-    assert_multiline_eq!(from_utf8(&buffer).unwrap(), expected);
+    assert_multiline_eq!(&clap_help, expected);
 }

@@ -1,11 +1,11 @@
 # conf
 
-`conf` is a derive-based, *composable* argument and env parsing library, meant to help with configuration of large projects, such as a web app following the [12-factor style](https://12factor.net/config).
+`conf` is an alternate derive macro for using [`clap`](https://docs.rs/clap/latest/clap/). It supports some additional features that `clap-derive` does not, which help with the configuration of large projects, such as a web app following the [12-factor style](https://12factor.net/config). In exchange, some features are not implemented that are less useful for such purposes (or would add a lot of complexity). In some cases there are deviations from `clap-derive` to make the defaults closer to a good 12-factor app behavior.
 
 `conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/latest/clap/) and the earlier `struct-opt` which I used for years. They are both great and became popular for a reason.
 However, there are some specific missing features (prefixing on flatten) and related pain points that I ran into over and over again. It seems to be hard to add these features now.
-These features are very helpful when you want to be able to configure a large web service entirely via the environment.
-See [Motivation](./MOTIVATION.md) for more detail.
+These features are very helpful when you want to be able to configure a large web app entirely via the environment.
+See [motivation](./MOTIVATION.md) for more detail.
 
 ## Using `conf` in a cargo project
 
@@ -52,7 +52,7 @@ Generally, the CLI interface and help text that is generated is meant to conform
 
 A field in your struct can be read from a few sources:
 
-* `#[conf(short)]` means that it corresponds to a "short" option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short="t")]` for example.
+* `#[conf(short)]` means that it corresponds to a "short" option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short='t')]` for example.
 * `#[conf(long)]` means that it corresponds to a "long" option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[conf(long="target-url")]` for example.
 * `#[conf(env)]` means that it corresponds to an environment varaible, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
 * `#[conf(default_value)]` specifies a default value for this field if none of the other three possible sources provides one.
@@ -89,7 +89,7 @@ Intuitively, this is meant to read a lot like the [`serde(flatten)`](https://ser
 During parsing, the parser behaves as if every field of `DbConfig` were declared within `Config`, and generates matching options, env, and help, but then the parsed values actually
 get stored in subfields of the `.db` field.
 
-Using `flatten` can save a lot of labor. For example, suppose your web application has ten web services, and they all need a `DbConfig`. Instead of duplicating all the values,
+Using `flatten` can save a lot of labor. For example, suppose your web application consists of ten different web services, and they all need a `DbConfig`. Instead of duplicating all the values,
 any env, any defaults, any help text, in each `Config` that you have, you can write that once and then `flatten` it ten times. Then, later when you discover that `DbConfig` should contain another value,
 you only have to add it to `DbConfig` once, and every service that uses `DbConfig` will get the new config parameter. Also, when you need to initialize your db connection, you can just pass it the entire `.db` field rather
 than pick out needed config arguments one-by-one.
@@ -191,7 +191,7 @@ The argument parsing functionality of this crate is of secondary importance -- t
 * I had some existing projects that were using `clap` that I wanted to be able to migrate to this in a non-disruptive way.
 * I wanted to ensure that `--help` could be easily auto-generated in a way that includes all the relevant information about `env` arguments.
 
-This is different from [`clap`](https://docs.rs/clap/latest/clap/), which started life as a CLI argument parser, and added `env` fallback after the library was already pretty mature.
+This is somewhat different from the history of [`clap`](https://docs.rs/clap/latest/clap/), which started life as a CLI argument parser, and added `env` fallback after the library was already pretty mature.
 
 If you have very specific CLI argument parsing needs, you will likely be better off with `clap` than this crate, because `clap` has considerably more features and configurability around that than this crate does.
 

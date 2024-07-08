@@ -28,7 +28,7 @@ fn test_repeats_get_program_options() {
     assert_eq!(opts.len(), 3);
 
     assert_eq!(opts[0].parse_type, ParseType::Parameter);
-    assert_eq!(opts[0].short_form.as_deref(), Some("m"));
+    assert_eq!(opts[0].short_form, Some('m'));
     assert_eq!(opts[0].long_form.as_deref(), Some("foo"));
     assert_eq!(opts[0].env_form.as_deref(), Some("MY_OPTION"));
     assert_eq!(opts[0].default_value, None);

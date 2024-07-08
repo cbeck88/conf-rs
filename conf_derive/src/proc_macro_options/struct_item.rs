@@ -7,6 +7,7 @@ use syn::{Attribute, Ident, LitStr};
 #[derive(Default)]
 pub struct StructItem {
     pub about: Option<LitStr>,
+    pub name: String,
     pub no_help_flag: bool,
     pub env_prefix: Option<LitStr>,
     pub doc_string: Option<String>,
@@ -15,7 +16,11 @@ pub struct StructItem {
 impl StructItem {
     /// Parse conf options out of attributes on a struct
     pub fn new(attrs: &[Attribute]) -> Result<Self, syn::Error> {
-        let mut result = Self::default();
+        let mut result = Self {
+            // This matches what clap derive does
+            name: std::env::var("CARGO_PKG_NAME").ok().unwrap_or_default(),
+            ..Default::default()
+        };
 
         for attr in attrs {
             maybe_append_doc_string(&mut result.doc_string, &attr.meta)?;
@@ -49,16 +54,18 @@ impl StructItem {
 
     /// Generate a conf::ParserConfig expression, based on top-level options in this struct
     pub fn gen_parser_config(&self) -> Result<TokenStream, syn::Error> {
+        let name = &self.name;
         let no_help_flag = self.no_help_flag;
         let about_text = self
             .about
             .as_ref()
             .map(|lit_str| lit_str.value())
             .or(self.doc_string.clone());
-        let about = quote_opt_string(&about_text);
+        let about = quote_opt(&about_text);
         Ok(quote! {
             conf::ParserConfig {
                 about: #about,
+                name: #name,
                 no_help_flag: #no_help_flag,
             }
         })
@@ -72,7 +79,7 @@ impl StructItem {
     ) -> Result<Option<TokenStream>, syn::Error> {
         if let Some(env_prefix) = self.env_prefix.as_ref() {
             Ok(Some(quote! {
-                #program_options_ident = #program_options_ident.into_iter().map(|opt| opt.flatten("", #env_prefix, "")).collect();
+                #program_options_ident = #program_options_ident.into_iter().map(|opt| opt.flatten("", "", #env_prefix, "")).collect();
             }))
         } else {
             Ok(None)
@@ -80,14 +87,13 @@ impl StructItem {
     }
 
     /// Generate an (optional) ConfContext pre-processing step.
-    /// If we have an env_prefix at struct-level, apply it here.
     pub fn gen_pre_process_conf_context(
         &self,
         conf_context_ident: &Ident,
     ) -> Result<Option<TokenStream>, syn::Error> {
-        if let Some(env_prefix) = self.env_prefix.as_ref() {
+        if self.env_prefix.is_some() {
             Ok(Some(quote! {
-                let #conf_context_ident = #conf_context_ident.for_flattened("", #env_prefix);
+                let #conf_context_ident = #conf_context_ident.for_flattened("");
             }))
         } else {
             Ok(None)

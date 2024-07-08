@@ -37,7 +37,7 @@ fn test_client_config_program_options() {
     assert_eq!(opts.len(), 3);
 
     assert_eq!(opts[0].parse_type, ParseType::Parameter);
-    assert_eq!(opts[0].short_form.as_deref(), None);
+    assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("url"));
     assert_eq!(opts[0].env_form.as_deref(), Some("URL"));
     assert_eq!(opts[0].default_value.as_deref(), None);
@@ -141,7 +141,7 @@ fn test_db_tool_config_program_options() {
     assert_eq!(opts.len(), 4);
 
     assert_eq!(opts[0].parse_type, ParseType::Parameter);
-    assert_eq!(opts[0].short_form.as_deref(), None);
+    assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("db-url"));
     assert_eq!(opts[0].env_form.as_deref(), Some("DB_URL"));
     assert_eq!(opts[0].default_value.as_deref(), None);
@@ -168,7 +168,7 @@ fn test_db_tool_config_program_options() {
     assert_eq!(opts[2].description.as_deref(), Some("Connection pool size"));
 
     assert_eq!(opts[3].parse_type, ParseType::Flag);
-    assert_eq!(opts[3].short_form.as_deref(), Some("d"));
+    assert_eq!(opts[3].short_form, Some('d'));
     assert_eq!(opts[3].long_form.as_deref(), Some("dry-run"));
     assert_eq!(opts[3].env_form.as_deref(), None);
     assert_eq!(opts[3].default_value, None);
@@ -271,7 +271,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("LISTEN_ADDR"));
     assert_eq!(opt.default_value.as_deref(), Some("127.0.0.1:4040"));
@@ -280,7 +280,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("DB_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -310,7 +310,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("AUTH_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -319,7 +319,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("AUTH_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -331,7 +331,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FRIEND_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -340,7 +340,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FRIEND_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -352,7 +352,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("BUDDY_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -361,7 +361,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("BUDDY_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -373,7 +373,7 @@ fn test_service_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Flag);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
@@ -502,7 +502,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_LISTEN_ADDR"));
     assert_eq!(opt.default_value.as_deref(), Some("127.0.0.1:4040"));
@@ -511,7 +511,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_DB_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -544,7 +544,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_AUTH_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -553,7 +553,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_AUTH_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -565,7 +565,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_FRIEND_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -574,7 +574,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_FRIEND_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -586,7 +586,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_BUDDY_SERVICE_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -595,7 +595,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_BUDDY_SERVICE_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -607,7 +607,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Flag);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
@@ -616,7 +616,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Repeat);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peer-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_URLS"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -628,7 +628,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peer-min-connections"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_MIN_CONNECTIONS"));
     assert_eq!(opt.default_value.as_deref(), Some("2"));
@@ -640,7 +640,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peer-badness-score-limit"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -652,7 +652,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("admin-listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_ADMIN_LISTEN_ADDR"));
     assert_eq!(opt.default_value.as_deref(), Some("127.0.0.1:9090"));
@@ -664,7 +664,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -673,7 +673,7 @@ fn frob_config_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));
@@ -780,6 +780,7 @@ fn frob_config_parsing() {
 }
 
 // Another version of FrobConfig that uses different flattening options
+#[allow(dead_code)]
 #[derive(Conf)]
 #[conf(env_prefix = "FROB_")]
 struct FrobConfig2 {
@@ -811,7 +812,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-listen-addr"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -823,7 +824,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_TEST_SERVICE_DB_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -859,7 +860,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-auth-service-url"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -871,7 +872,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-auth-service-retries"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -886,7 +887,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-friend-service-url"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -898,7 +899,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-friend-service-retries"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -913,7 +914,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-buddy-service-url"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -925,7 +926,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-buddy-service-retries"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -940,7 +941,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Flag);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
@@ -949,7 +950,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Repeat);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peers-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_URLS"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -961,7 +962,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peers-min-connections"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_MIN_CONNECTIONS"));
     assert_eq!(opt.default_value.as_deref(), Some("2"));
@@ -973,7 +974,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peers-badness-score-limit"));
     assert_eq!(
         opt.env_form.as_deref(),
@@ -985,7 +986,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("admin-listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_ADMIN_LISTEN_ADDR"));
     assert_eq!(opt.default_value.as_deref(), Some("127.0.0.1:9090"));
@@ -997,7 +998,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_URL"));
     assert_eq!(opt.default_value.as_deref(), None);
@@ -1006,7 +1007,7 @@ fn frob_config2_program_options() {
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
-    assert_eq!(opt.short_form.as_deref(), None);
+    assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_RETRIES"));
     assert_eq!(opt.default_value.as_deref(), Some("3"));

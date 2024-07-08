@@ -1,6 +1,6 @@
 use conf::Conf;
-use url::Url;
 use std::net::SocketAddr;
+use url::Url;
 
 /// Configuration for an http client
 #[derive(Conf, Debug)]
@@ -8,7 +8,7 @@ pub struct HttpClientConfig {
     /// Base URL
     #[conf(long, env)]
     pub url: Url,
-    
+
     /// Number of retries
     #[conf(long, env)]
     pub retries: u32,
@@ -18,7 +18,7 @@ pub struct HttpClientConfig {
 #[derive(Conf, Debug)]
 pub struct SolveServiceConfig {
     /// Listen address to bind to
-    #[conf(long, env, default_value="127.0.0.1:4040")]
+    #[conf(long, env, default_value = "127.0.0.1:4040")]
     pub listen_addr: SocketAddr,
 
     /// Auth service:
@@ -48,7 +48,7 @@ pub struct SolverConfig {
     /// Whether to use a deterministic seeded rng
     #[conf(long, env)]
     pub deterministic_rng: bool,
-    
+
     /// Maximum number of rounds before we stop the search
     #[conf(long, env)]
     pub round_limit: Option<u64>,
@@ -56,13 +56,13 @@ pub struct SolverConfig {
 
 /// Solves widget optimization problems on demand as a service
 #[derive(Conf, Debug)]
-#[conf(env_prefix="MYCO_")]
+#[conf(env_prefix = "MYCO_")]
 pub struct Config {
     /// Solver service:
     #[conf(flatten, help_prefix)]
     pub solver_service: SolveServiceConfig,
 
-    /// Basic solver: 
+    /// Basic solver:
     #[conf(flatten, prefix, help_prefix)]
     pub basic_solver: SolverConfig,
 
@@ -71,18 +71,17 @@ pub struct Config {
     pub high_priority_solver: SolverConfig,
 
     /// Peers to which we can try to loadshed
-    #[conf(repeat, long="peer", env)]
+    #[conf(repeat, long = "peer", env)]
     pub peer_urls: Vec<Url>,
 
     /// Admin listen address to bind to
-    #[conf(long, env, default_value="127.0.0.1:9090")]
+    #[conf(long, env, default_value = "127.0.0.1:9090")]
     pub admin_listen_addr: SocketAddr,
 
     /// Telemetry endpoint:
     #[conf(flatten, prefix, help_prefix)]
     pub telemetry: HttpClientConfig,
 }
-
 
 fn main() {
     let config = Config::parse();

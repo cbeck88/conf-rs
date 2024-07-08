@@ -110,6 +110,7 @@ impl FlattenItem {
     ) -> Result<TokenStream, syn::Error> {
         // Generated code gets all program options for the struct we are flattening, then calls flatten on each one and adds all that to program_options_ident.
         let field_type = &self.field_type;
+        let id_prefix = self.field_name.to_string() + ".";
 
         let long_prefix = self
             .long_prefix
@@ -124,7 +125,7 @@ impl FlattenItem {
         let description_prefix = self.description_prefix.as_deref().unwrap_or_default();
 
         Ok(quote! {
-            #program_options_ident.extend(#field_type::get_program_options()?.1.into_iter().map(|program_option| program_option.flatten(#long_prefix, #env_prefix, #description_prefix)));
+            #program_options_ident.extend(#field_type::get_program_options()?.1.into_iter().map(|program_option| program_option.flatten(#id_prefix, #long_prefix, #env_prefix, #description_prefix)));
         })
     }
 
@@ -136,19 +137,10 @@ impl FlattenItem {
         let field_name = &self.field_name;
         let field_type = &self.field_type;
 
-        let long_prefix = self
-            .long_prefix
-            .as_ref()
-            .map(LitStr::value)
-            .unwrap_or_default();
-        let env_prefix = self
-            .env_prefix
-            .as_ref()
-            .map(LitStr::value)
-            .unwrap_or_default();
+        let id_prefix = self.field_name.to_string() + ".";
 
         Ok(quote! {
-            #field_name: #field_type::from_conf_context(#conf_context_ident.for_flattened(#long_prefix, #env_prefix))?,
+            #field_name: #field_type::from_conf_context(#conf_context_ident.for_flattened(#id_prefix))?,
         })
     }
 }

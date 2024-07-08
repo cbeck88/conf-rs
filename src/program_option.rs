@@ -1,5 +1,4 @@
-use crate::{CowStr, ParsedEnv};
-use heck::ToShoutySnakeCase;
+use crate::CowStr;
 use std::fmt;
 
 /// This is a property of every program option, and dictates what form of data we expect to collect from CLI and env.
@@ -15,8 +14,6 @@ pub enum ParseType {
     Parameter,
     /// A repeat parameter is a switch which may appear one or more times, each time supplying an argument.
     Repeat,
-    /// An option that causes us to display help and then exit
-    Help,
 }
 
 impl fmt::Display for ParseType {
@@ -25,7 +22,6 @@ impl fmt::Display for ParseType {
             Self::Flag => write!(f, "Flag"),
             Self::Parameter => write!(f, "Parameter"),
             Self::Repeat => write!(f, "Repeat"),
-            Self::Help => write!(f, "Help"),
         }
     }
 }
@@ -35,12 +31,14 @@ impl fmt::Display for ParseType {
 #[doc(hidden)]
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ProgramOption {
+    /// Id of this option. This is typically the field name literal, and on flattening we prepend it with `parent.`
+    pub id: CowStr,
     /// Parse type of this option
     pub parse_type: ParseType,
     /// Description (typically its doc string)
     pub description: Option<CowStr>,
     /// The short-form switch (-) associated to this option, if any
-    pub short_form: Option<CowStr>,
+    pub short_form: Option<char>,
     /// The long-form switch (--) associated to this option, if any
     pub long_form: Option<CowStr>,
     /// The env-form associated to this option, if any
@@ -57,11 +55,13 @@ impl ProgramOption {
     /// Note that prefixing does not apply to short forms, only long forms and env_forms.
     pub fn flatten(
         self,
+        id_prefix: &str,
         long_prefix: &str,
         env_prefix: &str,
         description_prefix: &str,
     ) -> ProgramOption {
         let ProgramOption {
+            mut id,
             parse_type,
             mut description,
             short_form,
@@ -70,6 +70,8 @@ impl ProgramOption {
             default_value,
             is_required,
         } = self;
+
+        id.to_mut().insert_str(0, id_prefix);
 
         if let Some(long_form) = long_form.as_mut() {
             if !long_prefix.is_empty() {
@@ -106,6 +108,7 @@ impl ProgramOption {
         }
 
         ProgramOption {
+            id,
             parse_type,
             description,
             short_form,
@@ -114,55 +117,5 @@ impl ProgramOption {
             default_value,
             is_required,
         }
-    }
-
-    // Desired output is like:
-    //  -x, --xyz <XYZ>
-    //          This is the description.
-    //          [env: XYZ=ABC]
-    //          [default: 123]
-    //
-    // The env part is optional
-    pub fn print(
-        &self,
-        stream: &mut impl std::io::Write,
-        env: Option<&ParsedEnv>,
-    ) -> Result<(), std::io::Error> {
-        // Deal with spacing so that when short is 1 char, all the short options are aligned and indented, and all the long options are too.
-        let dash = if self.short_form.is_some() { '-' } else { ' ' };
-        let short = self.short_form.as_deref().unwrap_or(" ");
-        let comma = if self.short_form.is_some() && self.long_form.is_some() {
-            ','
-        } else {
-            ' '
-        };
-        write!(stream, "  {dash}{short}{comma} ")?;
-        if let Some(long) = self.long_form.as_ref() {
-            write!(stream, "--{long} ")?;
-        }
-        if matches!(self.parse_type, ParseType::Parameter | ParseType::Repeat) {
-            if let Some(name) = self.long_form.as_ref().or(self.short_form.as_ref()) {
-                write!(stream, "<{}>", name.to_shouty_snake_case())?;
-            }
-        }
-        writeln!(stream,)?;
-        if let Some(desc) = self.description.as_ref() {
-            writeln!(stream, "          {}", desc.replace('\n', "\n          "))?;
-        }
-        if let Some(name) = self.env_form.as_deref() {
-            if let Some(env) = env {
-                let cur_val = env
-                    .get(name)
-                    .and_then(|os_str| os_str.to_str())
-                    .unwrap_or("");
-                writeln!(stream, "          [env: {name}={cur_val}]")?;
-            } else {
-                writeln!(stream, "          [env: {name}]")?;
-            }
-        }
-        if let Some(def) = self.default_value.as_ref() {
-            writeln!(stream, "          [default: {def}]")?;
-        }
-        Ok(())
     }
 }

@@ -40,7 +40,7 @@ bench = false
 
 [dependencies]
 conf_derive = { path = "./conf_derive" }
-edit-distance = "2"
+clap = { git = "https://github.com/cbeck88/clap.git", rev = "ad62c2d4d161d75ec1682ce5ca249f0c70ae8180", features = ["env", "string"] }
 heck = "0.5"
 
 [dev-dependencies]

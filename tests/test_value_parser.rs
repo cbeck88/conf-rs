@@ -158,7 +158,7 @@ fn test_value_parser_bool() {
     .is_err());
 
     let result = TestValueParserBool::try_parse_from::<&str, &str, &str>(
-        vec![".", "--strict=0", "--flag=true"],
+        vec![".", "--strict=0", "--flag"],
         vec![],
     )
     .unwrap();
@@ -167,7 +167,7 @@ fn test_value_parser_bool() {
     assert!(!result.strict);
 
     let result = TestValueParserBool::try_parse_from::<&str, &str, &str>(
-        vec![".", "--flag=t"],
+        vec![".", "--flag"],
         vec![("STRICT", "1")],
     )
     .unwrap();

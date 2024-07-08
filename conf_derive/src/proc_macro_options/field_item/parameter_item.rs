@@ -95,14 +95,16 @@ impl ParameterItem {
         program_options_ident: &Ident,
     ) -> Result<TokenStream, syn::Error> {
         let is_required = !self.is_optional_type && self.default_value.is_none();
-        let description = quote_opt_string(&self.doc_string);
-        let short_form = quote_opt_char_string(&self.short_switch);
-        let long_form = quote_opt_string(&self.long_switch);
-        let env_form = quote_opt_string(&self.env_name);
-        let default_value = quote_opt_string(&self.default_value);
+        let id = self.field_name.to_string();
+        let description = quote_opt_into(&self.doc_string);
+        let short_form = quote_opt(&self.short_switch);
+        let long_form = quote_opt_into(&self.long_switch);
+        let env_form = quote_opt_into(&self.env_name);
+        let default_value = quote_opt_into(&self.default_value);
 
         Ok(quote! {
             #program_options_ident.push(conf::ProgramOption {
+                id: #id.into(),
                 parse_type: conf::ParseType::Parameter,
                 description: #description,
                 short_form: #short_form,
@@ -116,16 +118,12 @@ impl ParameterItem {
 
     pub fn gen_initializer(&self, conf_context_ident: &Ident) -> Result<TokenStream, syn::Error> {
         let field_name = &self.field_name;
+        let id = self.field_name.to_string();
 
-        let short_form = quote_opt_char(&self.short_switch);
+        let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt(&self.long_switch);
         let env_form = quote_opt(&self.env_name);
 
-        // Code gen is slightly different when default value is present, in that case we add `.or(Some( ... default_value ...))`
-        let maybe_default = self
-            .default_value
-            .as_ref()
-            .map(|def| quote! { .or(Some((conf::ValueSource::Default, #def))) });
         // Value parser is FromStr::from_str if not specified
         let value_parser: Expr = self
             .value_parser
@@ -137,7 +135,7 @@ impl ParameterItem {
         if !self.is_optional_type {
             Ok(quote! {
                 #field_name: {
-                  let (value_source, got_str): (conf::ValueSource, &str) = #conf_context_ident.get_string_opt(#short_form, #long_form, #env_form)?#maybe_default.ok_or(conf::InnerError::MissingRequiredParameter(#short_form, #long_form, #env_form))?;
+                  let (value_source, got_str): (conf::ValueSource, &str) = #conf_context_ident.get_string_opt(#id)?.ok_or(conf::InnerError::MissingRequiredParameter(#short_form, #long_form, #env_form))?;
                   match #value_parser(got_str) {
                     Ok(t) => t,
                     Err(err) => return Err(conf::InnerError::InvalidParameterValue(value_source, err.to_string()).into()),
@@ -147,7 +145,7 @@ impl ParameterItem {
         } else {
             Ok(quote! {
                 #field_name: {
-                  let maybe_str: Option<(conf::ValueSource, &str)> = #conf_context_ident.get_string_opt(#short_form, #long_form, #env_form)?#maybe_default;
+                  let maybe_str: Option<(conf::ValueSource, &str)> = #conf_context_ident.get_string_opt(#id)?;
                   match maybe_str {
                     Some((value_source, got_str)) => {
                       match #value_parser(got_str) {

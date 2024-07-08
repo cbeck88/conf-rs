@@ -69,13 +69,15 @@ impl FlagItem {
         &self,
         program_options_ident: &Ident,
     ) -> Result<TokenStream, Error> {
-        let description = quote_opt_string(&self.doc_string);
-        let short_form = quote_opt_char_string(&self.short_switch);
-        let long_form = quote_opt_string(&self.long_switch);
-        let env_form = quote_opt_string(&self.env_name);
+        let id = self.field_name.to_string();
+        let description = quote_opt_into(&self.doc_string);
+        let short_form = quote_opt(&self.short_switch);
+        let long_form = quote_opt_into(&self.long_switch);
+        let env_form = quote_opt_into(&self.env_name);
 
         Ok(quote! {
             #program_options_ident.push(conf::ProgramOption {
+                id: #id.into(),
                 parse_type: conf::ParseType::Flag,
                 description: #description,
                 short_form: #short_form,
@@ -89,13 +91,10 @@ impl FlagItem {
 
     pub fn gen_initializer(&self, conf_context_ident: &Ident) -> Result<TokenStream, Error> {
         let field_name = &self.field_name;
-
-        let short_form = quote_opt_char(&self.short_switch);
-        let long_form = quote_opt(&self.long_switch);
-        let env_form = quote_opt(&self.env_name);
+        let id = self.field_name.to_string();
 
         Ok(quote! {
-            #field_name: #conf_context_ident.get_boolean_opt(#short_form, #long_form, #env_form)?,
+            #field_name: #conf_context_ident.get_boolean_opt(#id)?,
         })
     }
 }

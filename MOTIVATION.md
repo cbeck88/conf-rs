@@ -136,14 +136,12 @@ No problem, you think, I'll fix that name collision by prefixing. There's surely
 config that I need in a way that will work.
 
 Unfortunately, prefixing before flattening is a feature of `clap-derive` that has been requested for years and appears
-to be impossible without radical changes to `clap`.
+to be impossible without significant changes.
 
 [clap-3117](https://github.com/clap-rs/clap/issues/3117)
 [clap-3513](https://github.com/clap-rs/clap/issues/3513)
 [clap-5050](https://github.com/clap-rs/clap/issues/5050#issuecomment-1659413560)
 
-Most likely there would have to be large changes to the APIs of the builder part of `clap` so that it can keep track of
-prefixing and such. It's not something that can be done only in the derive side of things.
 So unfortunately, flattening is just not going to work out for you here.
 
 Scrappy engineer that you are, you come up with another solution:
@@ -173,15 +171,15 @@ And you also shouldn't have to change the code of every service to resolve probl
 Solution
 --------
 
-Over time, what I've realized is that in the context of web services, having a flatten-with-prefix feature that is flexible, lets me compose config structures again and again with prefixing as needed, and works as one intuitively expects, is probably more valuable to me than any of the other `clap` features.
+Over time, what I've realized is that in the context of web services, having a flatten-with-prefix feature that lets me compose config structures again and again with prefixing as needed, is probably more valuable to me than many of the other `clap-derive` features.
 
 In a complex rust program, where you have a stack of systems and subsystems that may each require configuration, and there is not generally "life before main", you usually need to find a way to plumb all the config from main to all these various systems. (Or, if you give up on that, then you are giving up on having complete `--help` documentation for your program, and possibly on failing fast when there is a configuration problem.)
 
 Nested flatten-with-prefix is basically the perfect tool to manage that while preserving separation of concerns across your project. It's all the conveience of [`gflags`](https://github.com/gflags/gflags), where you just declare a flag at the site where it is needed and it magically appears in all binaries that link to that code, but with none of the life-before-main nonsense.
 
-I looked at many of the existing alternatives to `clap`. In particular I looked at all the libraries listed here: https://github.com/rosetta-rs/argparse-rosetta-rs
+I looked at many of the existing alternatives to `clap`. In particular I looked at all the libraries listed in [argparse-roseetta-rs](https://github.com/rosetta-rs/argparse-rosetta-rs)
 
-(You can read more about one person's view of the pros and cons of different arg parser crates: https://rust-cli-recommendations.sunshowers.io/cli-parser.html)
+(You can read more about one person's view of the [pros and cons of different arg parser crates](https://rust-cli-recommendations.sunshowers.io/cli-parser.html))
 
 Of these, only `clap` has a `flatten` feature at all, let alone the `flatten-with-prefix` feature that I want. Many of them are motivated by simplicity, build times, or compiled code size compared to clap.
 
@@ -206,17 +204,16 @@ None of these seemed like they were going to meet my needs.
 * `envconfig`, `env-config`, `conf_from_env` all provide proc macros of their own, but of these only `envconfig` has a flatten feature (at time of writing). It doesn't have a flatten-with-prefix feature though, and it doesn't do any kind of auto-generated help / discoverability for the `env` read by the final program.
 * The other crates that I looked at don't seem to address my problem.
 
-Also, I was uncomfortable with setting arg parsing entirely out of scope, because it seems to me that you really want your service to have a `--help` option of some kind that documents all its config, including the environment variables, the way that `clap` does. But usually the arg parsers become responsible for generating that help, so if your `env` handling doesn't hook into that tightly somehow, then I don't see how it's going to work. Also, it can be legitimately very useful to be able to pass config as CLI arguments as an alternative to env, when developing locally or running in CI. It's also useful to be able to do this knowing that CLI parameters will shadow values in `env`.
-
 I decided that my best path forward was to write the library that I was looking for: a new env-and-argument parser library similar to `clap`, but where the traits and internals are structured such that `flatten-with-prefix` is easily implemented.
 
-I decided not to support the "builder" interface at all, and only offer a `derive` macro. My experience is that the derive macros cut out a lot of boilerplate and are easily understandable,
-and whatever control I've given up by using them has not turned out to be important later.
+I cut scope drastically in order to make the goal achieveable. I decided to only offer a `derive` macro to minimize API surface area. I chose to cut many features that I have never used in a web service such as subcommands and positional arguments. These things only really make sense when at least some of the config is happening via CLI args, since environment variables are not ordered.
 
-I chose to cut many features that I have never used in a web service such as subcommands and positional arguments.
-These things only really make sense when at least some of the config is happening via CLI args, since environment variables are not ordered.
+At some point I had built a first draft, working on and off in spare time. Eventually it got to the point where I could play with large examples and see how it felt, and particularly, see if I would actually feel good about migrating a project
+that was using `clap` to use this library instead.
 
-I chose to keep many features of `clap` that I used heavily in the past, and I tried to keep very similar syntax and behavior for these features.
+At some point I had a realization: I would be much better off using `clap::Builder` under the hood rather than building my own parser and error rendering, and I would not have to give up much of anything. The way I had already structured things, this was a relatively easy change. The goal of the project became about building an alternative derive macro for `clap` that supported flatten-with-prefix, rather than building a completely new env-and-argument parser. This was different from what I expected, because I thought based on the tickets that most likely there would be changes needed in the `builder` side and not only the `derive` side of `clap`. This ultimately saved a lot of work to get to a minimum viable state.
+
+The initial feature set was the features of `clap-derive` I had used most heavily in the past, and I tried to keep very similar syntax and behavior for these features, plus flatten with prefix.
 
 * Support for `flags` (on or off), `parameters` (take a value, either next arg or using `--flag=value` syntax), and `repeat` options (what `clap` calls "multi" options, which can appear several times and the results get aggregated).
 * Support for long form (`--switch`) and short form (`-s`) switches, and env variable association
@@ -231,11 +228,6 @@ I chose to keep many features of `clap` that I used heavily in the past, and I t
 * Default flag names and env names based on the field name.
 * The syntax for `flatten` is very similar, but it now supports additional options like `prefix`, `env_prefix`, `long_prefix`, `help_prefix`, which can be defaulted or explicitly set.
 
-I built a first draft in spare time. Eventually it got to the point where I could play with large examples and see how it felt, and particularly, see if I would actually feel good about migrating a project
-that was using `clap` to use this library instead.
-
-At some point I considered it minimum-viable. Then I added regression tests, iterated a bit on improving error messages, and started using it in a medium-size project that had been using `clap`.
-
 Future directions
 -----------------
 
@@ -244,13 +236,13 @@ My hope is that others will find this project interesting, and contribute any bu
 Note that just because this crate doesn't have a feature like subcommands now doesn't mean that I am opposed to that feature -- patches are welcome, and I can certainly see use-cases.
 For example, you may have some targets that are web services, and some that are associated command-line tools, and you may want to be able to share a bunch of config structures between them.
 
-But it's important to understand that I created this crate primarily to *serve an underserved niche*, which is large 12-factor app web services, and not to try to achieve feature parity with `clap`.
-`clap` is at this point an enormous library and I'm sure that it has many very useful features that I'm still not aware of after years of use.
-If you have rather complex or specific requirements around CLI argument parsing, then you should probably be using `clap` and not this crate, because this crate is more oriented towards `env` anyways.
+But it's important to understand that I created this crate primarily to *serve an underserved niche*, which is large 12-factor app projects, and not to try to achieve feature parity with `clap-derive`.
+`clap` is at this point an enormous library and I'm sure that it has many very useful features that I'm still not aware of after years of use, and many if not all are exposed through `clap-derive` somehow it seems.
+If you have rather complex or specific requirements around CLI argument parsing, then you should probably be using `clap-derive` and not this crate, because this crate is more oriented towards `env` anyways.
 We would need considerably more developer / maintainer energy than I am willing to commit to in order to realize a more ambitious vision.
 
 Additionally, in my view, optimizing parsing time or code size should not be a major development goal of this crate, because it's very unlikely to have a noticeable benefit for a web service.
-There are half a dozen libraries linked to above that have parsing time and code size as goals, which you can use in situations where that's more important.
+There are [half a dozen libraries]((https://github.com/rosetta-rs/argparse-rosetta-rs)) that have parsing time and code size as goals, which you can use in situations where that's more important.
 That's not to say that I won't take patches that refactor to avoid copies and allocations during parsing and such, but if a patch like that has negative impact on readability of the code, or ease of developing interesting features in the future,
 then it requires more justification. I have made some minimal efforts to avoid needless copies, but as long as performance is comparable to `clap`, then I think users in the targetted niche will be happy.
 
@@ -261,6 +253,6 @@ Another feature that I noticed in many `conf` libraries is special support for r
 I think it might make sense to make an "extras" crate that contains "common" or "popular" value parsers. One nice thing about that is that those value parsers could also be used with `clap`.
 I don't think that *this* crate should contain any code that reads a file. For me, that is a separation of concerns thing.
 
-Personally, I do like using a crate like [`dotenvy`](https://crates.io/crates/dotenvy), which can load a `.env` file and set values to `env` right before you do `Config::parse()`. That `.env` file can be checked into git which helps local development, and you can leave it out when you go to build a docker container. I suppose that some of the value that some developers seem to be getting from reading config from an `.ini` file or such, I am getting that way instead.
+Personally, I do like using a crate like [`dotenvy`](https://crates.io/crates/dotenvy), which can load a `.env` file and set values to `env` right before you do `Config::parse()`. That `.env` file can be checked into git which helps local development, and you can leave it out when you go to build a docker container. This is not as general as the "layered config" that [config-rs](https://crates.io/crates/config) offers, but it's as much as I've ever needed, and doesn't create a hazard if you ultimately want to deploy in kubernetes or something like that.
 
-My belief is that by keeping the API surface area relatively small and staying focused on the target niche, we can make sure that it stays as easy as possible to add useful features, test them appropriately, and drive the project forwards in a way that serves the users best.
+My belief is that by keeping the API surface area relatively small and staying focused on the target niche, we can make sure that it stays as easy as possible to add useful features, test them appropriately, and drive the project forwards. I do believe that building on `clap` is the best course in terms of conserving developer energy and serving the users the best.

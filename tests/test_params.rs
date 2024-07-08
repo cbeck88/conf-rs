@@ -37,7 +37,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[0].description.as_deref(), Some("This is a test param"));
 
     assert_eq!(opts[1].parse_type, ParseType::Parameter);
-    assert_eq!(opts[1].short_form.as_deref(), Some("m"));
+    assert_eq!(opts[1].short_form, Some('m'));
     assert_eq!(opts[1].long_form.as_deref(), Some("foo"));
     assert_eq!(opts[1].env_form.as_deref(), Some("MY_OPTION"));
     assert_eq!(opts[1].default_value, None);
@@ -45,7 +45,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[1].description.as_deref(), None);
 
     assert_eq!(opts[2].parse_type, ParseType::Parameter);
-    assert_eq!(opts[2].short_form.as_deref(), Some("d"));
+    assert_eq!(opts[2].short_form, Some('d'));
     assert_eq!(opts[2].long_form, None);
     assert_eq!(opts[2].env_form.as_deref(), Some("DEFAULTED"));
     assert_eq!(opts[2].default_value.as_deref(), Some("def"));
@@ -56,7 +56,7 @@ fn test_params_get_program_options() {
     );
 
     assert_eq!(opts[3].parse_type, ParseType::Parameter);
-    assert_eq!(opts[3].short_form.as_deref(), Some("s"));
+    assert_eq!(opts[3].short_form, Some('s'));
     assert_eq!(opts[3].long_form, None);
     assert_eq!(opts[3].env_form.as_deref(), Some("SHOULD_WORK"));
     assert_eq!(opts[3].default_value.as_deref(), Some("maybe"));
