@@ -86,5 +86,5 @@ pub struct Config {
 fn main() {
     let config = Config::parse();
 
-    println!("{config:?}");
+    println!("{config:#?}");
 }
