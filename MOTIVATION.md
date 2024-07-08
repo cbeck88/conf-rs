@@ -198,7 +198,7 @@ None of these seemed like they were going to meet my needs.
 
 * `envy` tries to use `serde::Deserialize` rather than create it's own proc macro, which is very KISS. But I think in practice it's not going to work that well if you try to flatten a lot of structures together.
   `#[serde(flatten)]` has several known bugs which you can read about in the serde issue tracker which have been open for years. It works fine for small `serde_json` examples but in more complicated examples it has confusing / broken behavior.
-  That makes me nervous. `figment` is similarly based on `serde::Deserialize`. I also think that in an env crate based on `serde::Deserialize`, you aren't going to be able to do error handling in the most helpful way,
+  That makes me nervous. `figment` is similarly based on `serde::Deserialize`. (Sure enough, you can find issues on their tracker [like this one](https://github.com/SergioBenitez/Figment/issues/80)). I also think that in an env crate based on `serde::Deserialize`, you aren't going to be able to do error handling in the most helpful way,
   where you report all the configuration problems and not just the first one you encounter.
   That's important for productivity when your deployment cycles take a long time, and unfortunately that's just not how the `serde::Deserialize` trait works.
 * `envconfig`, `env-config`, `conf_from_env` all provide proc macros of their own, but of these only `envconfig` has a flatten feature (at time of writing). It doesn't have a flatten-with-prefix feature though, and it doesn't do any kind of auto-generated help / discoverability for the `env` read by the final program.
@@ -209,7 +209,7 @@ I decided that my best path forward was to write the library that I was looking 
 I cut scope drastically in order to make the goal achieveable. I decided to only offer a `derive` macro to minimize API surface area. I chose to cut many features that I have never used in a web service such as subcommands and positional arguments. These things only really make sense when at least some of the config is happening via CLI args, since environment variables are not ordered.
 
 At some point I had built a first draft, working on and off in spare time. Eventually it got to the point where I could play with large examples and see how it felt, and particularly, see if I would actually feel good about migrating a project
-that was using `clap` to use this library instead.
+that was using `clap-derive` to use this library instead.
 
 At some point I had a realization: I would be much better off using `clap::Builder` under the hood rather than building my own parser and error rendering, and I would not have to give up much of anything. The way I had already structured things, this was a relatively easy change. The goal of the project became about building an alternative derive macro for `clap` that supported flatten-with-prefix, rather than building a completely new env-and-argument parser. This was different from what I expected, because I thought based on the tickets that most likely there would be changes needed in the `builder` side and not only the `derive` side of `clap`. This ultimately saved a lot of work to get to a minimum viable state.
 
@@ -244,15 +244,16 @@ We would need considerably more developer / maintainer energy than I am willing 
 Additionally, in my view, optimizing parsing time or code size should not be a major development goal of this crate, because it's very unlikely to have a noticeable benefit for a web service.
 There are [half a dozen libraries]((https://github.com/rosetta-rs/argparse-rosetta-rs)) that have parsing time and code size as goals, which you can use in situations where that's more important.
 That's not to say that I won't take patches that refactor to avoid copies and allocations during parsing and such, but if a patch like that has negative impact on readability of the code, or ease of developing interesting features in the future,
-then it requires more justification. I have made some minimal efforts to avoid needless copies, but as long as performance is comparable to `clap`, then I think users in the targetted niche will be happy.
+then it requires more justification. I have made some minimal efforts to avoid needless copies, but as long as performance is comparable to `clap-derive`, then I think users in the targetted niche will be happy.
 
-Another feature that I noticed in many `conf` libraries is special support for reading config from files in various formats. From my experience using `clap`, the simplest way to handle this is to write a `value_parser` that opens a file and parses it. This can usually be one line if you want it to be, for example:
+Another feature that I noticed in many `config` libraries is special support for reading config from files in various formats. From my experience using `clap-derive`, the simplest way to handle this is to write a `value_parser` that opens a file and parses it. This can usually be one line if you want it to be, for example:
 
  `value_parser = |path: &str| { serde_json::from_str(&std::fs::read_to_string(path).unwrap()) }`
 
+This is good because it's very simple and very configurable -- if you decide you'd rather use `serde_json_lenient::from_str` instead, it's easy for you to change to that and you aren't tied to my choices of libraries or versions.
 I think it might make sense to make an "extras" crate that contains "common" or "popular" value parsers. One nice thing about that is that those value parsers could also be used with `clap`.
 I don't think that *this* crate should contain any code that reads a file. For me, that is a separation of concerns thing.
 
-Personally, I do like using a crate like [`dotenvy`](https://crates.io/crates/dotenvy), which can load a `.env` file and set values to `env` right before you do `Config::parse()`. That `.env` file can be checked into git which helps local development, and you can leave it out when you go to build a docker container. This is not as general as the "layered config" that [config-rs](https://crates.io/crates/config) offers, but it's as much as I've ever needed, and doesn't create a hazard if you ultimately want to deploy in kubernetes or something like that.
+Personally, I do like using a crate like [`dotenvy`](https://crates.io/crates/dotenvy), which can load a `.env` file and set values to `env` right before you do `Config::parse()`. That `.env` file can be checked into git which helps local development, and you can leave it out when you go to build a docker container. This is not as general as the "layered config" that [config-rs](https://crates.io/crates/config) and [figment](https://crates.io/crates/figment) offer, but it's as much as I've ever needed, and doesn't create a hazard if you ultimately want to deploy in kubernetes or something similar, where env is the preferred configuration mechanism and config files usually can't be as easily changed.
 
 My belief is that by keeping the API surface area relatively small and staying focused on the target niche, we can make sure that it stays as easy as possible to add useful features, test them appropriately, and drive the project forwards. I do believe that building on `clap` is the best course in terms of conserving developer energy and serving the users the best.
