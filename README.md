@@ -1,10 +1,12 @@
 # conf
 
-`conf` is an alternate derive macro for using [`clap`](https://docs.rs/clap/latest/clap/). It supports some additional features that `clap-derive` does not, which help with the configuration of large projects, such as a web app following the [12-factor style](https://12factor.net/config). In exchange, some features are not implemented that are less useful for such purposes (or would add a lot of complexity). In some cases there are deviations from `clap-derive` to make the defaults closer to a good 12-factor app behavior.
+`conf` is an alternative derive macro for [`clap`](https://docs.rs/clap/latest/clap/). It supports some powerful features that `clap-derive` does not, which help with the configuration of large projects, such as a web app following the [12-factor style](https://12factor.net/config). In exchange, some features are not implemented that are less useful for such purposes.
+
+In some cases, there are deviations from `clap-derive` to either help avoid mistakes, or to make the defaults closer to a good 12-factor app behavior.
 
 `conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/latest/clap/) and the earlier `struct-opt` which I used for years. They are both great and became popular for a reason.
 However, there are some specific missing features (prefixing on flatten) and related pain points that I ran into over and over again. It seems to be hard to add these features now.
-These features are very helpful when you want to be able to configure a large web app entirely via the environment.
+These features are very helpful when you want to be able to configure a large web app with many parts entirely via the environment.
 See [motivation](./MOTIVATION.md) for more detail.
 
 ## Using `conf` in a cargo project
@@ -15,6 +17,8 @@ First add `conf` to the dependencies in your `Cargo.toml` file:
 [dependencies]
 conf = "0.1"
 ```
+
+NOTE: Not actually published to crates.io yet...
 
 Then, create a `struct` which represents the configuration data your application needs to read on startup.
 This struct should derive the `Conf` trait, and the `conf` attributes should be used to describe how each field can be read.
@@ -54,7 +58,7 @@ A field in your struct can be read from a few sources:
 
 * `#[conf(short)]` means that it corresponds to a "short" option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short='t')]` for example.
 * `#[conf(long)]` means that it corresponds to a "long" option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[conf(long="target-url")]` for example.
-* `#[conf(env)]` means that it corresponds to an environment varaible, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
+* `#[conf(env)]` means that it corresponds to an environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
 * `#[conf(default_value)]` specifies a default value for this field if none of the other three possible sources provides one.
 
 Such attributes can be combined by separating them with commas, for example `#[conf(long, env, default_value="x")]` means the field has an assocated long option, an associated environment variable, and a default value if both of these are omitted.
@@ -114,7 +118,7 @@ pub struct Config {
 
 because logically, you have three different http clients that you need to configure.
 
-However with `clap`, this is going to cause a problem, because when the fields from `HttpClientConfig` get flattened, their names will collide, and the parser will reject it as ambiguous.
+However with `clap-derive`, this is going to cause a problem, because when the fields from `HttpClientConfig` get flattened, their names will collide, and the parser will reject it as ambiguous.
 
 When using `conf`, you can resolve it by declaring a prefix.
 
@@ -183,12 +187,12 @@ If you think this crate is a good fit for you, I believe that the most effective
 * If your component is initialized by a larger component, then that component should have its own config struct and you should use `flatten` to assemble it. You should usually use the `prefix` and `help_prefix` options when flattening.
 * Each binary target should have a config struct, and should `::parse()` it in `fn main()`.
 
-This way, whenever you discover in the future that you need to add more config values for one of your small components, all you have to do is add it to the associated config struct, and it will automatically appear in every service that needs it, as many times as needed with appropriate prefixing, without you having to plumb it through every step of the way. Additionally, it makes it easier to create correct config for any future services or tools. And it causes all of your services and tools to have a similar, predictable style, and to have all of their config documented in `--help`, even pretty obscure environment variables and such, which usually just don't get documented if you chose to read them directly from `std::env` instead.
+This way, whenever you discover in the future that you need to add more config values for one of your small components, all you have to do is add it to the associated config struct, and it will automatically appear in every service that needs it, as many times as needed with appropriate prefixing, without you having to plumb it through every step of the way. Additionally, it makes it easier to create correct config for any future services or tools. And it causes all of your services and tools to have a similar, predictable style, and to have all of their config documented in `--help`, even pretty obscure environment variables and such, which usually just don't get documented if you choose to read them directly from `std::env` instead.
 
-The argument parsing functionality of this crate is of secondary importance -- the 12-factor app reads *all* config from the environment. The main reason that CLI argument parsing functionality is here is:
+The argument parsing functionality of this crate is of secondary importance -- the 12-factor app reads *all* config from the environment when deployed. The main reason that CLI argument parsing functionality is here is:
 
 * It's sometimes very convenient when running services locally, or in CI, to be able to pass config as CLI arguments instead of env, or to pass these arguments knowing that they will shadow whatever values are in `env`.
-* I had some existing projects that were using `clap` that I wanted to be able to migrate to this in a non-disruptive way.
+* I had some existing projects that were using `clap-derive` that I wanted to be able to migrate to this in a non-disruptive way.
 * I wanted to ensure that `--help` could be easily auto-generated in a way that includes all the relevant information about `env` arguments.
 
 This is somewhat different from the history of [`clap`](https://docs.rs/clap/latest/clap/), which started life as a CLI argument parser, and added `env` fallback after the library was already pretty mature.
