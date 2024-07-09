@@ -1,6 +1,14 @@
 use crate::{Error, ParseType, ParsedEnv, ProgramOption};
 use clap::{Arg, ArgAction, ArgMatches, Command};
-use std::ffi::OsString;
+use std::{collections::HashMap, ffi::OsString};
+
+/// Result of parsing arguments
+pub struct ParsedArgs<'a> {
+    // Clap's results of parsing the CLI arguments
+    pub arg_matches: ArgMatches,
+    // A map from option id's back to options. This helps ConfContext to handle env parsing.
+    pub id_to_option: &'a HashMap<&'a str, &'a ProgramOption>,
+}
 
 /// Top-level parser config
 #[derive(Clone, Debug, Default)]
@@ -18,6 +26,7 @@ pub struct ParserConfig {
 pub struct Parser<'a> {
     parser_config: ParserConfig,
     options: Vec<&'a ProgramOption>,
+    id_to_option: HashMap<&'a str, &'a ProgramOption>,
     env: &'a ParsedEnv,
     command: Command,
 }
@@ -32,6 +41,10 @@ impl<'a> Parser<'a> {
         env: &'a ParsedEnv,
     ) -> Result<Self, Error> {
         let options = options.iter().collect::<Vec<&'a ProgramOption>>();
+        let id_to_option = options
+            .iter()
+            .map(|opt| (&*opt.id, *opt))
+            .collect::<HashMap<&'a str, &'a ProgramOption>>();
 
         // Build a clap command
         let mut command = Command::new(parser_config.name);
@@ -41,14 +54,38 @@ impl<'a> Parser<'a> {
             command = command.about(&**about);
         }
 
-        command = command.args(
-            options
-                .iter()
-                .map(|opt| Self::make_arg(&parser_config, env, opt)),
-        );
+        let mut args = Vec::<Arg>::new();
+        let mut env_only_help_text = Vec::<String>::new();
+
+        for opt in options.iter() {
+            match Self::make_arg(&parser_config, env, opt)? {
+                MaybeArg::Arg(arg) => {
+                    args.push(arg);
+                }
+                MaybeArg::EnvOnly(text) => {
+                    env_only_help_text.push(text);
+                }
+                MaybeArg::DefaultOnly => {
+                    // We don't bother documenting these since the user can't adjust them
+                }
+            }
+        }
+
+        command = command.args(args);
 
         if parser_config.no_help_flag {
             command = command.disable_help_flag(true);
+        }
+
+        // Make an environment variables section that goes at the end, in after_help
+        if !env_only_help_text.is_empty() {
+            let mut after_help_text = "Environment variables:\n".to_owned();
+
+            for var_text in env_only_help_text {
+                after_help_text += &var_text;
+            }
+
+            command = command.after_help(after_help_text);
         }
 
         command.build();
@@ -56,22 +93,88 @@ impl<'a> Parser<'a> {
         Ok(Self {
             parser_config,
             options,
+            id_to_option,
             env,
             command,
         })
     }
 
+    /// Get command associated to this parser
+    pub fn get_command(&self) -> &Command {
+        &self.command
+    }
+
     /// Parse from raw os args (or something that looks like std::env::args_os but could be test data)
-    pub fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ArgMatches, Error>
+    pub fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ParsedArgs, Error>
     where
         T: Into<OsString> + Clone,
     {
-        self.command.clone().try_get_matches_from(args_os)
+        Ok(self
+            .command
+            .clone()
+            .try_get_matches_from(args_os)
+            .map(|arg_matches| ParsedArgs {
+                arg_matches,
+                id_to_option: &self.id_to_option,
+            })?)
     }
 
-    // Turn a ProgramOption into an arg
-    fn make_arg(_parser_config: &ParserConfig, env: &ParsedEnv, option: &'a ProgramOption) -> Arg {
-        let mut arg = Arg::new(option.id.clone().into_owned()).required(option.is_required);
+    // Turn a ProgramOption into an arg. Or, if it should not be set via CLI at all, just generate
+    // help text for it which we will append to the help message.
+    //
+    // Notes:
+    //   Our goal here is to get clap to parse the CLI args, and generate satisfactory help text,
+    //   but we don't actually want it to handle env, because it's missing a lot of functionality around that.
+    //   So some things that clap has nominal support for, we're not going to build into the command here.
+    //
+    //   Instead, our strategy is:
+    //   1. No env is specified to clap. All env handling is going to happen in `ConfContext` instead.
+    //   2. Nothing that is "required" is considered required at this stage, because it might be supplied by env.
+    //      We will check for requirements being fulfilled in `ConfContext` instead, and errors will be aggregated
+    //      in `from_conf_context`.
+    //      That also lets us delay hitting "missing required value" errors until we are prepared to capture
+    //      all possible errors that occur.
+    //   3. Because no env is specified to clap, it won't show up in the clap generated help text automatically.
+    //      Instead we have to put it in the description ourselves.
+    //
+    // We also need to work around this issue: https://github.com/clap-rs/clap/discussions/5432
+    //
+    // If an arg doesn't have a short or long flag, then clap will consider it a positional argument.
+    // But if it has an env source, it might be a secret or something and it would not be correct to treat it as a positional CLI argument.
+    // In this crate we want positional arguments to be opt-in, and we don't support them yet.
+    //
+    // For similar reasons, we can't let clap perform default values for env-only arguments, since it won't run for those arguments.
+    // It's simpler to just let not clap perform default values at all.
+    fn make_arg(
+        _parser_config: &ParserConfig,
+        env: &ParsedEnv,
+        option: &'a ProgramOption,
+    ) -> Result<MaybeArg, Error> {
+        if option.short_form.is_none() && option.long_form.is_none() {
+            // If there is no short form and no long form, clap is going to make it a positional argument, but we don't want that and there's no way to disable the behavior.
+            // Clap also isn't supposed to read a value for this, so the solution is don't create an arg at all, and just add documentation
+            // about it ourselves.
+            return if option.env_form.is_some() {
+                let mut buf = String::new();
+                option.print(&mut buf, Some(env))?;
+                Ok(MaybeArg::EnvOnly(buf))
+            } else if option.default_value.is_some() {
+                Ok(MaybeArg::DefaultOnly)
+            } else {
+                panic!("Program option {option:#?} has no way to receive a value, this is an internal error.");
+            };
+        }
+
+        if option.is_secret() {
+            let mut buf = String::new();
+            option.print(&mut buf, Some(env)).unwrap();
+            panic!("The secret feature is not compatible with arguments that can be read from CLI args. See documentation for more about this.\n\n{buf}")
+        }
+
+        let mut arg = Arg::new(option.id.clone().into_owned());
+
+        // All args are considered optional from clap's point of view, and we will handle any missing required errors later.
+        arg = arg.required(false);
 
         // Set the short form if present
         if let Some(short_form) = option.short_form {
@@ -83,37 +186,63 @@ impl<'a> Parser<'a> {
             arg = arg.long(long_form.clone().into_owned());
         }
 
-        // Set the env form if present
-        if let Some(env_form) = option.env_form.as_ref() {
-            let env = env.clone();
-            let env_source = move |var: &std::ffi::OsStr| {
-                var.to_str().and_then(|var_str| env.get(var_str).cloned())
-            };
-            arg = arg.env_with_source(env_form.clone().into_owned(), env_source);
+        // Set visible aliases if present
+        if !option.aliases.is_empty() {
+            arg = arg.visible_aliases(
+                option
+                    .aliases
+                    .iter()
+                    .map(|alias| alias.clone().into_owned())
+                    .collect::<Vec<_>>(),
+            );
         }
 
-        // Set the default value if present
-        if let Some(default_value) = option.default_value.as_ref() {
-            arg = arg.default_value(default_value.clone().into_owned());
+        // Set the help text if either description or env_form is present, in that order
+        let mut help_text = option
+            .env_form
+            .as_deref()
+            .map(|env_form| {
+                let cur_val = env.get_lossy_or_default(env_form);
+                format!("\n[env {env_form}={cur_val}]")
+            })
+            .unwrap_or_default();
+        // Append any env aliases to the help text
+        for env_alias in option.env_aliases.iter() {
+            let cur_val = env.get_lossy_or_default(env_alias);
+            help_text += &format!("\n[env {env_alias}={cur_val}]");
         }
-
-        // Set the help text if present
-        if let Some(description) = option.description.as_ref() {
-            arg = arg.help(description.clone().into_owned());
+        // Append any default value to the help text
+        if let Some(def) = option.default_value.as_ref() {
+            help_text += &format!("\n[default: {def}]");
+        }
+        // Append secret tag if the option is a secret
+        if option.is_secret() {
+            help_text += "\n[secret]";
+        }
+        // Prepend the user's description to the help_text if present
+        help_text.insert_str(0, option.description.as_deref().unwrap_or_default());
+        if !help_text.is_empty() {
+            arg = arg.help(help_text);
         }
 
         // Set the ArgAction of the arg based on its parse type
-        // We typically allow hyphen values.
         match option.parse_type {
             ParseType::Flag => {
                 // See also https://github.com/clap-rs/clap/issues/1649
                 arg = arg
                     .action(ArgAction::SetTrue)
                     .value_parser(clap::builder::FalseyValueParser::new())
-                //arg = arg.action(ArgAction::Set).default_value("false").value_parser(clap::builder::FalseyValueParser::new())
             }
-            ParseType::Parameter => arg = arg.action(ArgAction::Set).allow_hyphen_values(true),
-            ParseType::Repeat => arg = arg.action(ArgAction::Append).allow_hyphen_values(true),
+            ParseType::Parameter => {
+                arg = arg
+                    .action(ArgAction::Set)
+                    .allow_hyphen_values(option.allow_hyphen_values)
+            }
+            ParseType::Repeat => {
+                arg = arg
+                    .action(ArgAction::Append)
+                    .allow_hyphen_values(option.allow_hyphen_values)
+            }
         };
 
         // Set the help heading.
@@ -134,7 +263,7 @@ impl<'a> Parser<'a> {
             arg = arg.help_heading("Environment Variables");
         }*/
 
-        arg
+        Ok(MaybeArg::Arg(arg))
     }
 
     // This function is not used in the actual crate, since clap handles all the help stuff, but it's here and marked public for testing
@@ -144,4 +273,11 @@ impl<'a> Parser<'a> {
         command.set_bin_name("."); // Override the crate name stuff for tests
         command.render_help().to_string()
     }
+}
+
+#[allow(clippy::large_enum_variant)]
+enum MaybeArg {
+    Arg(Arg),
+    EnvOnly(String),
+    DefaultOnly,
 }

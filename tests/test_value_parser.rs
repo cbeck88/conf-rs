@@ -1,14 +1,17 @@
+mod common;
+use common::*;
+
 use conf::Conf;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct MyJson {
     a: String,
     b: i64,
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestValueParserJson {
     // json argument, serde_json::from_str just works
     #[conf(long, env, value_parser = serde_json::from_str)]
@@ -21,7 +24,11 @@ struct TestValueParserJson {
 
 #[test]
 fn test_value_parser_json() {
-    assert!(TestValueParserJson::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestValueParserJson::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        ["required value was not provided", "env 'MY_JSON'"],
+        not["--fallback"]
+    );
 
     let result = TestValueParserJson::try_parse_from::<&str, &str, &str>(
         vec![".", "--my-json={\"a\":\"foo\", \"b\": 9}"],
@@ -34,11 +41,17 @@ fn test_value_parser_json() {
     assert_eq!(result.fallback_jsons.len(), 0);
 
     // unknown fields causes an error (with serde(deny_unknown_fields))
-    assert!(TestValueParserJson::try_parse_from::<&str, &str, &str>(
-        vec![".", "--my-json={\"a\":\"foo\", \"b\": 9, \"c\": 7}"],
-        vec![]
-    )
-    .is_err());
+    assert_error_contains_text!(
+        TestValueParserJson::try_parse_from::<&str, &str, &str>(
+            vec![".", "--my-json={\"a\":\"foo\", \"b\": 9, \"c\": 7}"],
+            vec![]
+        ),
+        [
+            "Invalid value",
+            "when parsing '--my-json' value '{\"a\":\"foo\"",
+            "unknown field `c`"
+        ]
+    );
 
     // Specifying json for a repeat parameter works as expected
     let result = TestValueParserJson::try_parse_from::<&str, &str, &str>(
@@ -62,20 +75,27 @@ fn test_value_parser_json() {
     assert_eq!(result.fallback_jsons[1].b, 19);
 
     // If one repeat parameter is invalid, then parsing fails
-    assert!(TestValueParserJson::try_parse_from::<&str, &str, &str>(
-        vec![
-            ".",
-            "--my-json={\"a\":\"foo\", \"b\": 9}",
-            "--fallback_json",
-            "{\"a\": \"bar\", \"b\": 42}",
-            "--fallback_json={\"a\": \"baz\", \"b\": 19, \"d\": 11}"
+    assert_error_contains_text!(
+        TestValueParserJson::try_parse_from::<&str, &str, &str>(
+            vec![
+                ".",
+                "--my-json={\"a\":\"foo\", \"b\": 9}",
+                "--fallback_json",
+                "{\"a\": \"bar\", \"b\": 42}",
+                "--fallback_json={\"a\": \"baz\", \"b\": 19, \"d\": 11}"
+            ],
+            vec![]
+        ),
+        [
+            "Invalid value",
+            "when parsing '--fallback_json' value '{\"a\": \"baz\"",
+            "unknown field `d`"
         ],
-        vec![]
-    )
-    .is_err());
+        not["\"foo\""]
+    );
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestValueParserJson2 {
     // parse a vec of jsons, without repeat keyword, but still using serde_json::from_str as value parser
     #[conf(long, env, value_parser = serde_json::from_str)]
@@ -84,7 +104,10 @@ struct TestValueParserJson2 {
 
 #[test]
 fn test_value_parser_json2() {
-    assert!(TestValueParserJson2::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestValueParserJson2::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        ["required value was not provided", "env 'JSONS'"]
+    );
 
     let result = TestValueParserJson2::try_parse_from::<&str, &str, &str>(
         vec![".", "--jsons=[{\"a\":\"foo\", \"b\": 9}]"],
@@ -122,7 +145,7 @@ fn strict_bool(arg: &str) -> Result<bool, &'static str> {
     }
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestValueParserBool {
     // this is a flag
     #[conf(short, long, env)]
@@ -135,7 +158,14 @@ struct TestValueParserBool {
 
 #[test]
 fn test_value_parser_bool() {
-    assert!(TestValueParserBool::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestValueParserBool::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        [
+            "required value was not provided",
+            "env 'STRICT'",
+            "'--strict'"
+        ]
+    );
 
     let result =
         TestValueParserBool::try_parse_from::<&str, &str, &str>(vec![".", "--strict=1"], vec![])
@@ -151,11 +181,14 @@ fn test_value_parser_bool() {
     assert!(!result.flag);
     assert!(!result.strict);
 
-    assert!(TestValueParserBool::try_parse_from::<&str, &str, &str>(
-        vec![".", "--strict=true"],
-        vec![]
-    )
-    .is_err());
+    assert_error_contains_text!(
+        TestValueParserBool::try_parse_from::<&str, &str, &str>(vec![".", "--strict=true"], vec![]),
+        [
+            "Invalid value",
+            "when parsing '--strict' value 'true'",
+            "not explicit enough"
+        ]
+    );
 
     let result = TestValueParserBool::try_parse_from::<&str, &str, &str>(
         vec![".", "--strict=0", "--flag"],
@@ -176,7 +209,7 @@ fn test_value_parser_bool() {
     assert!(result.strict);
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestValueParserLambda {
     #[conf(short = 't', value_parser = |s: &str| -> Result<_, &'static str> { Ok(s.to_uppercase()) })]
     field: String,
@@ -184,7 +217,10 @@ struct TestValueParserLambda {
 
 #[test]
 fn test_value_parser_lambda() {
-    assert!(TestValueParserLambda::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestValueParserLambda::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        ["required value was not provided", "'-t'"]
+    );
 
     let result =
         TestValueParserLambda::try_parse_from::<&str, &str, &str>(vec![".", "-t=a"], vec![])

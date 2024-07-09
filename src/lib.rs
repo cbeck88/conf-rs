@@ -1,4 +1,4 @@
-//! A derive-based, highly composable config parsing library with first-class support for env
+//! A `derive`-based, highly composable env-and-argument parser aimed at the practically-minded web developer building large web projects.
 #![doc = include_str!("../REFERENCE.md")]
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
@@ -8,19 +8,21 @@ mod error;
 mod parse_env;
 mod parser;
 mod program_option;
+mod str_to_bool;
 mod traits;
 
 // These are not needed by users or by generated code
+use conf_context::FlattenedOptionalDebugInfo;
 use parse_env::{parse_env, ParsedEnv};
+use parser::ParsedArgs;
+use str_to_bool::str_to_bool;
 
-// Conf, and perhaps Error, is really the only thing users should use, but the derive macro needs these other types.
+// Conf, and perhaps Error, is the only public API, but the derive macro needs these other types.
 pub use error::Error;
 pub use traits::Conf;
 
 #[doc(hidden)]
-pub use clap::parser::ValueSource;
-#[doc(hidden)]
-pub use conf_context::ConfContext;
+pub use conf_context::{ConfContext, ConfValueSource};
 #[doc(hidden)]
 pub use error::InnerError;
 #[doc(hidden)]

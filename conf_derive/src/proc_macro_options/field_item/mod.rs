@@ -2,7 +2,7 @@ use super::StructItem;
 use crate::util::type_is_bool;
 
 use proc_macro2::TokenStream;
-use syn::{punctuated::Punctuated, Field, Ident, Meta, Token};
+use syn::{punctuated::Punctuated, Field, Ident, Meta, Token, Type};
 
 mod flag_item;
 mod flatten_item;
@@ -27,7 +27,7 @@ impl FieldItem {
         // First, inspect the first field attribute.
         // If the first attribute is 'flag', 'parameter', 'repeat', or 'flatten', then that's how we're going to handle it.
         for attr in &field.attrs {
-            if attr.path().is_ident("conf") {
+            if attr.path().is_ident("conf") || attr.path().is_ident("arg") {
                 let nested =
                     attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
                 if let Some(meta) = nested.first() {
@@ -54,6 +54,34 @@ impl FieldItem {
         })
     }
 
+    /// True if this field represents a single program option
+    pub fn is_single_option(&self) -> bool {
+        matches!(
+            self,
+            Self::Flag(..) | Self::Parameter(..) | Self::Repeat(..)
+        )
+    }
+
+    /// Get the field name
+    pub fn get_field_name(&self) -> &Ident {
+        match self {
+            Self::Flag(item) => item.get_field_name(),
+            Self::Parameter(item) => item.get_field_name(),
+            Self::Repeat(item) => item.get_field_name(),
+            Self::Flatten(item) => item.get_field_name(),
+        }
+    }
+
+    /// Get the field type
+    pub fn get_field_type(&self) -> Type {
+        match self {
+            Self::Flag(item) => item.get_field_type(),
+            Self::Parameter(item) => item.get_field_type(),
+            Self::Repeat(item) => item.get_field_type(),
+            Self::Flatten(item) => item.get_field_type(),
+        }
+    }
+
     /// Generate code that constructs (one or more) ProgramOption as needed and pushes them onto program_options_ident
     pub fn gen_push_program_options(
         &self,
@@ -68,7 +96,13 @@ impl FieldItem {
     }
 
     /// Generate code for a struct initializer for this field
-    pub fn gen_initializer(&self, conf_context_ident: &Ident) -> Result<TokenStream, syn::Error> {
+    ///
+    /// Returns a TokenStream for initializer expression, which can use `?` to return errors,
+    /// and bool which is true if the error type is `Vec<InnerError>` and false if it is `InnerError`
+    pub fn gen_initializer(
+        &self,
+        conf_context_ident: &Ident,
+    ) -> Result<(TokenStream, bool), syn::Error> {
         match self {
             Self::Flag(item) => item.gen_initializer(conf_context_ident),
             Self::Parameter(item) => item.gen_initializer(conf_context_ident),

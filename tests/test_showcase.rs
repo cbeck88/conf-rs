@@ -15,23 +15,49 @@ fn test_showcase_example_no_args() {
     let output = command.output().unwrap();
 
     let expected = &"
-error: the following required arguments were not provided:
-  --auth-url <solver_service.auth.url>
-  --auth-retries <solver_service.auth.retries>
-  --artifact-url <solver_service.artifact.url>
-  --artifact-retries <solver_service.artifact.retries>
-  --basic-solver-matrix-size <basic_solver.matrix_size>
-  --basic-solver-branching-factor <basic_solver.branching_factor>
-  --basic-solver-epsilon <basic_solver.epsilon>
-  --high-priority-solver-matrix-size <high_priority_solver.matrix_size>
-  --high-priority-solver-branching-factor <high_priority_solver.branching_factor>
-  --high-priority-solver-epsilon <high_priority_solver.epsilon>
-  --telemetry-url <telemetry.url>
-  --telemetry-retries <telemetry.retries>
+error: A required value was not provided
+  env 'MYCO_BASIC_SOLVER_BRANCHING_FACTOR', or '--basic-solver-branching-factor', must be provided
+  env 'MYCO_BASIC_SOLVER_EPSILON', or '--basic-solver-epsilon', must be provided
+  env 'MYCO_BASIC_SOLVER_MATRIX_SIZE', or '--basic-solver-matrix-size', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_BRANCHING_FACTOR', or '--high-priority-solver-branching-factor', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_EPSILON', or '--high-priority-solver-epsilon', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_MATRIX_SIZE', or '--high-priority-solver-matrix-size', must be provided
+  env 'MYCO_ARTIFACT_RETRIES', or '--artifact-retries', must be provided
+  env 'MYCO_ARTIFACT_URL', or '--artifact-url', must be provided
+  env 'MYCO_AUTH_RETRIES', or '--auth-retries', must be provided
+  env 'MYCO_AUTH_URL', or '--auth-url', must be provided
+  env 'MYCO_TELEMETRY_RETRIES', or '--telemetry-retries', must be provided
+  env 'MYCO_TELEMETRY_URL', or '--telemetry-url', must be provided
+"[1..];
 
-Usage: showcase --auth-url <solver_service.auth.url> --auth-retries <solver_service.auth.retries> --artifact-url <solver_service.artifact.url> --artifact-retries <solver_service.artifact.retries> --basic-solver-matrix-size <basic_solver.matrix_size> --basic-solver-branching-factor <basic_solver.branching_factor> --basic-solver-epsilon <basic_solver.epsilon> --high-priority-solver-matrix-size <high_priority_solver.matrix_size> --high-priority-solver-branching-factor <high_priority_solver.branching_factor> --high-priority-solver-epsilon <high_priority_solver.epsilon> --telemetry-url <telemetry.url> --telemetry-retries <telemetry.retries>
+    assert_multiline_eq!(from_utf8(&output.stderr).unwrap(), &expected);
+    assert_eq!(output.status.code(), Some(2));
+}
 
-For more information, try '--help'.
+#[test]
+fn test_showcase_example_some_invalid_args() {
+    let mut command = get_built_showcase_example();
+    let output = command
+        .args(["--auth-retries=-3"])
+        .envs([("MYCO_TELEMETRY_RETRIES", "-2")])
+        .output()
+        .unwrap();
+
+    let expected = &"
+error: A required value was not provided
+  env 'MYCO_BASIC_SOLVER_BRANCHING_FACTOR', or '--basic-solver-branching-factor', must be provided
+  env 'MYCO_BASIC_SOLVER_EPSILON', or '--basic-solver-epsilon', must be provided
+  env 'MYCO_BASIC_SOLVER_MATRIX_SIZE', or '--basic-solver-matrix-size', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_BRANCHING_FACTOR', or '--high-priority-solver-branching-factor', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_EPSILON', or '--high-priority-solver-epsilon', must be provided
+  env 'MYCO_HIGH_PRIORITY_SOLVER_MATRIX_SIZE', or '--high-priority-solver-matrix-size', must be provided
+  env 'MYCO_ARTIFACT_RETRIES', or '--artifact-retries', must be provided
+  env 'MYCO_ARTIFACT_URL', or '--artifact-url', must be provided
+  env 'MYCO_AUTH_URL', or '--auth-url', must be provided
+  env 'MYCO_TELEMETRY_URL', or '--telemetry-url', must be provided
+error: Invalid value
+  when parsing '--auth-retries' value '-3': invalid digit found in string
+  when parsing env 'MYCO_TELEMETRY_RETRIES' value '-2': invalid digit found in string
 "[1..];
 
     assert_multiline_eq!(from_utf8(&output.stderr).unwrap(), &expected);
@@ -46,47 +72,68 @@ fn test_showcase_example_help() {
     let expected = &"
 Solves widget optimization problems on demand as a service
 
-Usage: showcase [OPTIONS] --auth-url <solver_service.auth.url> --auth-retries <solver_service.auth.retries> --artifact-url <solver_service.artifact.url> --artifact-retries <solver_service.artifact.retries> --basic-solver-matrix-size <basic_solver.matrix_size> --basic-solver-branching-factor <basic_solver.branching_factor> --basic-solver-epsilon <basic_solver.epsilon> --high-priority-solver-matrix-size <high_priority_solver.matrix_size> --high-priority-solver-branching-factor <high_priority_solver.branching_factor> --high-priority-solver-epsilon <high_priority_solver.epsilon> --telemetry-url <telemetry.url> --telemetry-retries <telemetry.retries>
+Usage: showcase [OPTIONS]
 
 Options:
       --listen-addr <solver_service.listen_addr>
-          Solver service: Listen address to bind to [env: MYCO_LISTEN_ADDR=] [default: 127.0.0.1:4040]
+          Solver service: Listen address to bind to
+          [env MYCO_LISTEN_ADDR=]
+          [default: 127.0.0.1:4040]
       --auth-url <solver_service.auth.url>
-          Solver service: Auth service: Base URL [env: MYCO_AUTH_URL=]
+          Solver service: Auth service: Base URL
+          [env MYCO_AUTH_URL=]
       --auth-retries <solver_service.auth.retries>
-          Solver service: Auth service: Number of retries [env: MYCO_AUTH_RETRIES=]
+          Solver service: Auth service: Number of retries
+          [env MYCO_AUTH_RETRIES=]
       --artifact-url <solver_service.artifact.url>
-          Solver service: Artifact service: Base URL [env: MYCO_ARTIFACT_URL=]
+          Solver service: Artifact service: Base URL
+          [env MYCO_ARTIFACT_URL=]
       --artifact-retries <solver_service.artifact.retries>
-          Solver service: Artifact service: Number of retries [env: MYCO_ARTIFACT_RETRIES=]
+          Solver service: Artifact service: Number of retries
+          [env MYCO_ARTIFACT_RETRIES=]
       --basic-solver-matrix-size <basic_solver.matrix_size>
-          Basic solver: Size of matrix to use when solving [env: MYCO_BASIC_SOLVER_MATRIX_SIZE=]
+          Basic solver: Size of matrix to use when solving
+          [env MYCO_BASIC_SOLVER_MATRIX_SIZE=]
       --basic-solver-branching-factor <basic_solver.branching_factor>
-          Basic solver: Branching factor to use when exploring search tree [env: MYCO_BASIC_SOLVER_BRANCHING_FACTOR=]
+          Basic solver: Branching factor to use when exploring search tree
+          [env MYCO_BASIC_SOLVER_BRANCHING_FACTOR=]
       --basic-solver-epsilon <basic_solver.epsilon>
-          Basic solver: Epsilon which controls when we decide that solutions have stopped improving significantly [env: MYCO_BASIC_SOLVER_EPSILON=]
+          Basic solver: Epsilon which controls when we decide that solutions have stopped improving significantly
+          [env MYCO_BASIC_SOLVER_EPSILON=]
       --basic-solver-deterministic-rng
-          Basic solver: Whether to use a deterministic seeded rng [env: MYCO_BASIC_SOLVER_DETERMINISTIC_RNG=]
+          Basic solver: Whether to use a deterministic seeded rng
+          [env MYCO_BASIC_SOLVER_DETERMINISTIC_RNG=]
       --basic-solver-round-limit <basic_solver.round_limit>
-          Basic solver: Maximum number of rounds before we stop the search [env: MYCO_BASIC_SOLVER_ROUND_LIMIT=]
+          Basic solver: Maximum number of rounds before we stop the search
+          [env MYCO_BASIC_SOLVER_ROUND_LIMIT=]
       --high-priority-solver-matrix-size <high_priority_solver.matrix_size>
-          High-priority solver: Size of matrix to use when solving [env: MYCO_HIGH_PRIORITY_SOLVER_MATRIX_SIZE=]
+          High-priority solver: Size of matrix to use when solving
+          [env MYCO_HIGH_PRIORITY_SOLVER_MATRIX_SIZE=]
       --high-priority-solver-branching-factor <high_priority_solver.branching_factor>
-          High-priority solver: Branching factor to use when exploring search tree [env: MYCO_HIGH_PRIORITY_SOLVER_BRANCHING_FACTOR=]
+          High-priority solver: Branching factor to use when exploring search tree
+          [env MYCO_HIGH_PRIORITY_SOLVER_BRANCHING_FACTOR=]
       --high-priority-solver-epsilon <high_priority_solver.epsilon>
-          High-priority solver: Epsilon which controls when we decide that solutions have stopped improving significantly [env: MYCO_HIGH_PRIORITY_SOLVER_EPSILON=]
+          High-priority solver: Epsilon which controls when we decide that solutions have stopped improving significantly
+          [env MYCO_HIGH_PRIORITY_SOLVER_EPSILON=]
       --high-priority-solver-deterministic-rng
-          High-priority solver: Whether to use a deterministic seeded rng [env: MYCO_HIGH_PRIORITY_SOLVER_DETERMINISTIC_RNG=]
+          High-priority solver: Whether to use a deterministic seeded rng
+          [env MYCO_HIGH_PRIORITY_SOLVER_DETERMINISTIC_RNG=]
       --high-priority-solver-round-limit <high_priority_solver.round_limit>
-          High-priority solver: Maximum number of rounds before we stop the search [env: MYCO_HIGH_PRIORITY_SOLVER_ROUND_LIMIT=]
+          High-priority solver: Maximum number of rounds before we stop the search
+          [env MYCO_HIGH_PRIORITY_SOLVER_ROUND_LIMIT=]
       --peer <peer_urls>
-          Peers to which we can try to loadshed [env: MYCO_PEER_URLS=]
+          Peers to which we can try to loadshed
+          [env MYCO_PEER_URLS=]
       --admin-listen-addr <admin_listen_addr>
-          Admin listen address to bind to [env: MYCO_ADMIN_LISTEN_ADDR=] [default: 127.0.0.1:9090]
+          Admin listen address to bind to
+          [env MYCO_ADMIN_LISTEN_ADDR=]
+          [default: 127.0.0.1:9090]
       --telemetry-url <telemetry.url>
-          Telemetry endpoint: Base URL [env: MYCO_TELEMETRY_URL=]
+          Telemetry endpoint: Base URL
+          [env MYCO_TELEMETRY_URL=]
       --telemetry-retries <telemetry.retries>
-          Telemetry endpoint: Number of retries [env: MYCO_TELEMETRY_RETRIES=]
+          Telemetry endpoint: Number of retries
+          [env MYCO_TELEMETRY_RETRIES=]
   -h, --help
           Print help
 "[1..];
@@ -184,7 +231,10 @@ fn test_showcase_example_success_env() {
             ("MYCO_HIGH_PRIORITY_SOLVER_EPSILON", "-9.991"),
             ("MYCO_TELEMETRY_URL", "https://far.scape"),
             ("MYCO_TELEMETRY_RETRIES", "2"),
-            ("MYCO_PEER_URLS", "http://replica1.service.local,http://replica2.service.local"),
+            (
+                "MYCO_PEER_URLS",
+                "http://replica1.service.local,http://replica2.service.local",
+            ),
         ])
         .output()
         .unwrap();

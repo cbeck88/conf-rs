@@ -20,7 +20,8 @@ struct TestRepeats {
 
 #[test]
 fn test_repeats_get_program_options() {
-    let (parser_config, opts) = TestRepeats::get_program_options().unwrap();
+    let parser_config = TestRepeats::get_parser_config().unwrap();
+    let opts = TestRepeats::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -233,7 +234,8 @@ struct TestRepeats2 {
 
 #[test]
 fn test_repeats2_get_program_options() {
-    let (parser_config, opts) = TestRepeats2::get_program_options().unwrap();
+    let parser_config = TestRepeats2::get_parser_config().unwrap();
+    let opts = TestRepeats2::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());

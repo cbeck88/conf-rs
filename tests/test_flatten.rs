@@ -2,9 +2,9 @@ use assert_matches::assert_matches;
 use conf::{Conf, ParseType};
 
 mod common;
-use common::vec_str;
+use common::*;
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct HttpClientConfig {
     /// Url
     #[conf(long, env)]
@@ -16,7 +16,7 @@ struct HttpClientConfig {
 }
 
 // a putative test client that flattens http client config
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestClientConfig {
     /// api endpoint to test
     #[conf(flatten)]
@@ -29,7 +29,8 @@ struct TestClientConfig {
 
 #[test]
 fn test_client_config_program_options() {
-    let (parser_config, opts) = TestClientConfig::get_program_options().unwrap();
+    let parser_config = TestClientConfig::get_parser_config().unwrap();
+    let opts = TestClientConfig::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -104,7 +105,7 @@ fn test_client_config_parsing() {
     assert!(result.debug);
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct DbConfig {
     /// Url
     #[conf(long, env)]
@@ -120,7 +121,7 @@ struct DbConfig {
 }
 
 // a putative tool that connects to a database and flattens db config, with prefixing enabled
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestDbToolConfig {
     /// Database
     #[conf(flatten, prefix)]
@@ -133,7 +134,8 @@ struct TestDbToolConfig {
 
 #[test]
 fn test_db_tool_config_program_options() {
-    let (parser_config, opts) = TestDbToolConfig::get_program_options().unwrap();
+    let parser_config = TestDbToolConfig::get_parser_config().unwrap();
+    let opts = TestDbToolConfig::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -227,7 +229,7 @@ fn test_db_tool_config_parsing() {
 }
 
 // a putatative test service, which flattens HttpClientConfig multiple times, as well as DbConfig
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestServiceConfig {
     /// Listen addr to bind to
     #[conf(long, env, default_value = "127.0.0.1:4040")]
@@ -262,7 +264,8 @@ struct TestServiceConfig {
 
 #[test]
 fn test_service_config_program_options() {
-    let (parser_config, opts) = TestServiceConfig::get_program_options().unwrap();
+    let parser_config = TestServiceConfig::get_parser_config().unwrap();
+    let opts = TestServiceConfig::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -387,7 +390,17 @@ fn test_service_config_program_options() {
 fn test_service_config_parsing() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-    assert!(TestServiceConfig::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestServiceConfig::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        [
+            "required value was not provided",
+            "env 'DB_URL'",
+            "env 'DB_PASSWORD'",
+            "env 'AUTH_SERVICE_URL'",
+            "env 'FRIEND_SERVICE_URL'",
+            "env 'BUDDY_SERVICE_URL'"
+        ]
+    );
 
     let result = TestServiceConfig::try_parse_from::<&str, &str, &str>(
         vec!["."],
@@ -450,7 +463,7 @@ fn test_service_config_parsing() {
     assert!(result.hard_mode);
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct PeerServiceConfig {
     /// Urls to connect to
     #[conf(repeat, long = "url", env)]
@@ -471,7 +484,7 @@ struct PeerServiceConfig {
 // This tests what happened if we have two layers of flattening, and also if we flatten some structs at layer 2
 // and also again at layer 1, and turning prefixing on and off for different structs.
 // This also tests top-level env prefix
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 #[conf(env_prefix = "FROB_")]
 struct FrobConfig {
     /// Test
@@ -493,7 +506,8 @@ struct FrobConfig {
 
 #[test]
 fn frob_config_program_options() {
-    let (parser_config, opts) = FrobConfig::get_program_options().unwrap();
+    let parser_config = FrobConfig::get_parser_config().unwrap();
+    let opts = FrobConfig::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -687,7 +701,19 @@ fn frob_config_program_options() {
 fn frob_config_parsing() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-    assert!(FrobConfig::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        FrobConfig::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        [
+            "required value was not provided",
+            "env 'FROB_DB_URL'",
+            "env 'FROB_DB_PASSWORD'",
+            "env 'FROB_AUTH_SERVICE_URL'",
+            "env 'FROB_FRIEND_SERVICE_URL'",
+            "env 'FROB_BUDDY_SERVICE_URL'",
+            "env 'FROB_SLACK_URL'"
+        ],
+        not["env 'FROB_PEER_URLS'"]
+    );
 
     let result = FrobConfig::try_parse_from::<&str, &str, &str>(
         vec!["."],
@@ -803,7 +829,8 @@ struct FrobConfig2 {
 
 #[test]
 fn frob_config2_program_options() {
-    let (parser_config, opts) = FrobConfig2::get_program_options().unwrap();
+    let parser_config = FrobConfig2::get_parser_config().unwrap();
+    let opts = FrobConfig2::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());

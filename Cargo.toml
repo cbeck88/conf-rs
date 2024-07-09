@@ -40,7 +40,7 @@ bench = false
 
 [dependencies]
 conf_derive = { path = "./conf_derive" }
-clap = { git = "https://github.com/cbeck88/clap.git", rev = "ad62c2d4d161d75ec1682ce5ca249f0c70ae8180", features = ["env", "string"] }
+clap = { version = "4.5.8", features = ["string"] }
 
 [dev-dependencies]
 assert_matches = "1.5"

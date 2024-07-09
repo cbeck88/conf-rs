@@ -1,6 +1,9 @@
+mod common;
+use common::*;
+
 use conf::{Conf, ParseType};
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestFlags {
     /// This is a test flag
     #[conf(long, env)]
@@ -13,7 +16,8 @@ struct TestFlags {
 
 #[test]
 fn test_flags_get_program_options() {
-    let (parser_config, opts) = TestFlags::get_program_options().unwrap();
+    let parser_config = TestFlags::get_parser_config().unwrap();
+    let opts = TestFlags::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -66,20 +70,31 @@ fn test_flags_parsing() {
     assert!(result.my_flag);
     assert!(result.my_obscure_flag);
 
-    assert!(
-        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag=true"], vec![]).is_err()
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag=true"], vec![]),
+        ["unexpected value"]
     );
-    assert!(
-        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag=false"], vec![])
-            .is_err()
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag=false"], vec![]),
+        ["unexpected value"]
     );
-    assert!(
-        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag="], vec![]).is_err()
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "--my-flag="], vec![]),
+        ["unexpected value"]
     );
 
-    assert!(TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m=true"], vec![]).is_err());
-    assert!(TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m=false"], vec![]).is_err());
-    assert!(TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m="], vec![]).is_err());
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m=true"], vec![]),
+        ["unexpected argument"]
+    );
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m=false"], vec![]),
+        ["unexpected argument"]
+    );
+    assert_error_contains_text!(
+        TestFlags::try_parse_from::<&str, &str, &str>(vec![".", "-m="], vec![]),
+        ["unexpected argument"]
+    );
 }
 
 #[test]

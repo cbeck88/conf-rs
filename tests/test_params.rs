@@ -1,6 +1,9 @@
+mod common;
+use common::*;
+
 use conf::{Conf, ParseType};
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct TestParams {
     /// This is a test param
     #[conf(long, env)]
@@ -21,7 +24,8 @@ struct TestParams {
 
 #[test]
 fn test_params_get_program_options() {
-    let (parser_config, opts) = TestParams::get_program_options().unwrap();
+    let parser_config = TestParams::get_parser_config().unwrap();
+    let opts = TestParams::get_program_options().unwrap();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -67,7 +71,10 @@ fn test_params_get_program_options() {
 #[test]
 fn test_params_parsing() {
     // Missing required params should not work
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).is_err());
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(vec!["."], vec![]),
+        ["required value was not provided", "'--required'"]
+    );
 
     // Assigning to a required param should work
     let result =
@@ -88,28 +95,33 @@ fn test_params_parsing() {
     assert_eq!(result.should_work.as_deref(), Some("maybe"));
 
     // Assigning to a required param twice should not work
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "--required=foo"],
-        vec![]
-    )
-    .is_err());
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "--required", "foo"],
-        vec![]
-    )
-    .is_err());
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required", "foo", "--required", "foo"],
-        vec![]
-    )
-    .is_err());
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required=foo", "--required=foo"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required=foo", "--required", "foo"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required", "foo", "--required", "foo"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
 
     // Assigning to a optional param short switch should work similar to a long switch
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "-m"],
-        vec![]
-    )
-    .is_err());
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(vec![".", "--required=foo", "-m"], vec![]),
+        ["value is required", "none was supplied"]
+    );
     let result = TestParams::try_parse_from::<&str, &str, &str>(
         vec![".", "--required=foo", "-m=59"],
         vec![],
@@ -131,21 +143,27 @@ fn test_params_parsing() {
     assert_eq!(result.defaulted, "def");
     assert_eq!(result.should_work.as_deref(), Some("maybe"));
     // Assigning to it twice should not work
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "-m=59", "-m=59"],
-        vec![]
-    )
-    .is_err());
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "-m=59", "-m", "59"],
-        vec![]
-    )
-    .is_err());
-    assert!(TestParams::try_parse_from::<&str, &str, &str>(
-        vec![".", "--required=foo", "-m", "59", "-m", "59"],
-        vec![]
-    )
-    .is_err());
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required=foo", "-m=59", "-m=59"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required=foo", "-m=59", "-m", "59"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![".", "--required=foo", "-m", "59", "-m", "59"],
+            vec![]
+        ),
+        ["cannot be used multiple times"]
+    );
 
     // Setting the optional defaulted parameter should work
     let result = TestParams::try_parse_from::<&str, &str, &str>(
@@ -225,21 +243,36 @@ fn test_params_parsing() {
     assert_eq!(result.defaulted, "bueno");
     assert_eq!(result.should_work.as_deref(), Some("yes=no"));
 
-    // Using -- in a cli value should work
+    // Using -- in a cli value should not work (unless allow_hyphen_values is on)
+    assert_error_contains_text!(
+        TestParams::try_parse_from::<&str, &str, &str>(
+            vec![
+                ".",
+                "--required=--foo=bar",
+                "-m=59",
+                "-s",
+                "--yes=no",
+                "-d=bueno",
+            ],
+            vec![("DEFAULTED", "deff")],
+        ),
+        ["unexpected argument '--yes'"]
+    );
+
+    // Using = should work even if the value has hyphens
     let result = TestParams::try_parse_from::<&str, &str, &str>(
         vec![
             ".",
-            "--required=--foo=bar",
-            "-m=59",
-            "-s",
-            "--yes=no",
+            "--required=foo=bar",
+            "-m==59",
+            "-s=--yes=no",
             "-d=bueno",
         ],
         vec![("DEFAULTED", "deff")],
     )
     .unwrap();
-    assert_eq!(result.required, "--foo=bar");
-    assert_eq!(result.my_option.as_deref(), Some("59"));
+    assert_eq!(result.required, "foo=bar");
+    assert_eq!(result.my_option.as_deref(), Some("=59"));
     assert_eq!(result.defaulted, "bueno");
     assert_eq!(result.should_work.as_deref(), Some("--yes=no"));
 }
