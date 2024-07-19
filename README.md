@@ -2,20 +2,20 @@
 
 `conf` is a `derive`-based env-and-argument parser aimed at the practically-minded web developer building large web projects.
 
-It uses [`clap`]([`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
+It uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
 
 `conf` has an intentionally similar proc-macro API to `clap-derive`, but it is not a fork. It is a new library with different goals. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`, which are typically less useful in a web project.
 
 The features that you get for this bargain are:
 
-* You can *assign a prefix to a structure's fields when flattening* it into another structure, and you can similarly do `env` prefixing in a controlled way. This gives you a way to reuse config structures across your project and resolve any collisions. With `clap-derive`, there's no way to do this and there are no really satisfactory workarounds that I am aware of. This is very helpful in a large project, and the need for this feature was the initial motivation for this crate.
-* *You get ALL the errors and not just one of them* if some required env is missing and/or several of the values are invalid. In my searching I found that surprisingly few config crates out there actually do this. It's very helpful if you are doing web apps and your deployments take several minutes or more.
-* *Isolation & testability around `env`*. `clap` only supports reading env values from `std::env::var_os`. If you want to write tests for your config that test what happens when different env variables are set, it's harder than it should be to do this without creating race conditions between tests. This crate lets you control all the inputs more easily. This is also helpful if you want to build for a target such as `wasm`. It's also helpful if you want to implement `Default` for your struct based on the defaults declared in your config, which can help with testing other parts of your code that consume the config. Usually it's undesirable for your unit tests pass or fail depending on whether your local development environment has `env` vars set or not.
-* *Support for `env` aliases*. `clap` supports aliases for command-line arguments but not for `env`. `env` aliases completes the picture and can help you make changes without breaking compatibility.
-* *You can declare fields which are only read from `env`* and cannot be read from args at all. `clap` does not support this, but you may want this for some inputs.
-* *You can declare fields which represent secrets.* This controls whether or not the entire value should be printed in error messages if it fails to parse.
-* *Support for an optional-flatten syntax*. This can simplify code that in `clap-derive` would have to be written to use argument groups and such, and would be less idiomatic that way.
-* *Support for user-defined validation predicates*. This allows you to express constraints that can't be expressed in `clap`, call user-defined functions on user-defined values, etc.
+* You can **assign a prefix to a structure's fields when flattening** it into another structure, and you can similarly do `env` prefixing in a controlled way.
+* **You get ALL the errors and not just one of them** if some required env is missing and/or several of the values are invalid. In my searching I found that surprisingly few config crates out there actually do this. Very helpful if your deployments take a while.
+* **Isolation & testability around `env`**. `clap` only supports reading env values from `std::env::var_os`. If you want to write tests for your config that test what happens when different env variables are set, it's harder than it should be to do this without creating race conditions between tests. This crate lets you control all the inputs more easily. This is also helpful if you want to build for a target such as `wasm`. It's also helpful if you want to implement `Default` for your struct based on the defaults declared in your config, which can help with testing other parts of your code that consume the config. Usually it's undesirable for your unit tests pass or fail depending on whether your local development environment has `env` vars set or not.
+* **Support for `env` aliases**. `clap` supports aliases for command-line arguments but not for `env`. Make changes without breaking compatibility.
+* **You can declare fields which are only read from `env`** and cannot be read from args at all.
+* **You can declare fields which represent secrets.** This controls whether or not the entire value should be printed in error messages if it fails to parse.
+* **Support for an optional-flatten syntax**. This can simplify things that in `clap-derive` would use argument groups and such, and make them more idiomatic to use.
+* **Support for user-defined validation predicates**. This allows you to express constraints that can't be expressed in `clap`.
 
 `conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/latest/clap/) and the earlier [`struct-opt`](https://docs.rs/structopt/latest/structopt/) which I used for years. They are both great and became popular for a reason.
 
@@ -34,7 +34,7 @@ See [MOTIVATION.md](./MOTIVATION.md) for more discussion about this project and 
   * [Hierarchical config](#hierarchical-config)
   * [Secrets](#secrets)
   * [Argument groups and constraints](#argument-groups-and-constraints)
-* [Who should use this crate?](#who-should-use-this-crate?)
+* [Who should use this crate?](#who-should-use-this-crate)
 * [License](#license)
 
 ## Using conf in a cargo project
@@ -235,7 +235,7 @@ You can read about all the attributes in the docs or the [REFERENCE.md](./REFERE
 
 ## Topics
 
-This section discusses ways to accomplish various tasks when using `conf`, more advanced features, and compares with alternatives.
+This section discusses more advanced features and usage patterns, and alternatives.
 
 ### Reading files
 
@@ -443,11 +443,7 @@ pub struct FooConfig {
 
 When used with all fields in a struct, this is similar to an `ArgGroup` with `multiple=true` and `required=true` in the `clap-derive` API.
 
-Note that any of these attributes can be used multiple times on the same struct to create multiple constraints that apply to that struct.
-
-The other thing that appeals to me about this syntax is that, these kinds of constraints are not really properties of a single field, they are relationships between fields.
-So, they are annotated on a group of fields rather than on an individual field. This means that usually, if one of these constraints
-fails and you aren't sure why, you know exactly where in the code to go to see where it might be declared.
+Any of these attributes can be used multiple times on the same struct to create multiple constraints that apply to that struct.
 
 #### validation predicate
 
@@ -471,9 +467,9 @@ There's both less API for you to learn and remember, and less API surface area f
 
 Using these features together, you can express any kind of constraint you want to impose on your config structure, and hopefully make it feel idiomatic and natural.
 
-#### Closing thoughts
+-----
 
-It's reasonable to ask, given that the `validation_predicate` for a `T` runs after we have actually parsed a `T`, why have this feature at all? The users could just run such functions on their own after `Config::parse` succeeds.
+Given that the `validation_predicate` for a `T` runs after we have actually parsed a `T`, why have this feature at all? The users could just run such functions on their own after `Config::parse` succeeds.
 
 The benefit of using the `validation_predicate` is that if a predicate fails, `conf` is still able to report those errors and any other errors that occurred elsewhere in the tree.
 
@@ -524,7 +520,7 @@ In order to meet its goals, `conf` does not use `clap` to handle `env` at all. `
 
 This crate can expose more features of the underlying `clap` builder and get closer towards the feature set offered by `clap-derive`, but will probably never expose all of them -- we can only expose features that we are sure will work well with the additional features that we have created, like flatten-with-prefix, and will work well with the manner in which we are using the underlying clap builder. The most interesting features are those that can be motivated by common web development needs.
 
-If you have very specific CLI argument parsing needs, or if you need pixel-perfect help text, you may be better off using `clap` directly instead of this crate, because you will have more control that way. `clap` is the most mature and feature-complete CLI argument parser out there, by a wide margin.
+If you have very specific CLI argument parsing needs, or if you need pixel-perfect help text, you will be better off using `clap` directly instead of this crate, because you will have more control that way. `clap` is the most mature and feature-complete CLI argument parser out there, by a wide margin.
 
 In many web projects, you don't really have such needs. You aren't making very sophisticated use of `clap`, your project is small, and you don't particularly need any features of `conf` either, so you will be able to use `clap-derive` or `conf` equally well and not notice very much difference.
 
