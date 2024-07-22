@@ -27,7 +27,7 @@ In most cases, `conf` tries to stay extremely close to `clap-derive` syntax and 
 In some cases, there are small deviations from the behavior of `clap-derive` to either help avoid mistakes, or to make the defaults closer to a good [12-factor app](https://12factor.net/config) behavior.
 For some advanced features of `clap`, `conf` has a way to achieve the same thing, but we took a different approach. This is typically in an attempt to simplify how it works for the user of the `derive` macro, to have fewer named concepts, or to ease maintenance going forward.
 
-Rather than try to make many of the underlying objects and concepts part of the public API, and support hand-written implementations of the derivable traits as `clap-derive` does, the public API here is restricted to one trait, one proc-macro to derive it, and one error type. It is hoped that this will both reduce the learning curve and ease future development and maintenance.
+The public API here is restricted to one trait, one proc-macro to derive it, and one error type. It is hoped that this will both reduce the learning curve and ease future development and maintenance.
 
 See [MOTIVATION.md](./MOTIVATION.md) for more discussion about this project and the other various alternatives out there.
 
@@ -49,8 +49,6 @@ First add `conf` to the dependencies in your `Cargo.toml` file:
 [dependencies]
 conf = "0.1"
 ```
-
-NOTE: Not actually published to crates.io yet... there is some more test coverage that is needed before that can happen.
 
 Then, create a `struct` which represents the configuration data your application needs to read on startup.
 This struct should derive the `Conf` trait, and the `conf` attributes should be used to describe how each field can be read.
@@ -92,9 +90,9 @@ Generally, the CLI interface and help text that is generated is meant to conform
 
 A field in your struct can be read from a few sources:
 
-* `#[arg(short)]` means that it corresponds to a "short" option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short='t')]` for example.
-* `#[arg(long)]` means that it corresponds to a "long" option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[conf(long="target-url")]` for example.
-* `#[arg(env)]` means that it corresponds to an environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
+* `#[arg(short)]` means that it has an associated "short" command-line option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short='t')]` for example.
+* `#[arg(long)]` means that it has an associated "long" command-line option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[conf(long="target-url")]` for example.
+* `#[arg(env)]` means that it has an associated environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
 * `#[arg(default_value)]` specifies a default value for this field if none of the other three possible sources provides one.
 
 Such attributes can be combined by separating them with commas, for example `#[arg(long, env, default_value="x")]` means the field has an assocated long option, an associated environment variable, and a default value if both of these are omitted.
@@ -521,7 +519,7 @@ This crate defines itself somewhat differently from [`clap-derive`](https://docs
 `conf` places emphasis on features differently.
 
 * `env` is actually the most important thing for a 12-factor web app.
-* `conf` has a different architecture, such that its easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many of the new features that it brings to the table. Many of the details are undocumented and not part of the public API, so that they can be extended and improved without a breaking change.
+* `conf` has a different architecture, such that it's easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many of the new features that it brings to the table. Many of the details here are undocumented and not part of the public API, so that they can be extended to support new features without a breaking change.
 * `conf` has very specific goals around error reporting. We want to return as many config errors as possible at once, because deployment might take a relatively long time.
 
 In order to meet its goals, `conf` does not use `clap` to handle `env` at all. `clap` is only used to parse CLI arguments as strings, and to render help text, which are the two things that it is best at.
