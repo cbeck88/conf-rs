@@ -31,8 +31,6 @@ keywords = [
   "settings",
   "env",
   "environment"
-  "parser",
-  "parse"
 ]
 repository.workspace = true
 license.workspace = true
@@ -44,7 +42,7 @@ include.workspace = true
 bench = false
 
 [dependencies]
-conf_derive = { path = "./conf_derive" }
+conf_derive = { path = "./conf_derive", version = "0.1" }
 clap = { version = "4.5.8", features = ["string"] }
 
 [dev-dependencies]
