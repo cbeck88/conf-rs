@@ -6,6 +6,7 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 include.workspace = true
+description = "Derive macro crate used with conf"
 
 [lib]
 proc-macro = true
