@@ -25,12 +25,9 @@ description = "A derive-based config parser for CLI args and env parameters"
 categories = ["command-line-interface"]
 keywords = [
   "argument",
-  "arg",
-  "cli",
   "config",
   "configuration",
   "settings",
-  "env",
   "environment"
 ]
 repository.workspace = true
