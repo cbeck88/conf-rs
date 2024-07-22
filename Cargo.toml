@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-repository = "https://github.com/cbeck88/conf"
+repository = "https://github.com/cbeck88/conf-rs"
 license = "MIT OR Apache-2.0"
 edition = "2021"
 rust-version = "1.74"  # MSRV
@@ -20,12 +20,17 @@ include = [
 [package]
 name = "conf"
 version = "0.1.0"
-description = "A derive-based config parser for CLI args and env parameters, aimed at web-services."
+description = "A derive-based config parser for CLI args and env parameters"
 categories = ["command-line-interface"]
 keywords = [
   "argument",
-  "cli",
   "arg",
+  "cli",
+  "config",
+  "configuration",
+  "settings",
+  "env",
+  "environment"
   "parser",
   "parse"
 ]
