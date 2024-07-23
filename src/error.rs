@@ -32,6 +32,17 @@ impl Error {
     pub fn exit_code(&self) -> i32 {
         self.0.exit_code()
     }
+
+    // An error reported during program options generation
+    #[doc(hidden)]
+    pub fn skip_short_not_found(
+        not_found_chars: Vec<char>,
+        field_name: &'static str,
+        field_type_name: &'static str,
+    ) -> Self {
+        let buf = format!("Internal error (invalid skip short)\n  When flattening {field_type_name} at {field_name}, these short options were not found: {not_found_chars:?}\n  To fix this error, remove them from the skip_short attribute list.");
+        ClapError::raw(ErrorKind::UnknownArgument, buf).into()
+    }
 }
 
 impl From<ClapError> for Error {

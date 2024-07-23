@@ -149,10 +149,11 @@ impl ProgramOption {
     /// Drop our short form if it belongs to a list of forms to skip.
     /// This is applied when flattening if skip_short attribute is used.
     #[inline]
-    pub fn skip_short_forms(mut self, skip_these: &[char]) -> Self {
+    pub fn skip_short_forms(mut self, skip_these: &[char], was_skipped: &mut [bool]) -> Self {
         if let Some(short) = self.short_form {
-            if skip_these.contains(&short) {
+            if let Some(pos) = skip_these.iter().position(|to_skip| *to_skip == short) {
                 self.short_form = None;
+                was_skipped[pos] = true;
             }
         }
         self

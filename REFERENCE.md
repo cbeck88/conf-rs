@@ -400,9 +400,8 @@ and you can customize this if another choice of delimiter is more appropriate.
 
    This should only be used as a last resort if you cannot simply remove one of the conflicting short forms at its source, because it would break something else.
 
-   To try to help maintainability in a large project, it is an error if `skip_short` is used but no short flag matching this is actually found
-   at this flattening site. In other words, when this attribute appears, you can be sure that a short flag is actually being removed, if no
-   runtime errors are being reported.
+   To try to help maintainability in a large project, it is an error if a `skip_short` attribute is used but no short flag matching this is actually found
+   at this flattening site. So, when you see this attribute appearing, you can be sure that all the named short flags are actually being removed by it.
 
    example: `#[conf(flatten, skip_short = ['a', 'b', 'f'])]`
 

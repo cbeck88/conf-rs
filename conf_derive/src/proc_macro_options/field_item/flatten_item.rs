@@ -133,6 +133,7 @@ impl FlattenItem {
         program_options_ident: &Ident,
     ) -> Result<TokenStream, syn::Error> {
         // Generated code gets all program options for the struct we are flattening, then calls flatten on each one and adds all that to program_options_ident.
+        let field_name = self.field_name.to_string();
         let field_type = &self.field_type;
         let id_prefix = self.get_id_prefix();
 
@@ -148,29 +149,42 @@ impl FlattenItem {
             .unwrap_or_default();
         let description_prefix = self.description_prefix.as_deref().unwrap_or_default();
         let skip_short = self.skip_short.as_ref().map(|array| &array.elements);
+        let skip_short_len = self
+            .skip_short
+            .as_ref()
+            .map(|array| array.elements.len())
+            .unwrap_or(0);
 
         // Common modifications we have to make to program options whether the flatten is optional or required
         let common_program_option_modifications = quote! {
             .apply_flatten_prefixes(#id_prefix, #long_prefix, #env_prefix, #description_prefix)
-            .skip_short_forms(&[#skip_short])
+            .skip_short_forms(&[#skip_short], &mut was_skipped[..])
         };
 
         Ok(if let Some(inner_type) = self.is_optional_type.as_ref() {
             // This is flatten-optional. We have to request inner-type program options,
             // and do the same things to them, except also call make_optional() on them at the end.
             quote! {
-            #program_options_ident.extend(
-              #inner_type::get_program_options()?.iter().cloned().map(
-                |program_option|
-                    program_option
-                        #common_program_option_modifications
-                        .make_optional()
-              )
-            );
+              let mut was_skipped = [false; #skip_short_len];
+              #program_options_ident.extend(
+                #inner_type::get_program_options()?.iter().cloned().map(
+                  |program_option|
+                      program_option
+                          #common_program_option_modifications
+                          .make_optional()
+                )
+              );
+              if !was_skipped.iter().all(|x| *x) {
+                let not_skipped: Vec<char> = [#skip_short].into_iter().zip(was_skipped.into_iter()).filter_map(
+                    |(short_form, was_skipped)| if was_skipped { None } else { Some(short_form) }
+                ).collect();
+                return Err(::conf::Error::skip_short_not_found(not_skipped, #field_name, <#inner_type as ::conf::Conf>::get_name()));
+              }
             }
         } else {
             // This is a regular flatten
             quote! {
+              let mut was_skipped = [false; #skip_short_len];
               #program_options_ident.extend(
                 #field_type::get_program_options()?.iter().cloned().map(
                   |program_option|
@@ -178,6 +192,12 @@ impl FlattenItem {
                           #common_program_option_modifications
                 )
               );
+              if !was_skipped.iter().all(|x| *x) {
+                let not_skipped: Vec<char> = [#skip_short].into_iter().zip(was_skipped.into_iter()).filter_map(
+                    |(short_form, was_skipped)| if was_skipped { None } else { Some(short_form) }
+                ).collect();
+                return Err(::conf::Error::skip_short_not_found(not_skipped, #field_name, <#field_type as ::conf::Conf>::get_name()));
+              }
             }
         })
     }
