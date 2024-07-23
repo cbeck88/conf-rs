@@ -4,7 +4,7 @@
 
 It uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
 
-`conf` has an intentionally similar proc-macro API to `clap-derive`, but it is not a fork. It is a new library with different goals. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`, which are typically less useful in a web project.
+`conf` has an intentionally similar proc-macro API to `clap-derive`, but it is not a fork. It is a new library with different goals. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`, which I have found to be less useful in a typical web project.
 
 The features that you get for this bargain are:
 
@@ -39,6 +39,7 @@ See [MOTIVATION.md](./MOTIVATION.md) for more discussion about this project and 
   * [Secrets](#secrets)
   * [Argument groups and constraints](#argument-groups-and-constraints)
 * [Who should use this crate?](#who-should-use-this-crate)
+  * [When should clap-derive be preferred to this crate?](#when-should-clap-derive-be-preferred-to-this-crate)
 * [License](#license)
 
 ## Using conf in a cargo project
@@ -237,7 +238,7 @@ You can read about all the attributes in the docs or the [REFERENCE.md](./REFERE
 
 ## Topics
 
-This section discusses more advanced features and usage patterns, and alternatives.
+This section discusses more advanced features and usage patterns, as well as alternatives.
 
 ### Reading files
 
@@ -509,7 +510,7 @@ If you think that this crate is a good fit for you, the suggested way to use it 
 
 This way, whenever you discover in the future that you need to add more config values for one of your small components, all you have to do is add it to the associated config struct, and it will automatically appear in every service that needs it, as many times as needed with appropriate prefixing, without you having to plumb it through every step of the way. Additionally, it makes it easier to create correct config for any future services or tools. And it causes all of your services and tools to have a similar, predictable style, and to have all of their config documented in `--help`, even pretty obscure environment variables and such, which usually just don't get documented if you choose to read them directly from `std::env` instead.
 
-### When should `clap-derive` be preferred to this crate?
+### When should clap-derive be preferred to this crate?
 
 This crate defines itself somewhat differently from [`clap-derive`](https://docs.rs/clap/latest/clap/) and has different features and goals.
 
@@ -519,7 +520,7 @@ This crate defines itself somewhat differently from [`clap-derive`](https://docs
 `conf` places emphasis on features differently.
 
 * `env` is actually the most important thing for a 12-factor web app.
-* `conf` has a different architecture, such that it's easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many of the new features that it brings to the table. Many of the details here are undocumented and not part of the public API, so that they can be extended to support new features without a breaking change.
+* `conf` has a different architecture, such that it's easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many of the new features that it brings to the table. The details are not part of the public API, so that they can be extended to support new features without a breaking change.
 * `conf` has very specific goals around error reporting. We want to return as many config errors as possible at once, because deployment might take a relatively long time.
 
 In order to meet its goals, `conf` does not use `clap` to handle `env` at all. `clap` is only used to parse CLI arguments as strings, and to render help text, which are the two things that it is best at.
