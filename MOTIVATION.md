@@ -8,16 +8,16 @@ In order to answer this question, this document has to be *opinionated*. It intr
 and *reasonable people may disagree*. This situation is very similar to [`jiff/DESIGN.md`](https://github.com/BurntSushi/jiff/blob/master/DESIGN.md#the-api-design-rationale-for-jiff)
 and all the same caveats apply.
 
-Particularly, the opinions here ultimately work to justify an alternative, and so they tend to be oriented towards the technical shortcomings
+Particularly, the value judgments and opinions here ultimately work to justify an alternative, and so they tend to be oriented towards the technical shortcomings
 of other crates, as I perceive them.
 
-As in [`jiff`](https://github.com/BurntSushi/jiff/blob/master/DESIGN.md#the-api-design-rationale-for-jiff), ultimately I perceived that the crates in this genre, as a whole, had reached a local maximum and were unlikely to be able to rapidly improve in the ways that were important to me. So it appeared that there was a niche to be filled, and `conf` attempts to fill it.
+Similarly to the story in `jiff/DESIGN.md`, ultimately I perceived that the crates in this genre, as a whole, had reached a local maximum and were unlikely to be able to rapidly improve in the ways that were important to me. So it appeared that there was a niche to be filled, and `conf` attempts to fill it.
 
 For an application developer, it may be hard to believe that things like, "add a prefix to a group of strings", "allow using a custom function instead of `std::env::vars_os`", or "report as many errors as possible", can be in this
 category of things that cannot be easily improved in a crate, let alone, many crates in the genre. *All I can say is, read on*. As we'll see, it turns out that many crates in this genre made architectural decisions, and decisions about what their public API is, that made one or more of these things impossible without large amounts of rework and breaking changes to their public API, and so they are limited in what they can achieve here.
 
 Above all, please understand that *the purpose of this document is not to criticize other crates*. The discussion is grounded in practical concerns, pros and cons from a technical point of view, and my own
-efforts to make engineering decisions as a user of crates in this space. The document can *help potential users* of `conf` *rapidly build a mental model* of how initial design decisions in `conf` were made and how `conf` might evolve in the near future. This can *help users decide* whether or not `conf` is the right tool for the job in their situation.
+efforts to make engineering decisions as a user of crates in this space. The document can *help potential users* of `conf` *rapidly build a mental model* of how initial design decisions in `conf` were made and how `conf` might evolve in the near future. This can *help users decide* whether or not `conf` is the right tool for the job in their situation, or if another tool is more appropriate.
 
 In fact, I believe that many of these crates are very well-engineered overall, and just not the best choice for the use-cases that I have in mind. Maintainers and developers of these crates that are saying no to features right now that are important to users like me, are also doing the right thing, given where their projects are now, what niche they are aimed at, and how many users they have now who would be impacted by breaking changes. Please understand that I have only the greatest respect for everyone involved with any of the projects mentioned specifically.
 
@@ -236,7 +236,7 @@ None of these seemed like they were going to meet my needs.
 
 Speaking from my own experience, when you have a *large* web project with *a lot* of config, you can easily get into a situation where there are more than 10 different problems with the config (missing env values, misspelled or wrong env names, invalid json blobs, etc. etc.). It could be caused by simple mistakes, or by adding new features that add a lot of config, or refactoring helm templates, or changes to the underyling infrastructure that have unexpected consequences.
 
-If I have to deploy 10 times to see 10 different problems and fix them, for me that is a non-starter if I'm working on a large project. So this ruled out all the crates that use `serde` as the interface to use config structs.
+If I have to deploy 10 times to see 10 different problems and fix them, for me that is a non-starter if I'm working on a large project. So this ruled out all the crates that use `serde` as the interface to the config structs.
 
 If I'm working on a smaller project that doesn't actually have that much config, then there are fewer things that can go wrong at once. Or if the config only changes very rarely for some reason, then I'm less likely to have this problem. In those cases this issue is much less of a concern.
 
@@ -257,7 +257,7 @@ This is also a clever workaround, but my feeling is that this is stuff that a pr
 
 ## Testing interlude
 
-Many readers may be surprised at my conclusions about use of `serde` above. It seems to be widely believed among rust users that this is not a limitation of serde.
+Many readers may be surprised at my conclusions about use of `serde` above, and the limitations that that will create around error reporting. It seems to be widely believed among rust users that this is not a limitation of serde.
 
 See for example [this reddit thread](https://www.reddit.com/r/rust/comments/1bjc7tp/getting_all_serde_errors_at_once/):
 
@@ -692,7 +692,7 @@ If `envy` wanted to change their library's behavior, such that `./targed/debug/e
 
 This analysis shows that, while it's true that `serde` is a framework and doesn't itself deserialize anything, it's still a tool with opinions and limitations, especially where the derive macro is concerned. Because a bunch of the error-handling code for deserializing user-defined structures is defined by the derive macros, and not by the deserializer implementations, the deserializer is not actually in total control of the behavior. To work within the serde framework, when users are using `derive(Deserialize)`, it has to fail-fast on the first error. (If the users don't use `derive(Deserialize)`, then they can implement all this differently, and the error handling could be different in theory. But if all the users have to do that to use your crate effectively, then a lot of value proposition of `serde` here is lost.)
 
-So, it should come as no surprise that `figment` and `config` similarly can't report all the config errors when reading the configuration fails. All of these crates that chose to not offer a proc-macro, and to use `serde::Deserialize` as the trait that users `derive`, will be similarly limited. I don't believe that they can fix this limitation without somehow changing the code that `serde-derive` is generating. But, `serde` is an enormous library of fundamental importance to the ecosystem, and changing it in a fundamental way is not something that I believe can happen easily. Most likely, it's not just a codegen change, most likely to do this properly the [`serde::de::Error` trait](https://rust-lang.github.io/hashbrown/serde/de/trait.Error.html) would need to gain a function that allows "combining" two `serde::de::Error` into one error, or the whole thing would just have to change to return collections of errors.
+So, it should come as no surprise that `figment` and `config` similarly can't report all the config errors when reading the configuration fails. All of these crates that chose to not offer a proc-macro, and to use `serde::Deserialize` as the trait that users `derive`, will be similarly limited. I don't believe that they can fix this limitation without somehow changing the code that `serde-derive` is generating. But, `serde` is an enormous library of fundamental importance to the ecosystem, and changing it in a fundamental way is not something that I believe can happen easily. Most likely, it's not just a codegen change, most likely to do this properly the [`serde::de::Error` trait](https://rust-lang.github.io/hashbrown/serde/de/trait.Error.html) would need to gain a function that allows "combining" two `serde::de::Error` into one error, or the whole thing would just have to change to return collections of errors. Either way, that would also be disruptive.
 
 ---
 

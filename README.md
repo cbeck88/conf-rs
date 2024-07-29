@@ -2,7 +2,16 @@
 
 `conf` is a `derive`-based env-and-argument parser aimed at the practically-minded web developer building large web projects.
 
-It uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
+[![Crates.io](https://img.shields.io/crates/v/conf?style=flat-square)](https://crates.io/crates/conf)
+[![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](LICENSE-APACHE)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
+
+[API Docs](https://docs.rs/conf/latest/conf/) | [Reference](./REFERENCE.md)
+
+## Overview
+
+[`conf`](https://docs.rs/conf/latest/conf/) uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
 
 `conf` has an intentionally similar proc-macro API to `clap-derive`, but it is not a fork. It is a new library with different goals. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`, which I have found to be less useful in a typical web project.
 
@@ -234,7 +243,24 @@ pub struct Config {
 }
 ```
 
-You can read about all the attributes in the docs or the [REFERENCE.md](./REFERENCE.md), but hopefully this is enough to get started.
+`Option<T>` can also be used with a flattened structure, so if one of these services is optional, you can simply write:
+
+```rust
+#[derive(Conf)]
+#[conf(env_prefix="ACME_")]
+pub struct Config {
+    #[conf(flatten, prefix="auth")]
+    pub auth_service: HttpClientConfig,
+
+    #[conf(flatten, prefix="friend")]
+    pub friend_service: HttpClientConfig,
+
+    #[conf(flatten, prefix="snaps")]
+    pub snaps_service: Option<HttpClientConfig>,
+}
+```
+
+You can read about all the attributes and usage in the docs or the [REFERENCE.md](./REFERENCE.md), but hopefully this is enough to get started.
 
 ## Topics
 
@@ -325,13 +351,14 @@ Handling secrets is a complex topic and much of the discussion is out of scope h
 We'll offer just three points of guidance around this tool.
 
 1. The more valuable the secrets are, and the more challenging the threat model is, the more time it makes sense to spend working on defensive measures. The converse is also true.
+   No one really has context to judge this except you, so instead of offering one-size-fits-all guidance, I prefer to think in terms of a sliding scale.
 2. If you're at a point where systematically marking things `secret` seems like a good idea, then you should also be using special types to manage the secrets.
    For example, using [`SecretString` from the `secrecy` crate](https://docs.rs/secrecy/0.8.0/secrecy/type.SecretString.html) instead of `String` will prevent your password from appearing in debug logs *after* it has been loaded.
    There are alternatives out there if `secrecy` crate doesn't work for your use-case. This is usually a pretty low-effort improvement, and it goes hand-in-hand with what the `secret` marking does.
    * It's very easy to expose your secret by accident if you don't do something like this. For example, just by putting a `#[tracing::instrument]` annotation on a function that some day takes a `config` struct, you could accidentally log your password.
 3. If you're at a point where you think you need to *systematically [zeroize](https://docs.rs/zeroize/latest/zeroize/) all copies* of your secret that reside in process memory when they are no longer needed, then you are past the point
    where you can use an environment variable to pass the secret value to the application. Your application most likely needs to *read the secret value from a file instead*.
-   * The rust standard library handles environment values as `std::ffi::OsString` internally and in its API, but this type cannot be securely zeroized. There are no public APIs to mutably access the underlying bytes.
+   * The rust standard library handles environment values as `std::ffi::OsString` internally and in its API, but this type cannot be securely zeroized. There are no public APIs to mutably access the underlying bytes, and no public APIs that would otherwise do this for you.
    * At a lower level, `glibc` [exposes the environment as `char **environ`](https://www.gnu.org/software/libc/manual/html_node/Environment-Access.html), makes copies of the entire environment whenever it is changed using `set_var` or similar, and [leaks the old values](https://inbox.sourceware.org/libc-alpha/87le2od4xh.fsf@oldenburg.str.redhat.com/).
      It is difficult to systematically ensure that all of these copies are cleaned up if they contain sensitive data. `environ` often gets copied by other things very early in the process.
      The rust standard library also interacts with the environment via these `glibc` APIs, which means that typical rust libraries like `dotenvy` do as well.

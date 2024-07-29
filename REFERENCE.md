@@ -8,18 +8,31 @@ When the attributes are similar to those in `clap-derive`, we will call out any 
 
 The `#[conf(...)]` attributes conform to [Rust’s structured attribute convention](https://doc.rust-lang.org/reference/attributes.html#meta-item-attribute-syntax).
 
+* [Where can conf attributes be used?](#where-can-conf-attributes-be-used)
+* [Field-level attributes](#field-level-attributes)
+  * [Flag](#flag)
+  * [Parameter](#parameter)
+  * [Repeat](#repeat)
+  * [Flatten](#flatten)
+* [Struct-level attributes](#struct-level-attributes)
+
 ## Where can conf attributes be used?
 
-These attributes can appear in two places -- on a `struct` and on a `field`.
+The `#[conf(...)]` attributes can appear in two places -- on a `struct` and on a `field`.
 
-```
+```rust
 use conf::Conf;
 
 #[derive(Conf)]
 #[conf(env_prefix="RUST_")] // This is a struct-level attribute
 pub struct MyConfig {
+    //// This doc string becomes help text for my_field when --help flag is passed
     #[conf(long, env)] // These are field-level attributes
     pub my_field: String,
+
+    /// This doc string becomes help text for my_flag
+    #[conf(short, long)] // These are field-level attributes
+    pub my_flag: bool,
 }
 ```
 
@@ -45,7 +58,7 @@ In each case like this we'll document what syntax is valid in the parentheses.
 
 ## Field-level attributes
 
-For compatibility with `clap-derive`, when a `conf` attribute is used on a field, the labels `#[arg(...)]` and `#[conf(...)]` can be used interchangeably.
+For compatibility with `clap-derive`, when a `conf` attribute is used on a field, the labels `#[arg(...)]` and `#[conf(...)]` **can be used interchangeably**.
 
 When `derive(Conf)` encounters a field, the first thing it must determine what kind of field this is:
 
