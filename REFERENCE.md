@@ -1,7 +1,7 @@
 # Proc-macro reference
 
 To use `conf`, use the `#[derive(Conf)]` proc macro on your configuration struct.
-Then call a `Conf` trait function to parse your configuration struct.
+Then call a [`Conf`] trait function to parse your configuration struct.
 
 This section documents the different `#[conf(...)]` attributes that the derive macro reads and what they do.
 When the attributes are similar to those in `clap-derive`, we will call out any differences (as they exist in `clap 4.5.8`.)
@@ -11,10 +11,46 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
 * [Where can conf attributes be used?](#where-can-conf-attributes-be-used)
 * [Field-level attributes](#field-level-attributes)
   * [Flag](#flag)
+    * [short](#flag-short)
+    * [long](#flag-long)
+    * [env](#flag-env)
+    * [aliases](#flag-aliases)
+    * [env_aliases](#flag-env-aliases)
   * [Parameter](#parameter)
+    * [short](#parameter-short)
+    * [long](#parameter-long)
+    * [env](#parameter-env)
+    * [aliases](#parameter-aliases)
+    * [env_aliases](#parameter-env-aliases)
+    * [default_value](#parameter-default-value)
+    * [value_parser](#parameter-value-parser)
+    * [allow_hyphen_values](#parameter-allow-hyphen-values)
+    * [secret](#parameter-secret)
   * [Repeat](#repeat)
+    * [long](#repeat-long)
+    * [env](#repeat-env)
+    * [aliases](#repeat-aliases)
+    * [env_aliases](#repeat-env-aliases)
+    * [value_parser](#repeat-value-parser)
+    * [env_delimiter](#repeat-env-delimiter)
+    * [no_env_delimiter](#repeat-no-env-delimiter)
+    * [allow_hyphen_values](#repeat-allow-hyphen-values)
+    * [secret](#repeat-secret)
   * [Flatten](#flatten)
+    * [prefix](#flatten-prefix)
+    * [long_prefix](#flatten-long-prefix)
+    * [env_prefix](#flatten-env-prefix)
+    * [help_prefix](#flatten-help-prefix)
+    * [skip_short](#flatten-skip-short)
 * [Struct-level attributes](#struct-level-attributes)
+  * [no_help_flag](#struct-no-help-flag)
+  * [about](#struct-about)
+  * [name](#struct-name)
+  * [env_prefix](#struct-env-prefix)
+  * [one_of_fields](#struct-one-of-fields)
+  * [at_most_one_of_fields](#struct-at-most-one-of-fields)
+  * [at_least_one_of_fields](#struct-at-least-one-of-fields)
+  * [validation_predicate](#struct-validation-predicate)
 
 ## Where can conf attributes be used?
 
@@ -26,7 +62,7 @@ use conf::Conf;
 #[derive(Conf)]
 #[conf(env_prefix="RUST_")] // This is a struct-level attribute
 pub struct MyConfig {
-    //// This doc string becomes help text for my_field when --help flag is passed
+    /// This doc string becomes help text for my_field when --help flag is passed
     #[conf(long, env)] // These are field-level attributes
     pub my_field: String,
 
@@ -60,12 +96,12 @@ In each case like this we'll document what syntax is valid in the parentheses.
 
 For compatibility with `clap-derive`, when a `conf` attribute is used on a field, the labels `#[arg(...)]` and `#[conf(...)]` **can be used interchangeably**.
 
-When `derive(Conf)` encounters a field, the first thing it must determine what kind of field this is:
+When `derive(Conf)` encounters a field, the first thing it must determine *what kind of field* this is:
 
-* Flag: A flag corresponds to a boolean program option. It is either set or it isn't. For example, `./my_prog --flag1 --flag2`.
-* Parameter: A parameter corresponds to a program option that expects a string value to be found during parsing. For example `./my_prog --param1 value1 --param2 value2`.
-* Repeat: A repeat option represents a list of values. It has special parsing -- it is allowed to be specified multiple times on the command-line, and the results are parsed separately and aggregated into a `Vec`. This is similar to what `clap` calls a multi-option, and what `clap-derive` does by default if the field type is a `Vec`. For example, `./my_prog --can-repeat value1 --can-repeat value2`.
-* Flatten: A flatten field doesn't correspond to an option, but to a collection of options that come from another `Conf` structure, and may be adjusted before being merged in.
+* **Flag**: A flag corresponds to a boolean program option. It is either set or it isn't. For example, `./my_prog --flag1 --flag2`.
+* **Parameter**: A parameter corresponds to a program option that expects a string value to be found during parsing. For example `./my_prog --param1 value1 --param2 value2`.
+* **Repeat**: A repeat option represents a list of values. It has special parsing -- it is allowed to be specified multiple times on the command-line, and the results are parsed separately and aggregated into a `Vec`. This is similar to what `clap` calls a multi-option, and what `clap-derive` does by default if the field type is a `Vec`. For example, `./my_prog --can-repeat value1 --can-repeat value2`.
+* **Flatten**: A flatten field doesn't correspond to an option, but to a collection of options that come from another `Conf` structure, and may be adjusted before being merged in.
 
 If the *first attribute* is `flag`, `parameter`, `repeat` or `flatten`, then `conf` will handle the field that way.
 
@@ -85,7 +121,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
 *Requirements*: A flag field must have type `bool`.
 
-* `short` (optional char argument)
+*  <a name="flag-short"></a> `short` (optional char argument)
 
    Specifies a short (one-dash) switch associated to this flag.
    If argument is omitted, defaults to the first letter of the field name.
@@ -96,7 +132,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `long` (optional string argument)
+*  <a name="flag-long"></a> `long` (optional string argument)
 
    Specifies a long (two-dash) switch associated to this flag.
    If argument is omitted, defaults to the kebab-cased field name.
@@ -107,7 +143,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `env` (optional string argument)
+*  <a name="flag-env"></a> `env` (optional string argument)
 
    Specifies an environment variable associated to this flag.
    If argument is omitted, defaults to the upper snake-case field name.
@@ -121,7 +157,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `aliases` (string array argument)
+*  <a name="flag-aliases"></a>  `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this flag.
    This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
@@ -130,7 +166,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    example command-line: `./my_prog --old-flag-name` sets the flag to true
 
-* `env_aliases` (string array argument)
+*  <a name="flag-env-aliases"></a> `env_aliases` (string array argument)
 
    Specifies alternate (fallback) environment variables which should be associated to this flag. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
@@ -144,7 +180,7 @@ A parameter represents a single value that can be parsed from a string.
 
 *Requirements*: A parameter field can have any type as long as it implements `FromStr` or `value_parser` is used.
 
-* `short` (optional char argument)
+*  <a name="parameter-short"></a> `short` (optional char argument)
 
    Specifies a short (one-dash) switch associated to this parameter.
    If argument is omitted, defaults to the first letter of the field name.
@@ -155,7 +191,7 @@ A parameter represents a single value that can be parsed from a string.
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `long` (optional string argument)
+*  <a name="parameter-long"></a> `long` (optional string argument)
 
    Specifies a long (two-dash) switch associated to this parameter.
    If argument is omitted, defaults to the kebab-cased field name.
@@ -166,7 +202,7 @@ A parameter represents a single value that can be parsed from a string.
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `env` (optional string argument)
+*  <a name="parameter-env"></a> `env` (optional string argument)
 
    Specifies an environment variable associated to this parameter.
    If argument is omitted, defaults to the upper snake-case field name.
@@ -177,7 +213,7 @@ A parameter represents a single value that can be parsed from a string.
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `aliases` (string array argument)
+*  <a name="parameter-aliases"></a> `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this parmeter.
    This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
@@ -186,31 +222,33 @@ A parameter represents a single value that can be parsed from a string.
 
    example command-line: `./my_prog --old-param-name foo` or `./my_prog --old-param-name=foo` sets the parameter using the string value `foo`
 
-* `env_aliases` (string array argument)
-
-   Specifies alternate (fallback) environment variables which should be associated to this parameter. These are checked in the order listed, and if a value is found, the later ones are not checked.
+*  <a name="parameter-env-aliases"></a> `env_aliases` (string array argument)
 
    example: `#[arg(env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
 
-* `default_value` (string argument)
+   Specifies alternate (fallback) environment variables which should be associated to this parameter. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
-   Specifies the default value assigned to this parameter if none of the switches or env are present.
+*  <a name="parameter-default-value"></a> `default_value` (string argument)
 
    example: `#[arg(default_value = "some value")]`
 
+   Specifies the default value assigned to this parameter if none of the switches or env are present.
+
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `value_parser` (expr argument)
+*  <a name="parameter-value-parser"></a> `value_parser` (expr argument)
+
+   example: `#[arg(value_parser = my_function)]`
 
    By default, `conf` invokes the trait function `std::str::FromStr::from_str` to convert the parsed string to the type of the field.
    This can be overrided by setting `value_parser`. Any function expression can be used as long as any generic parameters are either specified or inferred.
 
-   example: `#[arg(value_parser = my_function)]`
-
    *Note*: This is very similar to `clap-derive`, but it seems to work a little better in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
    while at `clap` version 4.5.8 it doesn't work. I'm not totally sure why that is, but it seems to be something about lifetime inferences.
 
-* `allow_hyphen_values` (no arguments)
+*  <a name="parameter-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
+
+   example: `#[arg(allow_hyphen_values)]`
 
    By default, clap's parser considers a leading hyphen in a parameter value like `--my-param --my-value` to be an error, and that the user more likely forgot to give a value to `--my-param`
    and tried to specify a switch `--my-value` afterwards, than that they intended to give the value `--my-value` to `--my-param`. So the default behavior is to give an error in that case.
@@ -222,16 +260,14 @@ A parameter represents a single value that can be parsed from a string.
 
    This corresponds to [`clap::Arg::allow_hypen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
 
-   example: `#[conf(allow_hyphen_values)]`
+*  <a name="parameter-secret"></a> `secret` (optional bool argument)
 
-* `secret` (optional bool argument)
+   example: `#[conf(secret)]`, `#[conf(secret = true)]`, `#[conf(secret = false)]`
 
    Indicates that this value is secret and `conf` should avoid logging the value if there is an error.
-   
+
    If the `bool` argument is not specified when this attribute appears, it is considered `true`.
    Values not marked secret are considered not to be secrets.
-
-   example: `#[conf(secret)]`, `#[conf(secret = false)]`
 
 #### Notes
 
@@ -256,7 +292,7 @@ A repeat field is similar to a parameter, except that it may appear multiple tim
 *Note*: A repeat option produces one `T` for each time the option appears in the CLI arguments, and unlike a parameter the option can appear multiple times. If it does not appear, and an `env` variable is specified, then that variable
 is read and split on a delimiter character which defaults to `','`, to produce a series of `T` values.
 
-* `long` (optional string argument)
+*  <a name="repeat-long"></a> `long` (optional string argument)
 
    Specifies a long (two-dash) switch associated to this option.
    If argument is omitted, defaults to the kebab-cased field name.
@@ -267,7 +303,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    *Note*: This behavior of this attribute is the same as in `clap-derive`.
 
-* `env` (optional string argument)
+*  <a name="repeat-env"></a> `env` (optional string argument)
 
    Specifies an environment variable associated to this option.
    If omitted, defaults to the upper snake-cased field name.
@@ -278,43 +314,45 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    *Note*: The behavior of this attribute is the same as in `clap-derive`.
 
-* `aliases` (string array argument)
+*  <a name="repeat-aliases"></a> `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this option.
    This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
 
    example: `#[arg(aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
 
-* `env_alias` (string array argument)
+*  <a name="repeat-env-aliases"></a> `env_aliases` (string array argument)
 
    Specifies alternate (fallback) environment variables which should be associated to this option. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
    example: `#[arg(env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
 
-* `value_parser` (expr argument)
+*  <a name="repeat-value-parser"></a> `value_parser` (expr argument)
 
    By default, `conf` invokes the trait function `std::str::FromStr::from_str` to convert the parsed string to the type `T`.
    This can be overrided by setting `value_parser`. Any function expression can be used as long as it produces a `T` and any generic parameters are either specified or inferred.
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-* `env_delimiter` (char argument)
+*  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
 
    Controls what character is used as a delimiter when reading the list from an environment variable.
 
-   example: `[arg(env_delimiter = '|')]`
+   example: `[conf(env_delimiter = '|')]`
 
    example command-line: `PEERS=peer1|peer2 ./my_prog`
 
    *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like `value_delimieter`.
 
-* `no_env_delimiter` (no argument)
+*  <a name="repeat-no-env-delimiter"></a> `no_env_delimiter` (no argument)
 
    If set, then the env is parsed as if it is a single `T` and not a list. This can be used for strict compatibility with common `clap` configurations.
 
-   example: `[arg(no_env_delimiter)]`
+   example: `[conf(no_env_delimiter)]`
 
-* `allow_hyphen_values` (no arguments)
+*  <a name="repeat-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
+
+   example: `[arg(allow_hyphen_values)]`
 
    By default, clap's parser considers a leading hyphen in a parameter value like `--my-param --my-value` to be an error, and that the user more likely forgot to give a value to `--my-param`
    and tried to specify a switch `--my-value` afterwards, than that they intended to give the value `--my-value` to `--my-param`. So the default behavior is to give an error in that case.
@@ -326,16 +364,14 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    This corresponds to [`clap::Arg::allow_hypen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
 
-   example: `[arg(allow_hyphen_values)]`
-
-* `secret` (optional bool argument)
-
-   Indicates that this value is secret and `conf` should avoid logging the value if there is an error.
-   
-   If the `bool` argument is not specified when this attribute appears, it is considered `true`.
-   Values not marked secret are considered not to be secrets.
+*  <a name="repeat-secret"></a> `secret` (optional bool argument)
 
    example: `#[conf(secret)]`, `#[conf(secret = false)]`
+
+   Indicates that this value is secret and `conf` should avoid logging the value if there is an error.
+
+   If the `bool` argument is not specified when this attribute appears, it is considered `true`.
+   Values not marked secret are considered not to be secrets.
 
 #### Notes
 
@@ -369,21 +405,23 @@ and you can customize this if another choice of delimiter is more appropriate.
 
 *Note*: A flatten field's type `T` must implement `Conf`, or the field type must be `Option<T>` where `T` implements `Conf`.
 
-* `env_prefix` (optional string argument)
+*  <a name="flatten-env-prefix"></a> `env_prefix` (optional string argument)
+
+   example: `#[conf(flatten, env_prefix = "AUTH_")]`
 
    Specifies a string to be prepended to every environment variable of every program option in the target struct.
    If the argument is omitted, it defaults to the upper snake-case of the field name, with an `_` character appended.
 
-   example: `#[conf(flatten, env_prefix = "AUTH_")]`
+*  <a name="flatten-long-prefix"></a> `long_prefix` (optional string argument)
 
-* `long_prefix` (optional string argument)
+   example: `#[conf(flatten, long_prefix = "auth-")]`
 
    Specifies a string to be prepended to every long switch of every program option in the target struct.
    If the argument is omitted, it defaults to the kebab-case of the field name, with a `-` character appended.
 
-   example: `#[conf(flatten, long_prefix = "auth-")]`
+*  <a name="flatten-prefix"></a> `prefix` (optional string argument)
 
-* `prefix` (optional string argument)
+   example: `#[conf(flatten, prefix = "auth")]`
 
    Specifies a string to be used in place of the field name in the default constructions of `env_prefix` and `long_prefix`.
    If the argument is omitted, it's the same as specifying `env_prefix` and `long_prefix` both with no argument.
@@ -391,9 +429,9 @@ and you can customize this if another choice of delimiter is more appropriate.
    This option cannot be used if `env_prefix` or `long_prefix` is present.
    If none of these options are used, then no prefixing occurs.
 
-   example: `#[conf(flatten, prefix = "auth")]`
+*  <a name="flatten-help-prefix"></a> `help_prefix` (optional string argument)
 
-* `help_prefix` (optional string argument)
+   example: `#[conf(flatten, help_prefix = "(friend service)")]`
 
    Specifies that the help strings of every program option of the target struct should be prefixed with a particular string,
    to provide context. If the argument is omitted, it defaults to the doc string on this field.
@@ -403,9 +441,9 @@ and you can customize this if another choice of delimiter is more appropriate.
    If either the prefix or the help string has multiple lines, then a newline character is used to join them.
    Otherwise a space character is used to join them. (This may change in future revisions.)
 
-   example: `#[conf(flatten, help_prefix = "(friend service)")]`
+*  <a name="flatten-skip-short"></a> `skip_short` (char array argument)
 
-* `skip_short` (char array argument)
+   example: `#[conf(flatten, skip_short = ['a', 'b', 'f'])]`
 
    A list of short forms of options which should be skipped when options are flattened at this site.
 
@@ -413,10 +451,10 @@ and you can customize this if another choice of delimiter is more appropriate.
 
    This should only be used as a last resort if you cannot simply remove one of the conflicting short forms at its source, because it would break something else.
 
-   To try to help maintainability in a large project, it is an error if a `skip_short` attribute is used but no short flag matching this is actually found
-   at this flattening site. So, when you see this attribute appearing, you can be sure that all the named short flags are actually being removed by it.
-
-   example: `#[conf(flatten, skip_short = ['a', 'b', 'f'])]`
+   To try to help maintainability in a large project, if `skip_short` would have no effect, it is an error rather than silently
+   continuing. That is, it is an error if a `skip_short` attribute is used but the named short flag is not found
+   at this flattening site. So, when you see this attribute appearing, you can be sure that all of the named short flags are actually being removed at this location,
+   and not by some other `skip_short` attribute appearing in another location.
 
 #### Notes
 
@@ -424,7 +462,7 @@ Using `flatten` with no additional attributes behaves the same as `clap(flatten)
 
 When using `flatten` with `Option<T>`, the parsing behavior is:
 
-* If none of the fields of `T` (after flattening and prefixes) are present among the arguments and env, then the result is `None`.
+* If none of the fields of `T` (after flattening and prefixes) are present among the CLI arguments or env, then the result is `None`.
 * If any of the fields of `T` are present, then we must succeed in parsing a `T` as usual, and the result is `Some`.
 
 ## Struct-level attributes
@@ -433,43 +471,43 @@ Some struct attributes are "top-level only". This means they only have an effect
 on the struct that they are marking. If the struct that they mark is flattened into another struct, then these attributes have no effect on how `Conf::parse`
 works on that struct. Attributes that are not "top-level only" will still have an effect when the struct that they mark is flattened.
 
-* `no_help_flag` (no arguments) (top-level only)
-
-   The `no_help_flag` attribute suppresses the automatically generated help option.
+*  <a name="struct-no-help-flag"></a> `no_help_flag` (no arguments) (top-level only)
 
    example: `#[conf(no_help_flag)]`
 
+   Suppresses the automatically generated help option.
+
    *Note*: Similar to `disable_help_flag = true` in `clap`, but doesn't propagate to any other structs.
 
-* `about` (string argument) (top-level only)
+*  <a name="struct-about"></a> `about` (string argument) (top-level only)
+
+   example: `#[conf(about = "Frobnicate as a service")]`
 
    The about string is displayed as the first line of the automatically-generated help page, before the usage is displayed.
 
    The about string can be set by passing `#[conf(about="...")]`.
    If it is not set, it defaults to the doc string on the struct.
 
-   example: `#[conf(about = "Frobnicate as a service")]`
-
    *Note*: This matches the behavior of `clap` very closely.
 
-* `name` (string argument) (top-level only)
+*  <a name="struct-name"></a> `name` (string argument) (top-level only)
+
+   example: `#[conf(name = "frob_server")]`
 
    The name string is displayed as the name of the binary in the usage string in the help page.
 
    The name string can be set by passing `#[conf(name="...")]`.
    If it is not set, it defaults to the value of `CARGO_PKG_NAME` when the proc macro is being expanded, which is the same default as `clap-derive`.
 
-   example: `#[conf(name = "frob_server")]`
-
    *Note*: This matches the behavior of `clap` very closely.
 
-* `env_prefix` (string argument)
-
-   The given string is concatenated to the beginning of every env form and env alias of every program option associated to this struct.
+*  <a name="struct-env-prefix"></a> `env_prefix` (string argument)
 
    example: `#[conf(env_prefix = "FROBCO_")]`
 
-* `one_of_fields` (parenthesized identifier list)
+   The given string is concatenated to the beginning of every env form and env alias of every program option associated to this struct.
+
+*  <a name="struct-one-of-fields"></a> `one_of_fields` (parenthesized identifier list)
 
    example: `#[conf(one_of_fields(a, b, c))]`
 
@@ -484,7 +522,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    Note that any of the field kinds is potentially supported (`flag`, `parameter`, `repeat`, `flatten`).
 
-* `at_most_one_of_fields` (parenthesized identifier list)
+*  <a name="struct-at-most-one-of-fields"></a> `at_most_one_of_fields` (parenthesized identifier list)
 
    example: `#[conf(at_most_one_of_fields(a, b, c, d)]`
 
@@ -492,10 +530,17 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    Same as `one_of_fields` except that it's not an error if zero of the fields are present.
 
-* `at_least_one_of_fields` (parenthesized identifier list)
+*  <a name="struct-at-least-one-of-fields"></a> `at_least_one_of_fields` (parenthesized identifier list)
 
    example: `#[conf(at_least_one_of_fields(b, c, d)]`
 
    Each identifier in the list must correspond to a field in this `struct`.
 
    Same as `one_of_fields` except that it's not an error if more than one of the fields are present.
+
+*  <a name="struct-validation-predicate"></a> `validation_predicate` (expr argument)
+
+   example: `#[conf(validation_predicate = my_function)]`
+
+   Creates a validation constraint that must be satisfied after parsing this struct succeeds, from a user-defined function.
+   The function should have signature `fn(&T) -> Result<(), impl Display>`.

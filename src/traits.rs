@@ -5,8 +5,7 @@ use std::ffi::OsString;
 
 /// The Conf trait is implemented by types that represent a collection of config parsed on startup, and is modeled
 /// on `clap::Parser`. Users usually call `parse` or another of these functions on their
-/// config structure in `main()`. The `parse_from` version is mainly intended to be used
-/// in tests.
+/// config structure in `main()`.
 ///
 /// Hand-written implementations of this trait are not supported.
 pub trait Conf: Sized {
@@ -26,6 +25,7 @@ pub trait Conf: Sized {
     }
 
     /// Parse self from given containers which stand in for the process args and environment, and exit the program with a help message if we cannot.
+    /// This function's behavior is isolated from the values of `std::env::args_os` and `std::env::vars_os`.
     #[inline]
     fn parse_from<T, K, V>(
         args_os: impl IntoIterator<Item = T>,
@@ -65,19 +65,19 @@ pub trait Conf: Sized {
     // Get the parser config associated to this Conf.
     // This basically means, top-level options that affect parsing or clap setup, but not any of the
     // program options specifically.
-    // This is generally implemented using the derive macros.
+    // This is implemented using the derive macros.
     // Users shouldn't generally call this, because the returned data is implementation details,
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
     fn get_parser_config() -> Result<ParserConfig, Error>;
     // Get the program options this Conf declares, and associated help info etc, including flattened fields.
-    // This is generally implemented using the derive macros.
+    // This is implemented using the derive macros.
     // Users shouldn't generally call this, because the returned data is implementation details,
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
     fn get_program_options() -> Result<&'static [ProgramOption], Error>;
     // Try to parse an instance of self from a given parser context
-    // This is generally implemented using the derive macros.
+    // This is implemented using the derive macros.
     // Users generally can't call this, because ConfContext is not constructible by any public APIs.
     #[doc(hidden)]
     fn from_conf_context(conf_context: ConfContext<'_>) -> Result<Self, Vec<InnerError>>;
@@ -92,7 +92,7 @@ pub trait Conf: Sized {
     fn any_program_options_appeared<'a>(
         conf_context: &ConfContext<'a>,
     ) -> Result<Option<(&'a str, ConfValueSource<&'a str>)>, InnerError> {
-        // This unwrap kind of sucks but this code is only called when an earlier call to Self::get_program_options has succeeded,
+        // This unwrap is unfortunate but this code is only called when an earlier call to Self::get_program_options has succeeded,
         // since we have to call that to instantiate the parser, and we have to do that before getting a ConfContext.
         // The only place in the library where a `ConfContext` is created where one doesn't already exist is in `try_parse_from`,
         // and the ConfContext::new function is pub(crate). And we have to call get_program_options before that point, which calls it

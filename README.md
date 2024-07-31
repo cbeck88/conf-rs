@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
 
-[API Docs](https://docs.rs/conf/latest/conf/) | [Reference](./REFERENCE.md)
+[API Docs](https://docs.rs/conf/latest/conf/) | [Proc-macro Reference](./REFERENCE.md)
 
 ## Overview
 
