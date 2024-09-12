@@ -1,10 +1,10 @@
 use crate::{CowStr, ParsedEnv};
 use std::fmt;
 
-/// This is a property of every program option, and dictates what form of data we expect to collect from CLI and env.
-/// This also affects the parser's expectations when it encounters a switch associated to this program option -- does
-/// it expect to associate the next argument with this parameter? And it classifies the results of its parsing based
-/// on the parse-type of the switch.
+/// This is a property of every program option, and dictates what form of data we expect to collect
+/// from CLI and env. This also affects the parser's expectations when it encounters a switch
+/// associated to this program option -- does it expect to associate the next argument with this
+/// parameter? And it classifies the results of its parsing based on the parse-type of the switch.
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParseType {
@@ -12,7 +12,8 @@ pub enum ParseType {
     Flag,
     /// A parameter is a switch which appears and has one expected argument.
     Parameter,
-    /// A repeat parameter is a switch which may appear one or more times, each time supplying an argument.
+    /// A repeat parameter is a switch which may appear one or more times, each time supplying an
+    /// argument.
     Repeat,
 }
 
@@ -26,12 +27,13 @@ impl fmt::Display for ParseType {
     }
 }
 
-/// Description of a program option, sufficient to identify it on command line or in env, and to render help text for it
-/// It may have one long form and one short form
+/// Description of a program option, sufficient to identify it on command line or in env, and to
+/// render help text for it It may have one long form and one short form
 #[doc(hidden)]
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ProgramOption {
-    /// Id of this option. This is typically the field name literal, and on flattening we prepend it with `parent.`
+    /// Id of this option. This is typically the field name literal, and on flattening we prepend
+    /// it with `parent.`
     pub id: CowStr,
     /// Parse type of this option
     pub parse_type: ParseType,
@@ -49,18 +51,21 @@ pub struct ProgramOption {
     pub env_aliases: Vec<CowStr>,
     /// The default-value, if any
     pub default_value: Option<CowStr>,
-    /// Whether this option is considered required to appear. Affects help generation & semantics around flatten optional.
+    /// Whether this option is considered required to appear. Affects help generation & semantics
+    /// around flatten optional.
     pub is_required: bool,
-    /// If set, tell clap to allow hyphen values. By default clap turns this off, which can help with error messages / misparses.
+    /// If set, tell clap to allow hyphen values. By default clap turns this off, which can help
+    /// with error messages / misparses.
     pub allow_hyphen_values: bool,
     /// If set, then the user has specified that this is (or is not) a secret value, explicitly.
     pub secret: Option<bool>,
 }
 
 impl ProgramOption {
-    /// Apply prefixing to a program option. This is done when it appears in a Conf structure that is then flattened
-    /// into another one, and the flattening may have prefixes that need to be applied before the parser sees this program option.
-    /// Note that prefixing does not apply to short forms, only long forms and env_forms.
+    /// Apply prefixing to a program option. This is done when it appears in a Conf structure that
+    /// is then flattened into another one, and the flattening may have prefixes that need to be
+    /// applied before the parser sees this program option. Note that prefixing does not apply
+    /// to short forms, only long forms and env_forms.
     pub fn apply_flatten_prefixes(
         self,
         id_prefix: &str,
@@ -107,17 +112,20 @@ impl ProgramOption {
         }
 
         if let Some(desc) = description.as_mut() {
-            // Description prefix requires a little more subtlety to try to ensure that it is going to be readable,
-            // because typically we trim all the doc strings of leading and trailing whitespace, but retain the line breaks.
-            // The description prefix is usually similarly trimmed. But there should be some whitespace between the prefix and description
-            // if this is human-readable text.
+            // Description prefix requires a little more subtlety to try to ensure that it is going
+            // to be readable, because typically we trim all the doc strings of leading
+            // and trailing whitespace, but retain the line breaks. The description
+            // prefix is usually similarly trimmed. But there should be some whitespace between the
+            // prefix and description if this is human-readable text.
             //
-            // To decide what to do, we look at both the prefix and the description. If either of them has newlines, then we join with a newline.
-            // Otherwise we join with a space. If the prefix is empty string, then we don't join with anything.
+            // To decide what to do, we look at both the prefix and the description. If either of
+            // them has newlines, then we join with a newline. Otherwise we join with a
+            // space. If the prefix is empty string, then we don't join with anything.
             //
             // Probably won't work well in all cases, but it's a start.
-            // In the future, we should probably give the user more control, like, if they pass `help_format` instead of `help_prefix`, then
-            // we assume the doc string is a formatting string or something like this, and do like displaydoc does.
+            // In the future, we should probably give the user more control, like, if they pass
+            // `help_format` instead of `help_prefix`, then we assume the doc string is
+            // a formatting string or something like this, and do like displaydoc does.
             if !description_prefix.is_empty() {
                 let desc = desc.to_mut();
                 let ws = if description_prefix.contains('\n') || desc.contains('\n') {
@@ -166,7 +174,8 @@ impl ProgramOption {
         self
     }
 
-    /// Decide if a program option should be considered secret. Secrets need to be explicitly declared as such.
+    /// Decide if a program option should be considered secret. Secrets need to be explicitly
+    /// declared as such.
     #[inline]
     pub fn is_secret(&self) -> bool {
         self.secret.unwrap_or(false)
@@ -184,7 +193,8 @@ impl ProgramOption {
         stream: &mut impl std::fmt::Write,
         env: Option<&ParsedEnv>,
     ) -> Result<(), std::fmt::Error> {
-        // Deal with spacing so that when short is 1 char, all the short options are aligned and indented, and all the long options are too.
+        // Deal with spacing so that when short is 1 char, all the short options are aligned and
+        // indented, and all the long options are too.
         let dash = if self.short_form.is_some() { '-' } else { ' ' };
         let short = self.short_form.unwrap_or(' ');
         let comma = if self.short_form.is_some() && self.long_form.is_some() {

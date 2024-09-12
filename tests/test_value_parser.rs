@@ -97,7 +97,8 @@ fn test_value_parser_json() {
 
 #[derive(Conf, Debug)]
 struct TestValueParserJson2 {
-    // parse a vec of jsons, without repeat keyword, but still using serde_json::from_str as value parser
+    // parse a vec of jsons, without repeat keyword, but still using serde_json::from_str as value
+    // parser
     #[conf(long, env, value_parser = serde_json::from_str)]
     jsons: Vec<MyJson>,
 }

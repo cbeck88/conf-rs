@@ -57,7 +57,8 @@ pub(crate) struct FlattenedOptionalDebugInfo<'a> {
 // so that the generated code doesn't have to.
 //
 // Many of the APIs which take an id (or list of ids) will panic if the id is not found.
-// This is okay because this is not a user facing object, and it's okay to panic for internal logic errors like that.
+// This is okay because this is not a user facing object, and it's okay to panic for internal logic
+// errors like that.
 #[doc(hidden)]
 pub struct ConfContext<'a> {
     args: &'a ParsedArgs<'a>,
@@ -119,7 +120,8 @@ impl<'a> ConfContext<'a> {
     }
 
     /// Get a string program option if it was set, using any of its aliases or env value
-    /// Returns an error if it was set multiple times via args. If args and env are set, args shadows env.
+    /// Returns an error if it was set multiple times via args. If args and env are set, args
+    /// shadows env.
     #[allow(clippy::type_complexity)]
     pub fn get_string_opt(
         &self,
@@ -145,7 +147,8 @@ impl<'a> ConfContext<'a> {
                     .arg_matches
                     .value_source(&id)
                     .expect("Id not found, this is an internal error");
-                // Note: We don't support user-defined default value on this one right now, and we don't give default values to clap so this should be the only possibility
+                // Note: We don't support user-defined default value on this one right now, and we
+                // don't give default values to clap so this should be the only possibility
                 assert_eq!(value_source, ValueSource::CommandLine);
 
                 let val_and_source = Some((value_source.into(), val.as_str()));
@@ -202,7 +205,8 @@ impl<'a> ConfContext<'a> {
                 .arg_matches
                 .value_source(&id)
                 .expect("Id not found, this is an internal error");
-            // Note: We don't support user-defined default value on this one right now, and we don't give default values to clap so this should be the only possibility
+            // Note: We don't support user-defined default value on this one right now, and we don't
+            // give default values to clap so this should be the only possibility
             assert_eq!(value_source, ValueSource::CommandLine);
 
             let results: Vec<&'a str> = val.map(String::as_str).collect();
@@ -250,7 +254,8 @@ impl<'a> ConfContext<'a> {
         }
     }
 
-    /// Returns the value source of a given program option id (relative to our prefix), if it has a value
+    /// Returns the value source of a given program option id (relative to our prefix), if it has a
+    /// value
     fn get_value_source(&self, id: &str) -> Result<Option<ConfValueSource<&'a str>>, InnerError> {
         let prefixed_id = self.id_prefix.clone() + id;
         let opt = self
@@ -274,7 +279,8 @@ impl<'a> ConfContext<'a> {
                 maybe.map(|(src, _val)| src)
             }
             ParseType::Repeat => {
-                // Hack: don't supply delimiter char even if it exists, since it won't matter for this function
+                // Hack: don't supply delimiter char even if it exists, since it won't matter for
+                // this function
                 let (src, _val, _opt) = self.get_repeat_opt(id, None)?;
                 Some(src)
             }
@@ -297,7 +303,8 @@ impl<'a> ConfContext<'a> {
 
     /// Create a new context from self, for use with a flattened-optional substructure.
     ///
-    /// This preserves context about what optional group we are entering, and why it was enabled, for error messages.
+    /// This preserves context about what optional group we are entering, and why it was enabled,
+    /// for error messages.
     #[inline]
     pub fn for_flattened_optional(
         &self,
@@ -344,8 +351,9 @@ impl<'a> ConfContext<'a> {
 
     /// Generate a "too_few_arguments" error
     ///
-    /// This should contain the ids of all "single options" in this constraint, as well as all flattened options in this constraint.
-    /// This error includes context if we are within a flattened optional group
+    /// This should contain the ids of all "single options" in this constraint, as well as all
+    /// flattened options in this constraint. This error includes context if we are within a
+    /// flattened optional group
     pub fn too_few_arguments_error(
         &self,
         struct_name: &'static str,
@@ -371,12 +379,16 @@ impl<'a> ConfContext<'a> {
 
     /// Generate a "too_many_arguments" error
     ///
-    /// To use this function correctly, constraint_single_option_ids can be the relative id of any field in the constraint. (So, it's field name on the current struct.)
-    /// Whether or not that one actually appeared and is contributing to the error, `ConfContext` will figure that out, and filter out any that shouldn't be in the error report.
+    /// To use this function correctly, constraint_single_option_ids can be the relative id of any
+    /// field in the constraint. (So, it's field name on the current struct.) Whether or not
+    /// that one actually appeared and is contributing to the error, `ConfContext` will figure that
+    /// out, and filter out any that shouldn't be in the error report.
     ///
-    /// constraint_flattened_ids should include the id of the flattened optional struct contributing to the error, and the result of Conf::any_program_options_appeared on the inner struct.
-    /// This includes enough detail to render an error for at least one option that enabled that flattened optional struct. If the result is None then conf context will filter that out, so that
-    /// the proc macro doesn't have to.
+    /// constraint_flattened_ids should include the id of the flattened optional struct contributing
+    /// to the error, and the result of Conf::any_program_options_appeared on the inner struct.
+    /// This includes enough detail to render an error for at least one option that enabled that
+    /// flattened optional struct. If the result is None then conf context will filter that out, so
+    /// that the proc macro doesn't have to.
     #[allow(clippy::type_complexity)]
     pub fn too_many_arguments_error(
         &self,

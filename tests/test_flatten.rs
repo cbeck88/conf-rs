@@ -474,16 +474,16 @@ struct PeerServiceConfig {
     min_connections: u32,
 
     /// If a peer's badness score exceeds this limit, the peer is automatically disconnected
-    /// This will lead to an alert and we will not reconnect to the peer until an administrator authorizes
-    /// blah blah blah
+    /// This will lead to an alert and we will not reconnect to the peer until an administrator
+    /// authorizes blah blah blah
     #[conf(long, env, default_value = "1000")]
     badness_score_limit: u32,
 }
 
-// A putative server binary that embeds test-service as well as a peering service and an admin endpoint
-// This tests what happened if we have two layers of flattening, and also if we flatten some structs at layer 2
-// and also again at layer 1, and turning prefixing on and off for different structs.
-// This also tests top-level env prefix
+// A putative server binary that embeds test-service as well as a peering service and an admin
+// endpoint This tests what happened if we have two layers of flattening, and also if we flatten
+// some structs at layer 2 and also again at layer 1, and turning prefixing on and off for different
+// structs. This also tests top-level env prefix
 #[derive(Conf, Debug)]
 #[conf(env_prefix = "FROB_")]
 struct FrobConfig {

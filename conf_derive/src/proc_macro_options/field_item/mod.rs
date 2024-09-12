@@ -25,7 +25,8 @@ pub enum FieldItem {
 impl FieldItem {
     pub fn new(field: &Field, struct_item: &StructItem) -> Result<Self, syn::Error> {
         // First, inspect the first field attribute.
-        // If the first attribute is 'flag', 'parameter', 'repeat', or 'flatten', then that's how we're going to handle it.
+        // If the first attribute is 'flag', 'parameter', 'repeat', or 'flatten', then that's how
+        // we're going to handle it.
         for attr in &field.attrs {
             if attr.path().is_ident("conf") || attr.path().is_ident("arg") {
                 let nested =
@@ -82,7 +83,8 @@ impl FieldItem {
         }
     }
 
-    /// Generate code that constructs (one or more) ProgramOption as needed and pushes them onto program_options_ident
+    /// Generate code that constructs (one or more) ProgramOption as needed and pushes them onto
+    /// program_options_ident
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -98,7 +100,8 @@ impl FieldItem {
     /// Generate code for a struct initializer for this field
     ///
     /// Returns a TokenStream for initializer expression, which can use `?` to return errors,
-    /// and bool which is true if the error type is `Vec<InnerError>` and false if it is `InnerError`
+    /// and bool which is true if the error type is `Vec<InnerError>` and false if it is
+    /// `InnerError`
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,

@@ -108,11 +108,12 @@ fn gen_conf_get_program_options_impl_for_struct(
         .collect::<Result<Vec<_>, syn::Error>>()?;
 
     // To implement #[conf(env_prefix="ACME_")] on a struct (rather than on a flattened field),
-    // the code gen associated to the struct needs to be able to add its own prefixing during get_program_options
-    // and during from_conf_context.
-    // To do this, we allow the struct_item to "post-process" the Vec<ProgramOption>, (to add a prefix to them all)
-    // and to "pre-process" the ConfContext (to add a matching prefix to that before it is used)
-    // Note: The preprocessing no longer does anything since we switched to using id's like clap does.
+    // the code gen associated to the struct needs to be able to add its own prefixing during
+    // get_program_options and during from_conf_context.
+    // To do this, we allow the struct_item to "post-process" the Vec<ProgramOption>, (to add a
+    // prefix to them all) and to "pre-process" the ConfContext (to add a matching prefix to
+    // that before it is used) Note: The preprocessing no longer does anything since we switched
+    // to using id's like clap does.
     let struct_post_process_program_options =
         struct_item.gen_post_process_program_options(&program_options_ident)?;
 
@@ -182,7 +183,8 @@ fn gen_conf_from_conf_context_impl_for_struct(
     //     _ => Err(errors),
     //   }?;
     //
-    //   validation_predicate(&return_value).map_err(|err| vec![conf::InnerError::validation(&conf_context.id, err)])?;
+    //   validation_predicate(&return_value).map_err(|err|
+    // vec![conf::InnerError::validation(&conf_context.id, err)])?;
     //
     //   Ok(return_value)
     // }
@@ -192,8 +194,8 @@ fn gen_conf_from_conf_context_impl_for_struct(
     // The validation_predicate(...) part is called #apply_validation_predicate
     let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
     let errors_ident = Ident::new("__errors__", Span::call_site());
-    // For each field, intialize a local variable with Option<T> which is some if it worked and None if there were errors.
-    // Push all errors into #errors_ident.
+    // For each field, intialize a local variable with Option<T> which is some if it worked and None
+    // if there were errors. Push all errors into #errors_ident.
     let initializations: Vec<TokenStream> = fields
         .iter()
         .map(|field| -> Result<TokenStream, syn::Error> {

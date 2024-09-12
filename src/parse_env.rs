@@ -8,7 +8,8 @@ pub struct ParsedEnv {
 }
 
 impl ParsedEnv {
-    /// Get the OsString. This is useful if you want to raise an error with context if it not valid utf8.
+    /// Get the OsString. This is useful if you want to raise an error with context if it not valid
+    /// utf8.
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a OsString> {
         self.map.get(name)
     }
@@ -32,8 +33,9 @@ where
 {
     // Drop any non-utf8 env keys, since there's no way the parser can read them anyways, since we
     // don't give the user a way to specify a non-utf8 env value that should be read.
-    // If some values are non-utf8, that's also going to fail if they are read, but it's possible our program
-    // doesn't actually need to read those, so let's fail at the time it actually reads them instead.
+    // If some values are non-utf8, that's also going to fail if they are read, but it's possible
+    // our program doesn't actually need to read those, so let's fail at the time it actually
+    // reads them instead.
     ParsedEnv {
         map: env_vars_os
             .into_iter()

@@ -5,9 +5,10 @@ use std::{ffi::OsString, fmt, fmt::Write};
 /// An error which occurs when a `Conf::parse` function is called.
 /// This may conceptually represent many underlying errors of several different types.
 //
-// Note: For now this is a thin wrapper around clap::Error just so that we can control our public API independently of clap.
-// We may eventually need to make it contain an enum which is either a clap::Error or a collection of InnerError or something like this,
-// but this approach is working adequately for now.
+// Note: For now this is a thin wrapper around clap::Error just so that we can control our public
+// API independently of clap. We may eventually need to make it contain an enum which is either a
+// clap::Error or a collection of InnerError or something like this, but this approach is working
+// adequately for now.
 #[derive(Debug)]
 pub struct Error(ClapError);
 
@@ -23,7 +24,8 @@ impl Error {
         self.0.print()
     }
 
-    /// Exit the program, printing an error message to stderr or stdout as appropriate (as clap does)
+    /// Exit the program, printing an error message to stderr or stdout as appropriate (as clap
+    /// does)
     pub fn exit(&self) -> ! {
         self.0.exit()
     }
@@ -57,7 +59,8 @@ impl From<fmt::Error> for Error {
     }
 }
 
-/// A single problem that occurs when a Conf attempts to parse env, or run a value parser, or run a validation predicate
+/// A single problem that occurs when a Conf attempts to parse env, or run a value parser, or run a
+/// validation predicate
 #[doc(hidden)]
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum InnerError {
@@ -71,7 +74,8 @@ pub enum InnerError {
     // (source, value string, program option, error message)
     InvalidParameterValue(ConfValueSource<String>, String, Box<ProgramOption>, String),
     /// Too Few Arguments
-    // (struct name, instance id prefix, single options, flattened fields, optional reason this is required)
+    // (struct name, instance id prefix, single options, flattened fields, optional reason this is
+    // required)
     TooFewArguments(
         String,
         String,
@@ -80,7 +84,8 @@ pub enum InnerError {
         Option<Box<OwnedFlattenedOptionalDebugInfo>>,
     ),
     /// Too many arguments
-    // (struct name, instance id prefix, single options, flattened fields (field name, option which appeared))
+    // (struct name, instance id prefix, single options, flattened fields (field name, option which
+    // appeared))
     TooManyArguments(
         String,
         String,
@@ -392,7 +397,8 @@ impl InnerError {
         Ok(())
     }
 
-    // Formats an error string to look nicely indented if it has line breaks and starting with a line break if the error is long.
+    // Formats an error string to look nicely indented if it has line breaks and starting with a
+    // line break if the error is long.
     fn format_err_str(err_str: &str, estimated_line_length_so_far: usize) -> String {
         const TARGET_LINE_LENGTH: usize = 100;
         const INDENTATION: usize = 4;
@@ -443,7 +449,8 @@ fn print_opt_requirements(
 fn render_provided_opt(opt: &ProgramOption, value_source: &ConfValueSource<String>) -> String {
     match value_source {
         ConfValueSource::Args => {
-            // If we have both a long and a short form, prefer to display the long form in this help message
+            // If we have both a long and a short form, prefer to display the long form in this help
+            // message
             let switch = render_help_switch(opt).unwrap_or_default();
             format!("'{switch}'")
         }

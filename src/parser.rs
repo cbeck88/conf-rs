@@ -34,7 +34,8 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Create a parser from top-level parser config and a list of program options
     /// This parser doesn't consider env at all when parsing, but does use env when rendering help.
-    /// It also tries to fail with a long list if any required options are not supplied, and checks against env for that determination.
+    /// It also tries to fail with a long list if any required options are not supplied, and checks
+    /// against env for that determination.
     pub fn new(
         parser_config: ParserConfig,
         options: &'a [ProgramOption],
@@ -104,7 +105,8 @@ impl<'a> Parser<'a> {
         &self.command
     }
 
-    /// Parse from raw os args (or something that looks like std::env::args_os but could be test data)
+    /// Parse from raw os args (or something that looks like std::env::args_os but could be test
+    /// data)
     pub fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ParsedArgs, Error>
     where
         T: Into<OsString> + Clone,
@@ -124,36 +126,41 @@ impl<'a> Parser<'a> {
     //
     // Notes:
     //   Our goal here is to get clap to parse the CLI args, and generate satisfactory help text,
-    //   but we don't actually want it to handle env, because it's missing a lot of functionality around that.
-    //   So some things that clap has nominal support for, we're not going to build into the command here.
+    //   but we don't actually want it to handle env, because it's missing a lot of functionality
+    // around that.   So some things that clap has nominal support for, we're not going to build
+    // into the command here.
     //
     //   Instead, our strategy is:
-    //   1. No env is specified to clap. All env handling is going to happen in `ConfContext` instead.
-    //   2. Nothing that is "required" is considered required at this stage, because it might be supplied by env.
-    //      We will check for requirements being fulfilled in `ConfContext` instead, and errors will be aggregated
-    //      in `from_conf_context`.
-    //      That also lets us delay hitting "missing required value" errors until we are prepared to capture
-    //      all possible errors that occur.
-    //   3. Because no env is specified to clap, it won't show up in the clap generated help text automatically.
-    //      Instead we have to put it in the description ourselves.
+    //   1. No env is specified to clap. All env handling is going to happen in `ConfContext`
+    //      instead.
+    //   2. Nothing that is "required" is considered required at this stage, because it might be
+    //      supplied by env. We will check for requirements being fulfilled in `ConfContext`
+    //      instead, and errors will be aggregated in `from_conf_context`. That also lets us delay
+    //      hitting "missing required value" errors until we are prepared to capture all possible
+    //      errors that occur.
+    //   3. Because no env is specified to clap, it won't show up in the clap generated help text
+    //      automatically. Instead we have to put it in the description ourselves.
     //
     // We also need to work around this issue: https://github.com/clap-rs/clap/discussions/5432
     //
-    // If an arg doesn't have a short or long flag, then clap will consider it a positional argument.
-    // But if it has an env source, it might be a secret or something and it would not be correct to treat it as a positional CLI argument.
-    // In this crate we want positional arguments to be opt-in, and we don't support them yet.
+    // If an arg doesn't have a short or long flag, then clap will consider it a positional
+    // argument. But if it has an env source, it might be a secret or something and it would not
+    // be correct to treat it as a positional CLI argument. In this crate we want positional
+    // arguments to be opt-in, and we don't support them yet.
     //
-    // For similar reasons, we can't let clap perform default values for env-only arguments, since it won't run for those arguments.
-    // It's simpler to just let not clap perform default values at all.
+    // For similar reasons, we can't let clap perform default values for env-only arguments, since
+    // it won't run for those arguments. It's simpler to just let not clap perform default
+    // values at all.
     fn make_arg(
         _parser_config: &ParserConfig,
         env: &ParsedEnv,
         option: &'a ProgramOption,
     ) -> Result<MaybeArg, Error> {
         if option.short_form.is_none() && option.long_form.is_none() {
-            // If there is no short form and no long form, clap is going to make it a positional argument, but we don't want that and there's no way to disable the behavior.
-            // Clap also isn't supposed to read a value for this, so the solution is don't create an arg at all, and just add documentation
-            // about it ourselves.
+            // If there is no short form and no long form, clap is going to make it a positional
+            // argument, but we don't want that and there's no way to disable the behavior.
+            // Clap also isn't supposed to read a value for this, so the solution is don't create an
+            // arg at all, and just add documentation about it ourselves.
             return if option.env_form.is_some() {
                 let mut buf = String::new();
                 option.print(&mut buf, Some(env))?;
@@ -173,7 +180,8 @@ impl<'a> Parser<'a> {
 
         let mut arg = Arg::new(option.id.clone().into_owned());
 
-        // All args are considered optional from clap's point of view, and we will handle any missing required errors later.
+        // All args are considered optional from clap's point of view, and we will handle any
+        // missing required errors later.
         arg = arg.required(false);
 
         // Set the short form if present
@@ -246,9 +254,9 @@ impl<'a> Parser<'a> {
         };
 
         // Set the help heading.
-        // If there is a short-form or long-form set, then it is listed as a "flag" or "option" as is traditional.
-        // If there is only env set, then it is listed as "environment variable".
-        // TODO: Needs more work
+        // If there is a short-form or long-form set, then it is listed as a "flag" or "option" as
+        // is traditional. If there is only env set, then it is listed as "environment
+        // variable". TODO: Needs more work
         /*
         if option.short_form.is_some() || option.long_form.is_some() {
             match option.parse_type {
@@ -266,7 +274,8 @@ impl<'a> Parser<'a> {
         Ok(MaybeArg::Arg(arg))
     }
 
-    // This function is not used in the actual crate, since clap handles all the help stuff, but it's here and marked public for testing
+    // This function is not used in the actual crate, since clap handles all the help stuff, but
+    // it's here and marked public for testing
     #[doc(hidden)]
     pub fn render_clap_help(&self) -> String {
         let mut command = self.command.clone();
