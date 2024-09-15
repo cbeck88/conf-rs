@@ -163,7 +163,8 @@ impl StructItem {
     /// Generate tokens that apply any validations to an instance
     ///
     /// These tokens are the body of a validation function with signature
-    /// fn validation(#instance_ident: &Self, #instance_id_prefix_ident: &str) -> Result<(), Vec<conf::InnerError>>
+    /// fn validation(#instance_ident: &Self, #instance_id_prefix_ident: &str) -> Result<(),
+    /// Vec<conf::InnerError>>
     pub fn gen_validation_routine(
         &self,
         instance: &Ident,
@@ -207,8 +208,10 @@ impl StructItem {
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                // Note: A lambda is used here because it's allowed that get_value_source_expr can fail and early return with ?, but this isn't really expected to happen.
-                // The functions that it is calling will all be failing earlier in the process if they fail at all.
+                // Note: A lambda is used here because it's allowed that get_value_source_expr can
+                // fail and early return with ?, but this isn't really expected to happen.
+                // The functions that it is calling will all be failing earlier in the process if
+                // they fail at all.
                 quote! {
                     {
                         let flattened_ids_and_value_sources: Result<Vec<(&'static str, Option<(&str, ::conf::ConfValueSource::<&str>)>)>, ::conf::InnerError> =
@@ -264,7 +267,8 @@ impl StructItem {
     }
 }
 
-// struct which caches lookup from ident to FieldItem, and generates tokenstreams for checking if these fields are present in the struct instance etc.
+// struct which caches lookup from ident to FieldItem, and generates tokenstreams for checking if
+// these fields are present in the struct instance etc.
 struct FieldsHelper<'a> {
     instance: &'a Ident,
     conf_context_ident: &'a Ident,

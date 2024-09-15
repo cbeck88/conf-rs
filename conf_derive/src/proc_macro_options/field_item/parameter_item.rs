@@ -214,7 +214,8 @@ impl ParameterItem {
         // The part around value parser needs to be very simple if we want type inference to work
         // We also stick the user-provided expression inside a function to prevent it from mutating
         // anything in the surrounding scope.
-        // But we are reading conf_context_ident from our caller's scope, outside of the user-provided expression
+        // But we are reading conf_context_ident from our caller's scope, outside of the
+        // user-provided expression
         Ok((
             if let Some(inner_type) = self.is_optional_type.as_ref() {
                 quote! {

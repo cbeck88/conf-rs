@@ -228,11 +228,14 @@ impl RepeatItem {
             .clone()
             .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str });
 
-        // Note: We can't use rust into_iter, collect, map_err because sometimes it messes with type inference around the value parser
-        // Note: The line `let mut result: #field_type = Default::default();` is expected to be default initializing a Vec.
-        // If it fails because the user put another funky type there, imo this should not really be supported.
-        // It's more compelling to make the value_parser option easier to use (easier type inference) than to support user-defined containers here,
-        // and try to use `.collect` etc. directly into their container. The user's code can do .iter().collect() after our code runs if they want.
+        // Note: We can't use rust into_iter, collect, map_err because sometimes it messes with type
+        // inference around the value parser Note: The line `let mut result: #field_type =
+        // Default::default();` is expected to be default initializing a Vec. If it fails
+        // because the user put another funky type there, imo this should not really be supported.
+        // It's more compelling to make the value_parser option easier to use (easier type
+        // inference) than to support user-defined containers here, and try to use
+        // `.collect` etc. directly into their container. The user's code can do .iter().collect()
+        // after our code runs if they want.
         Ok((
             quote! {
                || -> Result<#field_type, Vec<conf::InnerError>> {

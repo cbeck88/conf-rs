@@ -1,4 +1,5 @@
-//! A `derive`-based, highly composable env-and-argument parser aimed at the practically-minded web developer building large web projects.
+//! A `derive`-based, highly composable env-and-argument parser aimed at the practically-minded web
+//! developer building large web projects.
 #![doc = include_str!("../REFERENCE.md")]
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
@@ -37,6 +38,6 @@ pub use parser::Parser;
 #[doc(hidden)]
 pub use conf_derive::{self, *};
 
-// CowStr is used internally mainly because using it allows us to construct ProgramOption in a const way from string literals,
-// but also to modify them if they have to be flattened into something.
+// CowStr is used internally mainly because using it allows us to construct ProgramOption in a const
+// way from string literals, but also to modify them if they have to be flattened into something.
 type CowStr = std::borrow::Cow<'static, str>;

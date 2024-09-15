@@ -106,8 +106,9 @@ impl FlattenItem {
             }
         }
 
-        // If help prefix was not requested, then doc_string should be ignored. If help_prefix was explicitly assigned, then doc_string is shadowed.
-        // unwrap_or_default is used to flatten the two levels of Option.
+        // If help prefix was not requested, then doc_string should be ignored. If help_prefix was
+        // explicitly assigned, then doc_string is shadowed. unwrap_or_default is used to
+        // flatten the two levels of Option.
         result.description_prefix = help_prefix
             .map(|inner| inner.as_ref().map(LitStr::value).or(doc_string))
             .unwrap_or_default();
@@ -127,12 +128,14 @@ impl FlattenItem {
         self.field_type.clone()
     }
 
-    // Body of a routine which extends #program_options_ident to hold any program options associated to this field
+    // Body of a routine which extends #program_options_ident to hold any program options associated
+    // to this field
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
     ) -> Result<TokenStream, syn::Error> {
-        // Generated code gets all program options for the struct we are flattening, then calls flatten on each one and adds all that to program_options_ident.
+        // Generated code gets all program options for the struct we are flattening, then calls
+        // flatten on each one and adds all that to program_options_ident.
         let field_name = self.field_name.to_string();
         let field_type = &self.field_type;
         let id_prefix = self.get_id_prefix();
@@ -155,7 +158,8 @@ impl FlattenItem {
             .map(|array| array.elements.len())
             .unwrap_or(0);
 
-        // Common modifications we have to make to program options whether the flatten is optional or required
+        // Common modifications we have to make to program options whether the flatten is optional
+        // or required
         let common_program_option_modifications = quote! {
             .apply_flatten_prefixes(#id_prefix, #long_prefix, #env_prefix, #description_prefix)
             .skip_short_forms(&[#skip_short], &mut was_skipped[..])
@@ -202,7 +206,8 @@ impl FlattenItem {
         })
     }
 
-    // Body of a function taking a &ConfContext returning Result<#field_type, Vec<::conf::InnerError>>
+    // Body of a function taking a &ConfContext returning Result<#field_type,
+    // Vec<::conf::InnerError>>
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,

@@ -1,0 +1,3 @@
+# these values require the nightly version of rustfmt
+wrap_comments = true
+comment_width = 100
