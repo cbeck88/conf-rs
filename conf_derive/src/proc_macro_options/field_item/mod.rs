@@ -8,11 +8,13 @@ mod flag_item;
 mod flatten_item;
 mod parameter_item;
 mod repeat_item;
+mod subcommands_item;
 
 use flag_item::FlagItem;
 use flatten_item::FlattenItem;
 use parameter_item::ParameterItem;
 use repeat_item::RepeatItem;
+use subcommands_item::SubcommandsItem;
 
 /// #[conf(...)] options listed in a field of a struct which has `#[derive(Conf)]`
 pub enum FieldItem {
@@ -20,6 +22,7 @@ pub enum FieldItem {
     Parameter(ParameterItem),
     Repeat(RepeatItem),
     Flatten(FlattenItem),
+    Subcommands(SubcommandsItem),
 }
 
 impl FieldItem {
@@ -41,6 +44,8 @@ impl FieldItem {
                         return Ok(Self::Repeat(RepeatItem::new(field, struct_item)?));
                     } else if path.is_ident("flatten") {
                         return Ok(Self::Flatten(FlattenItem::new(field, struct_item)?));
+                    } else if path.is_ident("subcommands") {
+                        return Ok(Self::Subcommands(SubcommandsItem::new(field, struct_item)?));
                     }
                 }
             }
@@ -70,6 +75,7 @@ impl FieldItem {
             Self::Parameter(item) => item.get_field_name(),
             Self::Repeat(item) => item.get_field_name(),
             Self::Flatten(item) => item.get_field_name(),
+            Self::Subcommands(item) => item.get_field_name(),
         }
     }
 
@@ -80,6 +86,7 @@ impl FieldItem {
             Self::Parameter(item) => item.get_field_type(),
             Self::Repeat(item) => item.get_field_type(),
             Self::Flatten(item) => item.get_field_type(),
+            Self::Subcommands(item) => item.get_field_type(),
         }
     }
 
@@ -94,14 +101,32 @@ impl FieldItem {
             Self::Parameter(item) => item.gen_push_program_options(program_options_ident),
             Self::Repeat(item) => item.gen_push_program_options(program_options_ident),
             Self::Flatten(item) => item.gen_push_program_options(program_options_ident),
+            Self::Subcommands(item) => item.gen_push_program_options(program_options_ident),
+        }
+    }
+
+    /// Generate code that constructs (one or more) subcommands as needed and pushes them onto
+    /// subcommands_ident
+    pub fn gen_push_subcommands(
+        &self,
+        subcommands_ident: &Ident,
+        parsed_env: &Ident,
+    ) -> Result<TokenStream, syn::Error> {
+        match self {
+            Self::Flag(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Parameter(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Repeat(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Flatten(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Subcommands(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
         }
     }
 
     /// Generate code for a struct initializer for this field
     ///
-    /// Returns a TokenStream for initializer expression, which can use `?` to return errors,
-    /// and bool which is true if the error type is `Vec<InnerError>` and false if it is
-    /// `InnerError`
+    /// Returns:
+    /// * a TokenStream for initializer expression, which can use `?` to return errors,
+    /// * a bool which is true if the error type is `Vec<InnerError>` and false if it is
+    ///   `InnerError`
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
@@ -111,6 +136,7 @@ impl FieldItem {
             Self::Parameter(item) => item.gen_initializer(conf_context_ident),
             Self::Repeat(item) => item.gen_initializer(conf_context_ident),
             Self::Flatten(item) => item.gen_initializer(conf_context_ident),
+            Self::Subcommands(item) => item.gen_initializer(conf_context_ident),
         }
     }
 }

@@ -14,26 +14,25 @@ mod traits;
 
 // These are not needed by users or by generated code
 use conf_context::FlattenedOptionalDebugInfo;
-use parse_env::{parse_env, ParsedEnv};
+use parse_env::parse_env;
 use parser::ParsedArgs;
 use str_to_bool::str_to_bool;
 
-// Conf, and perhaps Error, is the only public API, but the derive macro needs these other types.
+// Conf, Subcommands, and perhaps Error, is the only public API, but the derive macro needs these
+// other types.
 pub use error::Error;
-pub use traits::Conf;
+pub use traits::{Conf, Subcommands};
 
 #[doc(hidden)]
 pub use conf_context::{ConfContext, ConfValueSource};
 #[doc(hidden)]
 pub use error::InnerError;
 #[doc(hidden)]
-pub use parser::ParserConfig;
+pub use parse_env::ParsedEnv;
+#[doc(hidden)]
+pub use parser::{Parser, ParserConfig};
 #[doc(hidden)]
 pub use program_option::{ParseType, ProgramOption};
-
-// This is used by tests
-#[doc(hidden)]
-pub use parser::Parser;
 
 #[doc(hidden)]
 pub use conf_derive::{self, *};

@@ -3,11 +3,58 @@ use clap::{Arg, ArgAction, ArgMatches, Command};
 use std::{collections::HashMap, ffi::OsString};
 
 /// Result of parsing arguments
+#[derive(Clone)]
 pub struct ParsedArgs<'a> {
     // Clap's results of parsing the CLI arguments
-    pub arg_matches: ArgMatches,
-    // A map from option id's back to options. This helps ConfContext to handle env parsing.
-    pub id_to_option: &'a HashMap<&'a str, &'a ProgramOption>,
+    pub arg_matches: &'a ArgMatches,
+    // A reference to the parser that produced these arg matches.
+    // This is needed to:
+    // * Keep track of id_to_option map
+    // * When checking for subcommands, be able to update to the subcommand parser, so that the
+    //   correct id_to_option map is used.
+    pub parser: &'a Parser<'a>,
+}
+
+impl<'a> ParsedArgs<'a> {
+    // Make a ParsedArgs from an ArgMatches and a Parser.
+    // This is kind of janky from an API point of view. It would be simpler if calling
+    // `Parser::parse` could just return ParsedArgs, with all the needed data, and all the
+    // lifetimes would just work. Instead we have to do this two-step thing where we call
+    // Parser::parse, and then ParsedArgs::new, because we would need ParsedArgs to have an
+    // "owning ref" somehow but that is very difficult in rust unfortunately. Since it's just
+    // internal API I don't really care.
+    pub(crate) fn new(arg_matches: &'a ArgMatches, parser: &'a Parser) -> Self {
+        Self {
+            arg_matches,
+            parser,
+        }
+    }
+
+    // Get the id_to_option map from the parser.
+    // This is very helpful to the ConfContext to handle env parsing and error reporting.
+    pub fn id_to_option(&self) -> &'a HashMap<&'a str, &'a ProgramOption> {
+        &self.parser.id_to_option
+    }
+
+    // Check if Clap found a subcommand among these matches.
+    // If so, return the name, and a correct ParsedArgs for the subcommand, with the subcommand arg
+    // matches and reference to the subcommand parser.
+    pub fn get_subcommand(&self) -> Option<(String, Self)> {
+        self.arg_matches.subcommand().map(|(name, arg_matches)| {
+            let parser = self.parser.subcommands.iter().find(|parser| parser.command.get_name() == name).unwrap_or_else(|| {
+                let names: Vec<_> = self.parser.subcommands.iter().map(|parser| parser.command.get_name()).collect();
+                panic!("Could not find parser matching to subcommand {name}. This is an internal error. Found subcommand names: {:?}", names);
+            });
+
+            (
+                name.to_owned(),
+                Self {
+                    arg_matches,
+                    parser,
+                },
+            )
+        })
+    }
 }
 
 /// Top-level parser config
@@ -22,11 +69,15 @@ pub struct ParserConfig {
 }
 
 /// A parser which tries to parse args, matching them to a list of ProgramOptions.
-#[allow(unused)]
+#[derive(Clone)]
 pub struct Parser<'a> {
+    #[allow(unused)]
     parser_config: ParserConfig,
+    #[allow(unused)]
     options: Vec<&'a ProgramOption>,
     id_to_option: HashMap<&'a str, &'a ProgramOption>,
+    subcommands: Vec<Parser<'a>>,
+    #[allow(unused)]
     env: &'a ParsedEnv,
     command: Command,
 }
@@ -34,14 +85,14 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Create a parser from top-level parser config and a list of program options
     /// This parser doesn't consider env at all when parsing, but does use env when rendering help.
-    /// It also tries to fail with a long list if any required options are not supplied, and checks
-    /// against env for that determination.
     pub fn new(
         parser_config: ParserConfig,
         options: &'a [ProgramOption],
+        subcommands: impl AsRef<[Parser<'a>]>,
         env: &'a ParsedEnv,
     ) -> Result<Self, Error> {
         let options = options.iter().collect::<Vec<&'a ProgramOption>>();
+        let subcommands = subcommands.as_ref();
         let id_to_option = options
             .iter()
             .map(|opt| (&*opt.id, *opt))
@@ -72,7 +123,11 @@ impl<'a> Parser<'a> {
             }
         }
 
-        command = command.args(args);
+        let subcommand_vec: Vec<_> = subcommands
+            .iter()
+            .map(|p| p.get_command().clone())
+            .collect();
+        command = command.args(args).subcommands(subcommand_vec);
 
         if parser_config.no_help_flag {
             command = command.disable_help_flag(true);
@@ -95,9 +150,16 @@ impl<'a> Parser<'a> {
             parser_config,
             options,
             id_to_option,
+            subcommands: subcommands.to_vec(),
             env,
             command,
         })
+    }
+
+    /// Rename a parser. (This is used by subcommands)
+    pub fn rename(mut self, name: impl Into<String>) -> Self {
+        self.command = self.command.name(name.into());
+        self
     }
 
     /// Get command associated to this parser
@@ -107,18 +169,11 @@ impl<'a> Parser<'a> {
 
     /// Parse from raw os args (or something that looks like std::env::args_os but could be test
     /// data)
-    pub fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ParsedArgs, Error>
+    pub(crate) fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ArgMatches, Error>
     where
         T: Into<OsString> + Clone,
     {
-        Ok(self
-            .command
-            .clone()
-            .try_get_matches_from(args_os)
-            .map(|arg_matches| ParsedArgs {
-                arg_matches,
-                id_to_option: &self.id_to_option,
-            })?)
+        Ok(self.command.clone().try_get_matches_from(args_os)?)
     }
 
     // Turn a ProgramOption into an arg. Or, if it should not be set via CLI at all, just generate

@@ -206,6 +206,24 @@ impl FlattenItem {
         })
     }
 
+    // Flatten fields don't add subcommands to the conf structure, because we don't support that
+    // right now. But we need to catch it and flag an error.
+    pub fn gen_push_subcommands(
+        &self,
+        _subcommands_ident: &Ident,
+        parsed_env_ident: &Ident,
+    ) -> Result<TokenStream, syn::Error> {
+        let inner_type: &Type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
+        let type_name = quote! { inner_type }.to_string();
+        let panic_message = format!("It is not supported to declare subcommands in a flattened structure '{type_name}', only at top level. (Needs design work around prefixing.) See conf-rs discussion #4");
+
+        Ok(quote! {
+            if !<#inner_type as conf::Conf>::get_subcommands(#parsed_env_ident)?.is_empty() {
+                panic!(#panic_message);
+            }
+        })
+    }
+
     // Body of a function taking a &ConfContext returning Result<#field_type,
     // Vec<::conf::InnerError>>
     pub fn gen_initializer(

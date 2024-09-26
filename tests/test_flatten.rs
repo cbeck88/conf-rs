@@ -662,7 +662,7 @@ fn frob_config_program_options() {
     );
     assert_eq!(opt.default_value.as_deref(), Some("1000"));
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator authorizes\nblah blah blah"));
+    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"));
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
@@ -1009,7 +1009,7 @@ fn frob_config2_program_options() {
     );
     assert_eq!(opt.default_value.as_deref(), Some("1000"));
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator authorizes\nblah blah blah"));
+    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"));
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);

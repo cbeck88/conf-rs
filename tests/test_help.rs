@@ -26,7 +26,7 @@ fn test_subsystem_options_help() {
     let opts = SubsystemOptions::get_program_options().unwrap();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, &opts, &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"
@@ -69,7 +69,7 @@ fn test_other_subsystem_options_help() {
     let opts = OtherSubsystemOptions::get_program_options().unwrap();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, &opts, &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"
@@ -131,7 +131,7 @@ fn test_system_options_help() {
     let opts = SystemOptions::get_program_options().unwrap();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, &opts, &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"

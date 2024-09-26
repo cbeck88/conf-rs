@@ -2,10 +2,13 @@ use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
-use syn::{Data, DataStruct, Error, Fields, Generics, Ident};
+use syn::{Data, DataEnum, DataStruct, Error, Fields, Generics, Ident};
 
 mod proc_macro_options;
 use proc_macro_options::{collect_args_fields, FieldItem, StructItem};
+
+mod subcommand_proc_macro_options;
+use subcommand_proc_macro_options::{collect_enum_variants, VariantItem};
 
 pub(crate) mod util;
 
@@ -49,6 +52,7 @@ fn gen_conf_impl_for_struct(
     let get_parser_config_impl = gen_conf_get_parser_config_impl_for_struct(struct_item, fields)?;
     let get_program_options_impl =
         gen_conf_get_program_options_impl_for_struct(struct_item, fields)?;
+    let get_subcommands_impl = gen_conf_get_subcommands_impl_for_struct(struct_item, fields)?;
     let from_conf_context_impl = gen_conf_from_conf_context_impl_for_struct(struct_item, fields)?;
     let get_name_impl = gen_conf_get_name_impl_for_struct(struct_item)?;
 
@@ -60,6 +64,7 @@ fn gen_conf_impl_for_struct(
         impl #impl_generics conf::Conf for #item_name #ty_generics #where_clause {
             #get_parser_config_impl
             #get_program_options_impl
+            #get_subcommands_impl
             #from_conf_context_impl
             #get_name_impl
         }
@@ -135,6 +140,28 @@ fn gen_conf_get_program_options_impl_for_struct(
             let cached = CACHED.get().unwrap();
 
             Ok(cached.as_ref())
+        }
+    })
+}
+
+fn gen_conf_get_subcommands_impl_for_struct(
+    _struct_item: &StructItem,
+    fields: &[FieldItem],
+) -> Result<TokenStream, syn::Error> {
+    let parsers_ident = Ident::new("__parsers__", Span::call_site());
+    let parsed_env_ident = Ident::new("__parsed_env__", Span::call_site());
+    let fields_push_subcommands: Vec<TokenStream> = fields
+        .iter()
+        .map(|field| field.gen_push_subcommands(&parsers_ident, &parsed_env_ident))
+        .collect::<Result<Vec<_>, syn::Error>>()?;
+
+    Ok(quote! {
+        fn get_subcommands(#parsed_env_ident: &::conf::ParsedEnv) -> Result<Vec<conf::Parser>, conf::Error> {
+            let mut #parsers_ident = vec![];
+
+            #(#fields_push_subcommands)*
+
+            Ok(#parsers_ident)
         }
     })
 }
@@ -278,6 +305,118 @@ fn gen_conf_from_conf_context_impl_for_struct(
             validation(&return_value, #conf_context_ident)?;
 
             Ok(return_value)
+        }
+    })
+}
+
+/// Derive a `Subcommands` implementation for an item with `#[conf(...)]` attributes
+#[proc_macro_derive(Subcommands, attributes(conf))]
+pub fn subcommands(input: TokenStream1) -> TokenStream1 {
+    let input: DeriveInput = parse_macro_input!(input);
+    derive_subcommands(&input)
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+fn derive_subcommands(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
+    let ident = &input.ident;
+
+    match &input.data {
+        Data::Enum(DataEnum { variants, .. }) => {
+            let variants = collect_enum_variants(ident, variants.into_iter())?;
+            gen_subcommands_impl_for_enum(ident, &input.generics, &variants)
+        }
+
+        _ => Err(Error::new(
+            ident.span(),
+            "#[derive(Subcommands)] is only supported on enums",
+        )),
+    }
+}
+
+fn gen_subcommands_impl_for_enum(
+    item_name: &Ident,
+    generics: &Generics,
+    variants: &[VariantItem],
+) -> Result<TokenStream, syn::Error> {
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let get_parsers_impl = gen_subcommands_get_parsers_impl_for_enum(item_name, variants)?;
+    let get_subcommand_names_impl =
+        gen_subcommands_get_subcommand_names_impl_for_enum(item_name, variants)?;
+    let from_conf_context_impl =
+        gen_subcommands_from_conf_context_impl_for_enum(item_name, variants)?;
+
+    Ok(quote! {
+        #[automatically_derived]
+        #[allow(
+            unused_qualifications,
+        )]
+        impl #impl_generics conf::Subcommands for #item_name #ty_generics #where_clause {
+            #get_parsers_impl
+            #get_subcommand_names_impl
+            #from_conf_context_impl
+        }
+    })
+}
+
+fn gen_subcommands_get_parsers_impl_for_enum(
+    _item_name: &Ident,
+    variants: &[VariantItem],
+) -> Result<TokenStream, syn::Error> {
+    let parsers_ident = Ident::new("__parsers__", Span::call_site());
+    let parsed_env_ident = Ident::new("__parsed_env__", Span::call_site());
+    let variants_push_parsers: Vec<TokenStream> = variants
+        .iter()
+        .map(|var| var.gen_push_parsers(&parsers_ident, &parsed_env_ident))
+        .collect::<Result<Vec<_>, syn::Error>>()?;
+
+    Ok(quote! {
+        fn get_parsers(#parsed_env_ident: &::conf::ParsedEnv) -> Result<Vec<::conf::Parser>, ::conf::Error> {
+            let mut #parsers_ident = vec![];
+
+            #(#variants_push_parsers)*
+
+            Ok(#parsers_ident)
+        }
+    })
+}
+
+fn gen_subcommands_get_subcommand_names_impl_for_enum(
+    _item_name: &Ident,
+    variants: &[VariantItem],
+) -> Result<TokenStream, syn::Error> {
+    let command_names: Vec<_> = variants.iter().map(|var| var.get_command_name()).collect();
+
+    Ok(quote! {
+        fn get_subcommand_names() -> &'static [&'static str] {
+            &[ #(#command_names,)* ]
+        }
+    })
+}
+
+fn gen_subcommands_from_conf_context_impl_for_enum(
+    _item_name: &Ident,
+    variants: &[VariantItem],
+) -> Result<TokenStream, syn::Error> {
+    let variant_match_arms: Vec<TokenStream> = variants
+        .iter()
+        .map(|var| {
+            let name = var.get_name();
+            let command_name = var.get_command_name();
+            let ty = var.get_type();
+            quote! {
+                #command_name => Ok(Self::#name(<#ty as Conf>::from_conf_context(conf_context)?))
+            }
+        })
+        .collect();
+
+    Ok(quote! {
+        fn from_conf_context(command_name: String, conf_context: ::conf::ConfContext<'_>) -> Result<Self, Vec<::conf::InnerError>> {
+            match command_name.as_str() {
+                #(#variant_match_arms,)*
+                _ => { panic!("Unknown command name '{command_name}'. This is an internal error. Expected '{:?}'", <Self as ::conf::Subcommands>::get_subcommand_names()) }
+            }
         }
     })
 }

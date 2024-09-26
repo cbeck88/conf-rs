@@ -197,6 +197,14 @@ impl ParameterItem {
         })
     }
 
+    pub fn gen_push_subcommands(
+        &self,
+        _subcommands_ident: &Ident,
+        _parsed_env: &Ident,
+    ) -> Result<TokenStream, syn::Error> {
+        Ok(quote! {})
+    }
+
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,

@@ -61,14 +61,14 @@ pub(crate) struct FlattenedOptionalDebugInfo<'a> {
 // errors like that.
 #[doc(hidden)]
 pub struct ConfContext<'a> {
-    args: &'a ParsedArgs<'a>,
+    args: ParsedArgs<'a>,
     env: &'a ParsedEnv,
     id_prefix: String,
     flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'a>>,
 }
 
 impl<'a> ConfContext<'a> {
-    pub(crate) fn new(args: &'a ParsedArgs<'a>, env: &'a ParsedEnv) -> Self {
+    pub(crate) fn new(args: ParsedArgs<'a>, env: &'a ParsedEnv) -> Self {
         Self {
             args,
             env,
@@ -104,12 +104,16 @@ impl<'a> ConfContext<'a> {
         if self.args.arg_matches.get_flag(&id) {
             return Ok((ConfValueSource::<&'a str>::Args, true));
         }
-        let opt = self.args.id_to_option.get(id.as_str()).unwrap_or_else(|| {
-            panic!(
-                "Option not found by id ({id}), this is an internal_error: {:?}",
-                self.args.id_to_option
-            )
-        });
+        let opt = self
+            .args
+            .id_to_option()
+            .get(id.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Option not found by id ({id}), this is an internal_error: {:?}",
+                    self.args.id_to_option()
+                )
+            });
         if let Some(env_form) = opt.env_form.as_deref() {
             if let Some(val) = self.get_env(env_form, opt)? {
                 return Ok((ConfValueSource::<&'a str>::Env(env_form), str_to_bool(val)));
@@ -134,12 +138,16 @@ impl<'a> ConfContext<'a> {
         InnerError,
     > {
         let id = self.id_prefix.clone() + id;
-        let opt = self.args.id_to_option.get(id.as_str()).unwrap_or_else(|| {
-            panic!(
-                "Option not found by id ({id}), this is an internal_error: {:?}",
-                self.args.id_to_option
-            )
-        });
+        let opt = self
+            .args
+            .id_to_option()
+            .get(id.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Option not found by id ({id}), this is an internal_error: {:?}",
+                    self.args.id_to_option()
+                )
+            });
         if opt.short_form.is_some() || opt.long_form.is_some() {
             if let Some(val) = self.args.arg_matches.get_one::<String>(&id) {
                 let value_source = self
@@ -192,12 +200,16 @@ impl<'a> ConfContext<'a> {
         env_delimiter: Option<char>,
     ) -> Result<(ConfValueSource<&'a str>, Vec<&'a str>, &'a ProgramOption), InnerError> {
         let id = self.id_prefix.clone() + id;
-        let opt = self.args.id_to_option.get(id.as_str()).unwrap_or_else(|| {
-            panic!(
-                "Option not found by id ({id}), this is an internal_error: {:?}",
-                self.args.id_to_option
-            )
-        });
+        let opt = self
+            .args
+            .id_to_option()
+            .get(id.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Option not found by id ({id}), this is an internal_error: {:?}",
+                    self.args.id_to_option()
+                )
+            });
 
         if let Some(val) = self.args.arg_matches.get_many::<String>(&id) {
             let value_source = self
@@ -260,12 +272,12 @@ impl<'a> ConfContext<'a> {
         let prefixed_id = self.id_prefix.clone() + id;
         let opt = self
             .args
-            .id_to_option
+            .id_to_option()
             .get(prefixed_id.as_str())
             .unwrap_or_else(|| {
                 panic!(
                     "Option not found by id ({prefixed_id}), this is an internal_error: {:?}",
-                    self.args.id_to_option
+                    self.args.id_to_option()
                 )
             });
 
@@ -294,7 +306,7 @@ impl<'a> ConfContext<'a> {
     #[inline]
     pub fn for_flattened(&self, sub_id_prefix: &str) -> ConfContext<'a> {
         ConfContext {
-            args: self.args,
+            args: self.args.clone(),
             env: self.env,
             id_prefix: self.id_prefix.clone() + sub_id_prefix,
             flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
@@ -318,9 +330,9 @@ impl<'a> ConfContext<'a> {
 
         let option_appeared = *self
             .args
-            .id_to_option
+            .id_to_option()
             .get(prefixed_id.as_str())
-            .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), option_appeared_relative_id = {option_appeared_relative_id}, this is an internal_error: {:?}", self.args.id_to_option));
+            .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), option_appeared_relative_id = {option_appeared_relative_id}, this is an internal_error: {:?}", self.args.id_to_option()));
 
         let flattened_optional_debug_info = Some(FlattenedOptionalDebugInfo {
             struct_name,
@@ -330,11 +342,27 @@ impl<'a> ConfContext<'a> {
         });
 
         ConfContext {
-            args: self.args,
+            args: self.args.clone(),
             env: self.env,
             id_prefix,
             flattened_optional_debug_info,
         }
+    }
+
+    /// Create a new context from self, for parsing subcommand objects, if clap found a subcommand.
+    #[inline]
+    pub fn for_subcommand(&self) -> Option<(String, ConfContext<'a>)> {
+        self.args.get_subcommand().map(|(name, args)| {
+            (
+                name,
+                ConfContext {
+                    args,
+                    env: self.env,
+                    id_prefix: self.id_prefix.clone(),
+                    flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
+                },
+            )
+        })
     }
 
     /// Get the id prefix of this conf context
@@ -364,9 +392,9 @@ impl<'a> ConfContext<'a> {
             let prefixed_id = self.id_prefix.clone() + id;
             *self
                 .args
-                .id_to_option
+                .id_to_option()
                 .get(prefixed_id.as_str())
-                .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), this is an internal_error: {:?}", self.args.id_to_option))      
+                .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), this is an internal_error: {:?}", self.args.id_to_option()))
         }).collect::<Vec<&ProgramOption>>();
         InnerError::too_few_arguments(
             struct_name,
@@ -400,9 +428,9 @@ impl<'a> ConfContext<'a> {
             let prefixed_id = self.id_prefix.clone() + id;
             let opt = *self
                 .args
-                .id_to_option
+                .id_to_option()
                 .get(prefixed_id.as_str())
-                .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), this is an internal_error: {:?}", self.args.id_to_option));
+                .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), this is an internal_error: {:?}", self.args.id_to_option()));
             self.get_value_source(id).expect("internal error").and_then(|value_source| {
                 if matches!(&value_source, ConfValueSource::Default) {
                     None
@@ -417,9 +445,9 @@ impl<'a> ConfContext<'a> {
                 let absolute_id = self.id_prefix.clone() + flattened_field + "." + id;
                 let opt = self
                     .args
-                    .id_to_option
+                    .id_to_option()
                     .get(absolute_id.as_str())
-                    .unwrap_or_else(|| panic!("Option not found by id ({absolute_id}), this is an internal_error: {:?}", self.args.id_to_option));
+                    .unwrap_or_else(|| panic!("Option not found by id ({absolute_id}), this is an internal_error: {:?}", self.args.id_to_option()));
                 (flattened_field, *opt, value_source)
             })
         }).collect::<Vec<(&str, &ProgramOption, ConfValueSource<&'a str>)>>();
