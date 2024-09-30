@@ -1,11 +1,61 @@
 use super::StructItem;
 use crate::util::*;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    parse_quote, spanned::Spanned, Error, Expr, Field, Ident, LitBool, LitChar, LitStr, Type,
+    meta::ParseNestedMeta, parse_quote, spanned::Spanned, token, Error, Expr, Field, Ident,
+    LitBool, LitChar, LitStr, Type,
 };
 
+/// #[conf(serde(...))] options listed on a field of Repeat kind
+pub struct RepeatSerdeItem {
+    pub rename: Option<LitStr>,
+    pub skip: bool,
+    pub use_value_parser: bool,
+    span: Span,
+}
+
+impl RepeatSerdeItem {
+    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+        let mut result = Self {
+            rename: None,
+            skip: false,
+            use_value_parser: false,
+            span: meta.input.span(),
+        };
+
+        if meta.input.peek(token::Paren) {
+            meta.parse_nested_meta(|meta| {
+                let path = meta.path.clone();
+                if path.is_ident("rename") {
+                    set_once(
+                        &path,
+                        &mut result.rename,
+                        Some(parse_required_value::<LitStr>(meta)?),
+                    )
+                } else if path.is_ident("skip") {
+                    result.skip = true;
+                    Ok(())
+                } else if path.is_ident("use_value_parser") {
+                    result.use_value_parser = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized conf(serde) option"))
+                }
+            })?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl GetSpan for RepeatSerdeItem {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
+/// Proc macro annotations parsed from a field of Repeat kind
 pub struct RepeatItem {
     field_name: Ident,
     field_type: Type, // This is needed to help with type inference in code gen
@@ -18,6 +68,7 @@ pub struct RepeatItem {
     value_parser: Option<Expr>,
     env_delimiter: Option<LitChar>,
     no_env_delimiter: bool,
+    serde: Option<RepeatSerdeItem>,
     description: Option<String>,
 }
 
@@ -49,6 +100,7 @@ impl RepeatItem {
             value_parser: None,
             env_delimiter: None,
             no_env_delimiter: false,
+            serde: None,
             description: None,
         };
 
@@ -112,6 +164,8 @@ impl RepeatItem {
                                     .unwrap_or(LitBool::new(true, path.span())),
                             ),
                         )
+                    } else if path.is_ident("serde") {
+                        set_once(&path, &mut result.serde, Some(RepeatSerdeItem::new(meta)?))
                     } else {
                         Err(meta.error("unrecognized conf repeat option"))
                     }
@@ -147,7 +201,11 @@ impl RepeatItem {
                 .map(LitStrArray::is_empty)
                 .unwrap_or(true)
         {
-            return Err(Error::new(field.span(), "Setting aliases without setting a long-switch is an error, make one of the aliases the primary switch name."));
+            return Err(Error::new(
+                field.span(),
+                "Setting aliases without setting a long-switch is an error, \
+                make one of the aliases the primary switch name.",
+            ));
         }
 
         if result.env_name.is_none()
@@ -157,7 +215,11 @@ impl RepeatItem {
                 .map(LitStrArray::is_empty)
                 .unwrap_or(true)
         {
-            return Err(Error::new(field.span(), "Setting env_aliases without setting an env is an error, make one of the aliases the primary env."));
+            return Err(Error::new(
+                field.span(),
+                "Setting env_aliases without setting an env is an error, \
+                make one of the aliases the primary env.",
+            ));
         }
 
         Ok(result)
@@ -171,6 +233,36 @@ impl RepeatItem {
         self.field_type.clone()
     }
 
+    pub fn get_serde_name(&self) -> LitStr {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.rename.clone())
+            .unwrap_or_else(|| LitStr::new(&self.field_name.to_string(), self.field_name.span()))
+    }
+
+    pub fn get_serde_type(&self) -> Type {
+        let use_value_parser = self
+            .serde
+            .as_ref()
+            .map(|serde| serde.use_value_parser)
+            .unwrap_or(false);
+
+        if use_value_parser {
+            parse_quote! { ::std::vec::Vec<::std::string::String> }
+        } else {
+            self.field_type.clone()
+        }
+    }
+
+    pub fn get_serde_skip(&self) -> bool {
+        self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
+    }
+
+    /// Generate a routine that pushes a ::conf::ProgramOption corresponding to
+    /// this field, onto a mut Vec<ProgramOption> that is in scope.
+    ///
+    /// Arguments:
+    /// * program_options_ident is the ident of this buffer of ProgramOption to push to.
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -188,19 +280,19 @@ impl RepeatItem {
         let secret = quote_opt(&self.secret);
 
         Ok(quote! {
-            #program_options_ident.push(conf::ProgramOption {
-                id: #id.into(),
-                parse_type: conf::ParseType::Repeat,
-                description: #description,
-                short_form: None,
-                long_form: #long_form,
-                aliases: vec![#aliases],
-                env_form: #env_form,
-                env_aliases: vec![#env_aliases],
-                default_value: None,
-                is_required: false,
-                allow_hyphen_values: #allow_hyphen_values,
-                secret: #secret,
+            #program_options_ident.push(::conf::ProgramOption {
+              id: #id.into(),
+              parse_type: ::conf::ParseType::Repeat,
+              description: #description,
+              short_form: None,
+              long_form: #long_form,
+              aliases: vec![#aliases],
+              env_form: #env_form,
+              env_aliases: vec![#env_aliases],
+              default_value: None,
+              is_required: false,
+              allow_hyphen_values: #allow_hyphen_values,
+              secret: #secret,
             });
         })
     }
@@ -213,14 +305,8 @@ impl RepeatItem {
         Ok(quote! {})
     }
 
-    pub fn gen_initializer(
-        &self,
-        conf_context_ident: &Ident,
-    ) -> Result<(TokenStream, bool), syn::Error> {
-        let field_type = &self.field_type;
-        let id = self.field_name.to_string();
-
-        let delimiter = quote_opt(&if self.no_env_delimiter {
+    fn get_delimiter(&self) -> TokenStream {
+        quote_opt(&if self.no_env_delimiter {
             None
         } else {
             Some(
@@ -228,43 +314,131 @@ impl RepeatItem {
                     .clone()
                     .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
             )
-        });
+        })
+    }
 
+    fn get_value_parser(&self) -> Expr {
         // Value parser is FromStr::from_str if not specified
-        let value_parser = self
-            .value_parser
+        self.value_parser
             .clone()
-            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str });
+            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str })
+    }
+
+    fn gen_initializer_helper(
+        &self,
+        conf_context_ident: &Ident,
+        before_value_parser: Option<TokenStream>,
+    ) -> Result<(TokenStream, bool), syn::Error> {
+        let field_type = &self.field_type;
+        let id = self.field_name.to_string();
+
+        let delimiter = self.get_delimiter();
+        let value_parser = self.get_value_parser();
 
         // Note: We can't use rust into_iter, collect, map_err because sometimes it messes with type
-        // inference around the value parser Note: The line `let mut result: #field_type =
-        // Default::default();` is expected to be default initializing a Vec. If it fails
-        // because the user put another funky type there, imo this should not really be supported.
-        // It's more compelling to make the value_parser option easier to use (easier type
-        // inference) than to support user-defined containers here, and try to use
-        // `.collect` etc. directly into their container. The user's code can do .iter().collect()
-        // after our code runs if they want.
-        Ok((
-            quote! {
-               || -> Result<#field_type, Vec<conf::InnerError>> {
-                    let (value_source, strs, opt): (conf::ConfValueSource<&str>, Vec<&str>, &conf::ProgramOption) = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
-                    let mut result: #field_type = Default::default();
-                    let mut errors = Vec::<conf::InnerError>::new();
-                    result.reserve(strs.len());
-                    for val_str in strs {
-                        match #value_parser(val_str) {
-                            Ok(val) => result.push(val),
-                            Err(err) => errors.push(conf::InnerError::invalid_value(value_source.clone(), val_str, opt, err.to_string()).into()),
-                        }
-                    }
-                    if errors.is_empty() {
-                        Ok(result)
-                    } else {
-                        Err(errors)
-                    }
-                }()
-            },
-            true,
-        ))
+        // inference around the value parser
+        //
+        // Note: The line `let mut result: #field_type = Default::default();`
+        // is expected to be default initializing a Vec.
+        // It can't be `#field_type::default()` because it requires turbofish syntax.
+        //
+        // If it fails because the user put another funky type there, imo this should not really be
+        // supported. It's more compelling to make the value_parser option easier to use
+        // (easier type inference) than to support user-defined containers here, and try to
+        // use `.collect` etc. directly into their container. The user's code can do
+        // .iter().collect() after our code runs if they want.
+        let initializer = quote! {
+          {
+            fn __value_parser__(
+              __arg__: &str
+            ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+              #value_parser(__arg__)
+            }
+
+            use ::conf::{ConfValueSource, ProgramOption, InnerError};
+            use ::std::vec::Vec;
+
+            let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&str>, &ProgramOption)
+              = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
+
+            #before_value_parser
+
+            let mut result: #field_type = Default::default();
+            let mut errors = Vec::<InnerError>::new();
+            result.reserve(strs.len());
+            for val_str in strs {
+              match __value_parser__(val_str) {
+                Ok(val) => result.push(val),
+                Err(err) => errors.push(
+                  InnerError::invalid_value(
+                    value_source.clone(),
+                    val_str,
+                    opt,
+                    err.to_string()
+                  )
+                ),
+              }
+            }
+            if errors.is_empty() {
+              Ok(result)
+            } else {
+              Err(errors)
+            }
+          }
+        };
+        Ok((initializer, true))
+    }
+
+    // Gen initializer
+    //
+    // Create an expression that returns initialized #field_type value, or errors.
+    pub fn gen_initializer(
+        &self,
+        conf_context_ident: &Ident,
+    ) -> Result<(TokenStream, bool), syn::Error> {
+        self.gen_initializer_helper(conf_context_ident, None)
+    }
+
+    // Gen initializer with a provided doc val
+    //
+    // This should work similar to gen_initializer, but if the conf context produces a default
+    // value, we should return the doc_val instead because it has higher priority than default,
+    // but lower than args and env.
+    pub fn gen_initializer_with_doc_val(
+        &self,
+        conf_context_ident: &Ident,
+        doc_name: &Ident,
+        doc_val: &Ident,
+    ) -> Result<(TokenStream, bool), Error> {
+        let use_value_parser = self
+            .serde
+            .as_ref()
+            .map(|serde| serde.use_value_parser)
+            .unwrap_or(false);
+
+        if use_value_parser {
+            // When use_value_parser is enabled, the behavior is, if conf_context produced a default
+            // value, we should overwrite it with the document value. `val_strs` is a `Vec<&str>`,
+            // and #doc_val is a `Vec<String>`.
+            let before_value_parser = quote! {
+              let (value_source, strs) = if value_source.is_default() {
+                (ConfValueSource::Document(#doc_name), #doc_val.iter().map(String::as_str).collect())
+              } else {
+                (value_source, strs)
+              };
+            };
+
+            self.gen_initializer_helper(conf_context_ident, Some(before_value_parser))
+        } else {
+            // When use_value_parser is not enabled, the behavior is, if conf context produced a
+            // default value, we should instead simply return the doc value.
+            let before_value_parser = quote! {
+              if value_source.is_default() {
+                return Ok(#doc_val);
+              }
+            };
+
+            self.gen_initializer_helper(conf_context_ident, Some(before_value_parser))
+        }
     }
 }

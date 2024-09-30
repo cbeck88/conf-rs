@@ -1,50 +1,49 @@
 use crate::{
-    parse_env, ConfContext, ConfValueSource, Error, InnerError, ParsedArgs, ParsedEnv, Parser,
-    ParserConfig, ProgramOption,
+    ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, ParsedEnv, Parser, ParserConfig,
+    ProgramOption,
 };
 use std::ffi::OsString;
 
 /// The Conf trait is implemented by types that represent a collection of config parsed on startup,
-/// and is modeled on `clap::Parser`. Users usually call `parse` or another of these functions on
-/// their config structure in `main()`.
+/// and is modeled on `clap::Parser`.
 ///
-/// Hand-written implementations of this trait are not supported.
+/// To use it, put `#[derive(Conf)]` on your config structure, and then call `Conf::parse` or
+/// another of these functions in `main()`.
+///
+/// **Hand-written implementations of this trait are not supported**.
+///
+/// You should think of this trait as a "non-exhaustive trait" with hidden required items.
+/// `conf` is free to add, modify, or remove these implementation details without considering it
+/// a semver breaking change, so the only stable way to get an impl is via the derive macro.
 #[doc = include_str!("../REFERENCE_derive_conf.md")]
 pub trait Conf: Sized {
     /// Parse self from the process CLI args and environment, and exit the program with a help
     /// message if we cannot.
     #[inline]
     fn parse() -> Self {
-        match Self::try_parse() {
-            Ok(result) => result,
-            Err(err) => err.exit(),
-        }
+        Self::conf_builder().parse()
     }
 
     /// Try to parse self from the process CLI args and environment, and return an error if we
     /// cannot.
     #[inline]
     fn try_parse() -> Result<Self, Error> {
-        Self::try_parse_from(std::env::args_os(), std::env::vars_os())
+        Self::conf_builder().try_parse()
     }
 
     /// Parse self from given containers which stand in for the process args and environment, and
     /// exit the program with a help message if we cannot. This function's behavior is isolated
-    /// from the values of `std::env::args_os` and `std::env::vars_os`.
+    /// from the values of [`std::env::args_os`] and [`std::env::vars_os`].
     #[inline]
     fn parse_from<T, K, V>(
-        args_os: impl IntoIterator<Item = T>,
+        args_os: impl IntoIterator<Item: Into<OsString>>,
         env_vars_os: impl IntoIterator<Item = (K, V)>,
     ) -> Self
     where
-        T: Into<OsString> + Clone,
-        K: Into<OsString> + Clone,
-        V: Into<OsString> + Clone,
+        K: Into<OsString>,
+        V: Into<OsString>,
     {
-        match Self::try_parse_from(args_os, env_vars_os) {
-            Ok(result) => result,
-            Err(err) => err.exit(),
-        }
+        Self::conf_builder().args(args_os).env(env_vars_os).parse()
     }
 
     /// Try to parse self from given containers which stand in for the process args and environment,
@@ -58,13 +57,16 @@ pub trait Conf: Sized {
         K: Into<OsString> + Clone,
         V: Into<OsString> + Clone,
     {
-        let parsed_env = parse_env(env_vars_os);
-        let parser = Self::get_parser(&parsed_env)?;
-        let arg_matches = parser.parse(args_os)?;
-        let parsed_args = ParsedArgs::new(&arg_matches, &parser);
-        let conf_context = ConfContext::new(parsed_args, &parsed_env);
-        Self::from_conf_context(conf_context)
-            .map_err(|errs| InnerError::vec_to_clap_error(errs, parser.get_command()))
+        Self::conf_builder()
+            .args(args_os)
+            .env(env_vars_os)
+            .try_parse()
+    }
+
+    /// Obtain a ConfBuilder, and use the builder API to parse.
+    /// The builder API is needed if you want to use advanced features.
+    fn conf_builder() -> ConfBuilder<Self> {
+        Default::default()
     }
 
     // Construct a conf::Parser object appropriate for this Conf.
@@ -142,16 +144,25 @@ pub trait Conf: Sized {
     fn get_name() -> &'static str;
 }
 
-/// The Subcommands trait represents one or more subcommands, and is derived on Enums.
+/// The Subcommands trait represents one or more subcommands that can be added to a `Conf`
+/// structure. To use it, put `#[derive(Subcommands)]` on your enum, and then add a
+/// `#[conf(subcommands)]` field to your `Conf` structure whose type is your enum type, or
+/// `Option<T>`.
 ///
-/// Each subcommand is an enum variant containing a Conf structure.
+/// Each variant of the enum corresponds to a subcommand, and must contain a single un-named `Conf`
+/// structure.
 ///
-/// The subcommand name is the name of the enum variant.
-///in
+/// The subcommand name is the name of the enum variant, but you can use attributes to change this
+/// name.
+///
 /// A Subcommands enum can then be added as a field to a top-level Conf structure and marked using
 /// the `#[conf(subcommands)]` attribute.
 ///
-/// Hand-written implementations of this trait are not supported.
+/// **Hand-written implementations of this trait are not supported**.
+///
+/// You should think of this trait as a "non-exhaustive trait" with hidden required items.
+/// `conf` is free to add, modify, or remove these implementation details without considering it
+/// a semver breaking change, so the only stable way to get an impl is via the derive macro.
 #[doc = include_str!("../REFERENCE_derive_subcommands.md")]
 pub trait Subcommands: Sized {
     // Get the subcommands associated to this enum.

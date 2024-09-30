@@ -1,9 +1,56 @@
 use super::StructItem;
 use crate::util::*;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{parse_quote, spanned::Spanned, Error, Field, Ident, LitChar, LitStr, Type};
+use syn::{
+    meta::ParseNestedMeta, parse_quote, spanned::Spanned, token, Error, Field, Ident, LitChar,
+    LitStr, Type,
+};
 
+/// #[conf(serde(...))] options listed on a field of Flag kind
+pub struct FlagSerdeItem {
+    pub rename: Option<LitStr>,
+    pub skip: bool,
+    span: Span,
+}
+
+impl FlagSerdeItem {
+    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+        let mut result = Self {
+            rename: None,
+            skip: false,
+            span: meta.input.span(),
+        };
+
+        if meta.input.peek(token::Paren) {
+            meta.parse_nested_meta(|meta| {
+                let path = meta.path.clone();
+                if path.is_ident("rename") {
+                    set_once(
+                        &path,
+                        &mut result.rename,
+                        Some(parse_required_value::<LitStr>(meta)?),
+                    )
+                } else if path.is_ident("skip") {
+                    result.skip = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized conf(serde) option"))
+                }
+            })?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl GetSpan for FlagSerdeItem {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
+/// Proc macro annotations parsed from a field of Flag kind
 pub struct FlagItem {
     field_name: Ident,
     short_switch: Option<LitChar>,
@@ -11,6 +58,7 @@ pub struct FlagItem {
     aliases: Option<LitStrArray>,
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
+    serde: Option<FlagSerdeItem>,
     doc_string: Option<String>,
 }
 
@@ -28,6 +76,7 @@ impl FlagItem {
             aliases: None,
             env_name: None,
             env_aliases: None,
+            serde: None,
             doc_string: None,
         };
 
@@ -71,6 +120,8 @@ impl FlagItem {
                             &mut result.env_aliases,
                             Some(parse_required_value::<LitStrArray>(meta)?),
                         )
+                    } else if path.is_ident("serde") {
+                        set_once(&path, &mut result.serde, Some(FlagSerdeItem::new(meta)?))
                     } else {
                         Err(meta.error("unrecognized conf flag option"))
                     }
@@ -85,7 +136,11 @@ impl FlagItem {
                 .map(LitStrArray::is_empty)
                 .unwrap_or(true)
         {
-            return Err(Error::new(field.span(), "Setting aliases without setting a long-switch is an error, make one of the aliases the primary switch name."));
+            return Err(Error::new(
+                field.span(),
+                "Setting aliases without setting a long-switch is an error, \
+                make one of the aliases the primary switch name.",
+            ));
         }
 
         if result.env_name.is_none()
@@ -95,7 +150,11 @@ impl FlagItem {
                 .map(LitStrArray::is_empty)
                 .unwrap_or(true)
         {
-            return Err(Error::new(field.span(), "Setting env_aliases without setting an env is an error, make one of the aliases the primary env."));
+            return Err(Error::new(
+                field.span(),
+                "Setting env_aliases without setting an env is an error, \
+                make one of the aliases the primary env.",
+            ));
         }
 
         Ok(result)
@@ -107,6 +166,21 @@ impl FlagItem {
 
     pub fn get_field_type(&self) -> Type {
         parse_quote! { bool }
+    }
+
+    pub fn get_serde_name(&self) -> LitStr {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.rename.clone())
+            .unwrap_or_else(|| LitStr::new(&self.field_name.to_string(), self.field_name.span()))
+    }
+
+    pub fn get_serde_type(&self) -> Type {
+        parse_quote! { bool }
+    }
+
+    pub fn get_serde_skip(&self) -> bool {
+        self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
     }
 
     pub fn gen_push_program_options(
@@ -160,6 +234,27 @@ impl FlagItem {
             quote! {
                 let (_src, val) = #conf_context_ident.get_boolean_opt(#id)?;
                 Ok(val)
+            },
+            false,
+        ))
+    }
+
+    pub fn gen_initializer_with_doc_val(
+        &self,
+        conf_context_ident: &Ident,
+        _doc_name: &Ident,
+        doc_val: &Ident,
+    ) -> Result<(TokenStream, bool), Error> {
+        let id = self.field_name.to_string();
+
+        Ok((
+            quote! {
+                let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                if src.is_default() {
+                    Ok(#doc_val)
+                } else {
+                    Ok(val)
+                }
             },
             false,
         ))

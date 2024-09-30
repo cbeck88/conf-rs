@@ -15,6 +15,9 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env](#flag-env)
     * [aliases](#flag-aliases)
     * [env_aliases](#flag-env-aliases)
+    * [serde](#flag-serde)
+      * [rename](#flag-serde-rename)
+      * [skip](#flag-serde-skip)
   * [Parameter](#parameter)
     * [short](#parameter-short)
     * [long](#parameter-long)
@@ -25,6 +28,10 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [value_parser](#parameter-value-parser)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
     * [secret](#parameter-secret)
+    * [serde](#parameter-serde)
+      * [rename](#parameter-serde-rename)
+      * [skip](#parameter-serde-skip)
+      * [use_value_parser](#parameter-serde-use-value-parser)
   * [Repeat](#repeat)
     * [long](#repeat-long)
     * [env](#repeat-env)
@@ -35,18 +42,29 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [no_env_delimiter](#repeat-no-env-delimiter)
     * [allow_hyphen_values](#repeat-allow-hyphen-values)
     * [secret](#repeat-secret)
+    * [serde](#repeat-serde)
+      * [rename](#repeat-serde-rename)
+      * [skip](#repeat-serde-skip)
+      * [use_value_parser](#repeat-serde-use-value-parser)
   * [Flatten](#flatten)
     * [prefix](#flatten-prefix)
     * [long_prefix](#flatten-long-prefix)
     * [env_prefix](#flatten-env-prefix)
     * [help_prefix](#flatten-help-prefix)
     * [skip_short](#flatten-skip-short)
+    * [serde](#flatten-serde)
+      * [rename](#flatten-serde-rename)
+      * [skip](#flatten-serde-skip)
   * [Subcommands](#subcommands)
+    * [serde](#subcommands-serde)
+      * [skip](#subcommands-serde-skip)
 * [Struct-level attributes](#struct-level-attributes)
   * [no_help_flag](#struct-no-help-flag)
   * [about](#struct-about)
   * [name](#struct-name)
   * [env_prefix](#struct-env-prefix)
+  * [serde](#struct-serde)
+    * [allow_unknown_fields](#struct-serde-allow-unknown-fields)
   * [one_of_fields](#struct-one-of-fields)
   * [at_most_one_of_fields](#struct-at-most-one-of-fields)
   * [at_least_one_of_fields](#struct-at-least-one-of-fields)
@@ -100,27 +118,26 @@ When `derive(Conf)` encounters a field, the first thing it must determine *what 
 
 * **Flag**: A flag corresponds to a boolean program option. It is either set or it isn't. For example, `./my_prog --flag1 --flag2`.
 * **Parameter**: A parameter corresponds to a program option that expects a string value to be found during parsing. For example `./my_prog --param1 value1 --param2 value2`.
-* **Repeat**: A repeat option represents a list of values. It has special parsing -- it is allowed to be specified multiple times on the command-line, and the results are parsed separately and aggregated into a `Vec`. This is similar to what `clap` calls a multi-option, and what `clap-derive` does by default if the field type is a `Vec`. For example, `./my_prog --can-repeat value1 --can-repeat value2`.
+* **Repeat**: A repeat field represents a list of values. It has special parsing -- it is allowed to be specified multiple times on the command-line, and the results are parsed separately and aggregated into a `Vec`. This is similar to what `clap` calls a multi-option, and what `clap-derive` does by default if the field type is a `Vec`. For example, `./my_prog --can-repeat value1 --can-repeat value2`.
 * **Flatten**: A flatten field doesn't correspond to an option, but to a collection of options that come from another `Conf` structure, and may be adjusted before being merged in.
 * **Subcommands**: A subcommands field doesn't correspond to an option, but to a collection of subcommands defined by a `Subcommands` enum. When a subcommand is used, any values parsed by the subcommand parser appear at the associated enum variant.
 
 If the *first attribute* is `flag`, `parameter`, `repeat`, `flatten`, or `subcommands`, then `conf` will handle the field that way.
 
-If none of these is found, then the *type* of the field is used to classify it.
+If none of these is found, then the *type* of the field is used to classify it [^1].
 
 * If the field is `bool`, then it is a flag
 * Otherwise it is a parameter.
 
-Each kind of field then supports a different set of attributes.
+In `conf` the only way to specify a repeat parameter is to use the `repeat` attribute. There is, intentionally, no type-based inference for that [^compat-note-1].
 
-*Note*: In `clap`, `repeat` parameters are inferred by setting the type to `Vec<T>`, and this is the only way to specify a repeat parameter. It also changes the meaning of `value_parser` in a subtle way.
-However, this can become confusing and so `conf` deviates from `clap` here. Instead, in `conf` the only way to specify a repeat parameter is to use the `repeat` attribute.
+Each kind of field then supports a different set of attributes.
 
 ### Flag
 
 A flag corresponds to a switch that doesn't take any parameters. It's presence on the command line means the value is `true`, otherwise it is `false`.
 
-*Requirements*: A flag field must have type `bool`.
+**Requirements**: A flag field must have type `bool`.
 
 *  <a name="flag-short"></a> `short` (optional char argument)
 
@@ -175,11 +192,29 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    example command-line: `OLD_FLAG_NAME=1 ./my_prog` sets the flag to true
 
+*  <a name="flag-serde"></a> `serde` (optional additional attributes)
+
+   example: `#[conf(serde(rename = "foo"))]`
+
+   Configuration specific to the serde integration.
+
+   * <a name="flag-serde-rename"></a> `rename` (string argument)
+
+     example: `#[conf(serde(rename = "foo"))]`
+
+     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="flag-serde-skip"></a> `skip` (no arguments)
+
+     example: `#[conf(serde(skip))]`
+
+     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+
 ### Parameter
 
 A parameter represents a single value that can be parsed from a string.
 
-*Requirements*: A parameter field can have any type as long as it implements `FromStr` or `value_parser` is used.
+**Requirements**: A parameter field can have any type as long as it implements `FromStr` or `value_parser` is used.
 
 *  <a name="parameter-short"></a> `short` (optional char argument)
 
@@ -244,8 +279,7 @@ A parameter represents a single value that can be parsed from a string.
    By default, `conf` invokes the trait function `std::str::FromStr::from_str` to convert the parsed string to the type of the field.
    This can be overrided by setting `value_parser`. Any function expression can be used as long as any generic parameters are either specified or inferred.
 
-   *Note*: This is very similar to `clap-derive`, but it seems to work a little better in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
-   while at `clap` version 4.5.8 it doesn't work. I'm not totally sure why that is, but it seems to be something about lifetime inferences.
+   *Note*: This is very similar to `clap-derive`, but there are technical differences [^compat-note-2].
 
 *  <a name="parameter-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
 
@@ -270,6 +304,32 @@ A parameter represents a single value that can be parsed from a string.
    If the `bool` argument is not specified when this attribute appears, it is considered `true`.
    Values not marked secret are considered not to be secrets.
 
+*  <a name="parameter-serde"></a> `serde` (optional additional attributes)
+
+   example: `#[conf(serde(use_value_parser, rename = "foo"))]`
+
+   Configuration specific to the serde integration.
+
+   * <a name="parameter-serde-rename"></a> `rename` (string argument)
+
+     example: `#[conf(serde(rename = "foo"))]`
+
+     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="parameter-serde-skip"></a> `skip` (no arguments)
+
+     example: `#[conf(serde(skip))]`
+
+     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+     This can be useful if the type doesn't implement `serde::Deserialize`.
+
+   * <a name="parameter-serde-use-value-parser"></a> `use_value_parser` (no arguments)
+
+     example: `#[conf(serde(use_value_parser))]`
+
+     If used, then instead of asking `serde` to deserialize the field type, `serde` will deserialize a `String`,
+     and then the `value_parser` will convert the string to the field type. The default value parser is `FromStr`.
+
 #### Notes
 
 When a parameter is parsed from CLI arguments, the parser expects one of two syntaxes `--param=value` or `--param value` to be used. If `value` is not found as expected then parsing will fail.
@@ -288,7 +348,7 @@ Currently none of the other special [type-based intent inferences that clap does
 
 A repeat field is similar to a parameter, except that it may appear multiple times on the command line, and the collection of string arguments are then parsed individually and aggregated.
 
-*Requirements*: A repeat field must have type `Vec<T>`, where `T` implements `FromStr`, or `value_parser` must be supplied that produces a `T`.
+**Requirements**: A repeat field must have type `Vec<T>`, where `T` implements `FromStr`, or `value_parser` must be supplied that produces a `T`.
 
 *Note*: A repeat option produces one `T` for each time the option appears in the CLI arguments, and unlike a parameter the option can appear multiple times. If it does not appear, and an `env` variable is specified, then that variable
 is read and split on a delimiter character which defaults to `','`, to produce a series of `T` values.
@@ -374,19 +434,45 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    If the `bool` argument is not specified when this attribute appears, it is considered `true`.
    Values not marked secret are considered not to be secrets.
 
+*  <a name="repeat-serde"></a> `serde` (optional additional attributes)
+
+   example: `#[conf(serde(use_value_parser, rename = "foos"))]`
+
+   Configuration specific to the serde integration.
+
+   * <a name="repeat-serde-rename"></a> `rename` (string argument)
+
+     example: `#[conf(serde(rename = "foos"))]`
+
+     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="repeat-serde-skip"></a> `skip` (no arguments)
+
+     example: `#[conf(serde(skip))]`
+
+     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+     This can be useful if the value doesn't implement `serde::Deserialize`.
+
+   * <a name="repeat-serde-use-value-parser"></a> `use_value_parser` (no arguments)
+
+     example: `#[conf(serde(use_value_parser))]`
+
+     If used, then instead of asking `serde` to deserialize `Vec<T>`, `serde` will deserialize a `Vec<String>`,
+     and then the `value_parser` will convert each string to `T`. The default value parser is `FromStr`.
+
 #### Notes
 
 `clap-derive`'s multi-option's don't work that well in a 12-factor app, because there's a mismatch between, getting multiple strings from the CLI arguments, and getting one string from env.
 
 `clap-derive`'s behavior for a typical case like
 
-```ignore
+```rust ignore
    #[clap(long, env)]
    my_list: Vec<String>,
 ```
 
 when there is no CLI arg and only env is set, is that the entire env value becomes the one element of `my_list`, and there is no way to configure a list with multiple items by setting only `env`.
-So, most likely an app that was using `clap` this way was only using the CLI arguments to configure this value.
+So, most likely an app that was using `clap` this way was only using the CLI arguments to configure this value. For `conf`, we consider that this is not a good default behavior.
 
 `clap` does have an additional option for this case called `value_delimiter`, which will cause it to split both CLI arguments and `env` values on a given character.
 In `conf` however, at this point the field can just be `parameter` instead of a `repeat`, and a `value_parser` can be used which does the splitting.
@@ -404,7 +490,7 @@ and you can customize this if another choice of delimiter is more appropriate.
 
 ### Flatten
 
-*Note*: A flatten field's type `T` must implement `Conf`, or the field type must be `Option<T>` where `T` implements `Conf`.
+**Requirements**: A flatten field's type must be `T` or` Option<T>` where `T: Conf`.
 
 *  <a name="flatten-env-prefix"></a> `env_prefix` (optional string argument)
 
@@ -457,20 +543,40 @@ and you can customize this if another choice of delimiter is more appropriate.
    at this flattening site. So, when you see this attribute appearing, you can be sure that all of the named short flags are actually being removed at this location,
    and not by some other `skip_short` attribute appearing in another location.
 
+*  <a name="flatten-serde"></a> `serde` (optional additional attributes)
+
+   example: `#[conf(serde(rename = "foo"))]`
+
+   Configuration specific to the serde integration.
+
+   * <a name="flatten-serde-rename"></a> `rename` (string argument)
+
+     example: `#[conf(serde(rename = "foo"))]`
+
+     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="flatten-serde-skip"></a> `skip` (no arguments)
+
+     example: `#[conf(serde(skip))]`
+
+     Similar to `#[serde(skip)]`, this substructure won't be read from the serde value source.
+
 #### Notes
 
 Using `flatten` with no additional attributes behaves the same as `clap(flatten)`.
 
 When using `flatten` with `Option<T>`, the parsing behavior is:
 
-* If none of the fields of `T` (after flattening and prefixes) are present among the CLI arguments or env, then the result is `None`.
-* If any of the fields of `T` are present, then we must succeed in parsing a `T` as usual, and the result is `Some`.
+* If none of the fields of `T` (after flattening and prefixes) are present among the CLI arguments or env, and the substructure doesn't appear in the `serde` document, then the result is `None`.
+* If any of the fields of `T` are present, or if the substructure appears in the serde document, then we must succeed in parsing a `T` as usual, and the result is `Some`.
 
 ### Subcommands
 
 A `subcommands` field works similarly to a `#[clap(subcommand)]` field, and represents one or more subcommands that can be used with this `Conf`.
 
-* The type of a `subcommands` field is `T` or `Option<T>` where `T` is an enum with `#[derive(Subcommands)]`. `Option<T>` means that use of a subcommand is optional.
+**Requirements**: A `subcommands` field type must be `T` or `Option<T>` where `T: Subcommands`.
+
+* `Option<T>` means that use of a subcommand is optional, otherwise, one of the subcommands must appear.
 * Each enum variant corresponds to one subcommand. The enum variant determines the name of the subcommand, and the value is a `Conf` structure.
 * If the subcommand appears on the command-line, then the subcommand is active, and the remaining arguments are handled by the subcommand parser.
   The result of this parse is stored as the enum value.
@@ -483,11 +589,20 @@ For example, in one mode, you might run a webserver, and in another you might ru
 When you use subcommands, the top-level `--help` won't show any subcommand-specific configuration options, and the help of each subcommand
 only shows options relevant to that subcommand. This can help users navigate the help more easily.
 
-`subcommands` fields do not support any additional attributes at this time.
+See also the [`Subcommands`] trait and proc-macro documentation.
 
-See also the [`Subcommands`] trait and documentation.
+*  <a name="subcommands-serde"></a> `serde` (optional additional attributes)
 
-*Restrictions*:
+   Configuration specific to the serde integration.
+
+   * <a name="subcommands-serde-skip"></a> `skip` (no arguments)
+
+     example: `#[conf(serde(skip))]`
+
+     These subcommands won't support reading anything from the serde value source, and not need have `#[serde(conf)]`
+     when derived.
+
+**Restrictions**:
 
 *  At most one `subcommands` field can appear in a given struct.
 *  `subcommands` fields are only valid at top-level, and cannot be used in a struct that is flattened.
@@ -534,6 +649,16 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    The given string is concatenated to the beginning of every env form and env alias of every program option associated to this struct.
 
+*  <a name="struct-serde"></a> `serde` (optional additional attributes)
+
+   example: `#[conf(serde)]`, `#[conf(serde(allow_unknown_fields))]`
+
+   Enable serde as a value source for this struct, for additional layered config patterns.
+
+   * <a name="struct-serde-allow-unknown-fields"></a> `allow_unknown_fields` (no arguments)
+
+     Similar to `#[serde(deny_unknown_fields)]`, except that the default is reversed here, to avoid configuration mistakes.
+
 *  <a name="struct-one-of-fields"></a> `one_of_fields` (parenthesized identifier list)
 
    example: `#[conf(one_of_fields(a, b, c))]`
@@ -547,7 +672,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
    The total number of these fields which are "present" (`true` or `Some` or `non-empty`) must be exactly one,
    otherwise an error will be generated describing the offending / missing fields, with context.
 
-   Note that any of the field kinds is potentially supported (`flag`, `parameter`, `repeat`, `flatten`).
+   Note that any of the field kinds is potentially supported (`flag`, `parameter`, `repeat`, `flatten`, `subcommands`).
 
 *  <a name="struct-at-most-one-of-fields"></a> `at_most_one_of_fields` (parenthesized identifier list)
 
@@ -571,3 +696,15 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    Creates a validation constraint that must be satisfied after parsing this struct succeeds, from a user-defined function.
    The function should have signature `fn(&T) -> Result<(), impl Display>`.
+
+
+[^1]: Actually, the *tokens* of the type are used, so e.g. it must be `bool` and not an alias for `bool`.
+
+[^compat-note-1]: In `clap`, `repeat` parameters are inferred by setting the type to `Vec<T>`, and this is the only way to specify a repeat parameter. It also changes the meaning of `value_parser` in a subtle way.
+However, this can become confusing and so `conf` deviates from `clap` here. Instead, in `conf` the only way to specify a repeat parameter is to use the `repeat` attribute.
+
+[^compat-note-2]: Our `value_parser` feature is very similar to `clap-derive`, but it seems to work a little better in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
+while at `clap` version 4.5.8 it doesn't work. The reason seems to be that in clap v4, the `value_parser!` macro was introduced, and it uses auto-ref specialization to try to detect
+features of the value parser type at build time and handle special cases. However, this adds more layers of complexity and prevents the compiler from inferring things like lifetime parameters, afaict, so it makes the
+UX of the `derive` API somewhat worse. Our criteria for how to implement `value_parser` are also a bit different because we don't have a need for the solution to work with the `clap_builder` API as well.
+

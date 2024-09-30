@@ -1,7 +1,7 @@
 use conf::{Conf, Subcommands};
+use http::Uri as Url;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use url::Url;
 
 /// Configuration for an http client
 #[derive(Conf, Debug)]
@@ -17,6 +17,7 @@ pub struct HttpClientConfig {
 
 /// Configuration for model service
 #[derive(Conf, Debug)]
+#[conf(name = "subcommands_example")]
 pub struct ModelServiceConfig {
     /// Listen address to bind to
     #[conf(long, env, default_value = "127.0.0.1:9090")]

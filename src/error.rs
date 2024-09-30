@@ -101,6 +101,9 @@ pub enum InnerError {
     /// Missing required subcommand
     // struct name, field name, subcommands
     MissingRequiredSubcommand(String, String, Vec<String>),
+    /// Parsing (document)
+    // document name, field name, error
+    Serde(String, String, String),
 }
 
 impl InnerError {
@@ -230,6 +233,16 @@ impl InnerError {
             subcommand_names.iter().map(|x| (*x).to_owned()).collect(),
         )
     }
+
+    /// Helper which makes Serde
+    pub fn serde(document_name: &str, field_name: &str, err: impl fmt::Display) -> Self {
+        Self::Serde(
+            document_name.to_owned(),
+            field_name.to_owned(),
+            err.to_string(),
+        )
+    }
+
     // A short (one-line) description of the problem
     fn title(&self) -> &'static str {
         match self {
@@ -240,6 +253,7 @@ impl InnerError {
             Self::ValidationFailed(..) => "Validation failed",
             Self::InvalidParameterValue(..) => "Invalid value",
             Self::MissingRequiredSubcommand(..) => "Missing required subcommand",
+            Self::Serde(..) => "Parsing document",
         }
     }
 
@@ -253,6 +267,7 @@ impl InnerError {
             Self::ValidationFailed(..) => ErrorKind::ValueValidation,
             Self::InvalidParameterValue(..) => ErrorKind::InvalidValue,
             Self::MissingRequiredSubcommand(..) => ErrorKind::MissingSubcommand,
+            Self::Serde(..) => ErrorKind::InvalidValue,
         }
     }
 
@@ -267,6 +282,7 @@ impl InnerError {
             Self::TooManyArguments(..) => None,
             Self::ValidationFailed(..) => None,
             Self::MissingRequiredSubcommand(..) => None,
+            Self::Serde(..) => None,
         }
     }
 
@@ -420,6 +436,15 @@ impl InnerError {
                     writeln!(stream, "    {name}")?;
                 }
             }
+            Self::Serde(document_name, field_name, err) => {
+                let context = format!("  Parsing {document_name} (@ {field_name})");
+                let estimated_len = context.len();
+                writeln!(
+                    stream,
+                    "{context}: {err_str}",
+                    err_str = Self::format_err_str(err, estimated_len + 2)
+                )?;
+            }
         }
         Ok(())
     }
@@ -484,6 +509,9 @@ fn render_provided_opt(opt: &ProgramOption, value_source: &ConfValueSource<Strin
         ConfValueSource::Default => "default value".into(),
         ConfValueSource::Env(name) => {
             format!("env '{name}'")
+        }
+        ConfValueSource::Document(name) => {
+            format!("document '{name}'")
         }
     }
 }

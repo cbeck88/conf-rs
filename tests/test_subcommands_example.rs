@@ -1,22 +1,15 @@
 mod common;
-use common::assert_multiline_eq;
-use escargot::{CargoBuild, CargoRun};
-use std::{process::Command, str::from_utf8, sync::OnceLock};
+use common::{assert_multiline_eq, Example};
+use std::str::from_utf8;
 
-fn get_built_showcase_subcommands_example() -> Command {
-    static ONCE: OnceLock<CargoRun> = OnceLock::new();
-    ONCE.get_or_init(|| {
-        CargoBuild::new()
-            .example("showcase_subcommands")
-            .run()
-            .unwrap()
-    })
-    .command()
+struct SubcommandsExample {}
+impl Example for SubcommandsExample {
+    const NAME: &'static str = "subcommands_example";
 }
 
 #[test]
 fn test_showcase_example_no_args() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command.output().unwrap();
 
     let expected = &"
@@ -31,16 +24,17 @@ error: A required value was not provided
 
 #[test]
 fn test_showcase_example_some_invalid_args() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
-        .args(["--db-url=asdf"])
+        .args(["--db-url=asdf:/"])
         .envs([("DB_RETRIES", "5")])
         .output()
         .unwrap();
+    println!("{}", from_utf8(&output.stdout).unwrap());
 
     let expected = &"
 error: Invalid value
-  when parsing '--db-url' value 'asdf': relative URL without a base
+  when parsing '--db-url' value 'asdf:/': invalid format
 
 Help:
       --db-url <db.url>
@@ -54,13 +48,13 @@ Help:
 
 #[test]
 fn test_showcase_example_help() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command.args(["--help"]).output().unwrap();
 
     let expected = &"
 Configuration for model service
 
-Usage: showcase_subcommands [OPTIONS] [COMMAND]
+Usage: subcommands_example [OPTIONS] [COMMAND]
 
 Commands:
   run-migrations
@@ -88,7 +82,7 @@ Options:
 
 #[test]
 fn test_showcase_example_success_args() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .args([
             "--auth-url=https://example.com",
@@ -106,12 +100,12 @@ ModelServiceConfig {
     listen_addr: 127.0.0.1:9090,
     auth: Some(
         HttpClientConfig {
-            url: "https://example.com/",
+            url: https://example.com/,
             retries: 7,
         },
     ),
     db: HttpClientConfig {
-        url: "postgres://localhost/dev",
+        url: postgres://localhost/dev,
         retries: 9,
     },
     command: None,
@@ -124,7 +118,7 @@ ModelServiceConfig {
 
 #[test]
 fn test_showcase_example_success_env() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .envs([
             ("LISTEN_ADDR", "0.0.0.0:7777"),
@@ -139,7 +133,7 @@ ModelServiceConfig {
     listen_addr: 0.0.0.0:7777,
     auth: None,
     db: HttpClientConfig {
-        url: "postgres://localhost/dev",
+        url: postgres://localhost/dev,
         retries: 3,
     },
     command: None,
@@ -152,11 +146,11 @@ ModelServiceConfig {
 
 #[test]
 fn test_showcase_example_subcommand_help() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command.args(["run-migrations", "--help"]).output().unwrap();
 
     let expected = &"
-Usage: showcase_subcommands run-migrations [OPTIONS]
+Usage: subcommands_example run-migrations [OPTIONS]
 
 Options:
       --migrations <migrations>  Path to migrations file (instead of embedded migrations)
@@ -170,7 +164,7 @@ Options:
 
 #[test]
 fn test_showcase_example_subcommand_invalid_args() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .args(["run-migrations", "--db-url=postgres://localhost/dev"])
         .output()
@@ -179,7 +173,7 @@ fn test_showcase_example_subcommand_invalid_args() {
     let expected = &"
 error: unexpected argument '--db-url' found
 
-Usage: showcase_subcommands run-migrations [OPTIONS]
+Usage: subcommands_example run-migrations [OPTIONS]
 
 For more information, try '--help'.
 "[1..];
@@ -190,7 +184,7 @@ For more information, try '--help'.
 
 #[test]
 fn test_showcase_example_subcommand_missing_args() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .args(["--db-url=postgres://localhost/dev", "run-migrations"])
         .output()
@@ -212,7 +206,7 @@ Help:
 
 #[test]
 fn test_showcase_example_subcommand_success() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .args(["--db-url=postgres://localhost/dev", "run-migrations"])
         .env("DB_RETRIES", "77")
@@ -224,7 +218,7 @@ ModelServiceConfig {
     listen_addr: 127.0.0.1:9090,
     auth: None,
     db: HttpClientConfig {
-        url: \"postgres://localhost/dev\",
+        url: postgres://localhost/dev,
         retries: 77,
     },
     command: Some(
@@ -243,7 +237,7 @@ ModelServiceConfig {
 
 #[test]
 fn test_showcase_example_subcommand_success2() {
-    let mut command = get_built_showcase_subcommands_example();
+    let mut command = SubcommandsExample::get_command();
     let output = command
         .args([
             "--db-url=postgres://localhost/dev",
@@ -259,7 +253,7 @@ ModelServiceConfig {
     listen_addr: 127.0.0.1:9090,
     auth: None,
     db: HttpClientConfig {
-        url: \"postgres://localhost/dev\",
+        url: postgres://localhost/dev,
         retries: 77,
     },
     command: Some(
