@@ -1,6 +1,11 @@
 //! A `derive`-based, highly composable env-and-argument parser aimed at the practically-minded web
 //! developer building large web projects.
-#![doc = include_str!("../REFERENCE.md")]
+//!
+//! To use `conf`, use the `#[derive(Conf)]` proc macro on your configuration struct.
+//! Then call a [`Conf`] trait function to parse your configuration struct.
+//! Proc macro attributes are documented there.
+//!
+//! See README for an overview.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 

@@ -36,7 +36,7 @@ In most cases, `conf` tries to stay extremely close to `clap-derive` syntax and 
 In some cases, there are small deviations from the behavior of `clap-derive` to either help avoid mistakes, or to make the defaults closer to a good [12-factor app](https://12factor.net/config) behavior.
 For some advanced features of `clap`, `conf` has a way to achieve the same thing, but we took a different approach. This is typically in an attempt to simplify how it works for the user of the `derive` macro, to have fewer named concepts, or to ease maintenance going forward.
 
-The public API here is restricted to one trait, one proc-macro to derive it, and one error type. It is hoped that this will both reduce the learning curve and ease future development and maintenance.
+The public API here is restricted to the `Conf` and `Subcommands` traits, proc-macros to derive them, and one error type. It is hoped that this will both reduce the learning curve and ease future development and maintenance.
 
 See [MOTIVATION.md](./MOTIVATION.md) for more discussion about this project and the other various alternatives out there.
 
@@ -100,9 +100,9 @@ Generally, the CLI interface and help text that is generated is meant to conform
 
 A field in your struct can be read from a few sources:
 
-* `#[arg(short)]` means that it has an associated "short" command-line option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[conf(short='t')]` for example.
-* `#[arg(long)]` means that it has an associated "long" command-line option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[conf(long="target-url")]` for example.
-* `#[arg(env)]` means that it has an associated environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[conf(env="TARGET_URL")]` for example.
+* `#[arg(short)]` means that it has an associated "short" command-line option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[arg(short='t')]` for example.
+* `#[arg(long)]` means that it has an associated "long" command-line option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[arg(long="target-url")]` for example.
+* `#[arg(env)]` means that it has an associated environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[arg(env="TARGET_URL")]` for example.
 * `#[arg(default_value)]` specifies a default value for this field if none of the other three possible sources provides one.
 
 Such attributes can be combined by separating them with commas, for example `#[arg(long, env, default_value="x")]` means the field has an assocated long option, an associated environment variable, and a default value if both of these are omitted.
@@ -261,6 +261,8 @@ pub struct Config {
 ```
 
 You can read about all the attributes and usage in the docs or the [REFERENCE.md](./REFERENCE.md), but hopefully this is enough to get started.
+
+See also the [examples](./examples).
 
 ## Topics
 
