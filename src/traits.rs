@@ -1,5 +1,6 @@
 use crate::{
-    parse_env, ConfContext, ConfValueSource, Error, InnerError, Parser, ParserConfig, ProgramOption,
+    parse_env, ConfContext, ConfValueSource, Error, InnerError, ParsedArgs, ParsedEnv, Parser,
+    ParserConfig, ProgramOption,
 };
 use std::ffi::OsString;
 
@@ -8,6 +9,8 @@ use std::ffi::OsString;
 /// their config structure in `main()`.
 ///
 /// Hand-written implementations of this trait are not supported.
+///
+#[doc = include_str!("../REFERENCE_derive_conf.md")]
 pub trait Conf: Sized {
     /// Parse self from the process CLI args and environment, and exit the program with a help
     /// message if we cannot.
@@ -56,14 +59,25 @@ pub trait Conf: Sized {
         K: Into<OsString> + Clone,
         V: Into<OsString> + Clone,
     {
-        let parser_config = Self::get_parser_config()?;
-        let program_options = Self::get_program_options()?;
         let parsed_env = parse_env(env_vars_os);
-        let parser = Parser::new(parser_config, program_options, &parsed_env)?;
-        let parsed_args = parser.parse(args_os)?;
-        let conf_context = ConfContext::new(&parsed_args, &parsed_env);
+        let parser = Self::get_parser(&parsed_env)?;
+        let arg_matches = parser.parse(args_os)?;
+        let parsed_args = ParsedArgs::new(&arg_matches, &parser);
+        let conf_context = ConfContext::new(parsed_args, &parsed_env);
         Self::from_conf_context(conf_context)
             .map_err(|errs| InnerError::vec_to_clap_error(errs, parser.get_command()))
+    }
+
+    // Construct a conf::Parser object appropriate for this Conf.
+    // This requires the parsed_env because that is used in help text.
+    // This Parser may be used in Conf::try_parse_from, or may be used to implement
+    // Subcommands::get_commands.
+    #[doc(hidden)]
+    fn get_parser(parsed_env: &ParsedEnv) -> Result<Parser<'_>, Error> {
+        let parser_config = Self::get_parser_config()?;
+        let program_options = Self::get_program_options()?;
+        let subcommands = Self::get_subcommands(parsed_env)?;
+        Parser::new(parser_config, program_options, subcommands, parsed_env)
     }
 
     // Get the parser config associated to this Conf.
@@ -80,6 +94,14 @@ pub trait Conf: Sized {
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
     fn get_program_options() -> Result<&'static [ProgramOption], Error>;
+    // Get the subcommands that are declared on this Conf.
+    //
+    // These come from `conf(subcommand)` being used on a field, and `derive(Subcommand)` being used
+    // on the enum type of that field.
+    //
+    // This requires ParsedEnv because a command contains a help page, and the env influences that.
+    #[doc(hidden)]
+    fn get_subcommands(parsed_env: &ParsedEnv) -> Result<Vec<Parser<'_>>, Error>;
     // Try to parse an instance of self from a given parser context
     // This is implemented using the derive macros.
     // Users generally can't call this, because ConfContext is not constructible by any public APIs.
@@ -119,4 +141,35 @@ pub trait Conf: Sized {
     // Generally this is the struct identifier
     #[doc(hidden)]
     fn get_name() -> &'static str;
+}
+
+/// The Subcommands trait represents one or more subcommands, and is derived on Enums.
+///
+/// Each subcommand is an enum variant containing a Conf structure.
+///
+/// The subcommand name is the name of the enum variant.
+///in
+/// A Subcommands enum can then be added as a field to a top-level Conf structure and marked using
+/// the `#[conf(subcommands)]` attribute.
+///
+/// Hand-written implementations of this trait are not supported.
+///
+#[doc = include_str!("../REFERENCE_derive_subcommands.md")]
+pub trait Subcommands: Sized {
+    // Get the subcommands associated to this enum.
+    // This is generally done by calling get_parser for each variant, and then get_command on the
+    // parser. The Command::name should then be set based on the name of the enum variant.
+    #[doc(hidden)]
+    fn get_parsers(env: &ParsedEnv) -> Result<Vec<Parser<'_>>, Error>;
+
+    // Get the subcommand names associated to this enum, for error messages
+    #[doc(hidden)]
+    fn get_subcommand_names() -> &'static [&'static str];
+
+    // Construct Self from a command name and a conf context for the corresponding subcommand
+    #[doc(hidden)]
+    fn from_conf_context(
+        command_name: String,
+        conf_context: ConfContext<'_>,
+    ) -> Result<Self, Vec<InnerError>>;
 }

@@ -93,6 +93,7 @@ fn test_skip_short_flags_parsing() {
 }
 
 #[derive(Conf, Debug)]
+#[allow(unused)]
 struct BadA {
     #[conf(short, env)]
     f: bool,
@@ -111,6 +112,7 @@ fn test_skip_short_flags_parsing_expected_collision_error() {
 }
 
 #[derive(Conf, Debug)]
+#[allow(unused)]
 struct BadA2 {
     #[conf(short, env)]
     f: bool,
@@ -131,6 +133,7 @@ fn test_skip_short_flags_program_options_unknown_skip_error() {
 }
 
 #[derive(Conf, Debug)]
+#[allow(unused)]
 struct BadA3 {
     #[conf(short, env)]
     f: bool,

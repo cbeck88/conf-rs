@@ -95,8 +95,12 @@ pub enum InnerError {
     /// Validation failed
     // (struct name, instance id_prefix, error message)
     ValidationFailed(String, String, String),
-    /// Invalid UTF-8 in env (value omitted if it is secret)
+    /// Invalid UTF-8 in env
+    // (value omitted if it is secret)
     InvalidUtf8Env(String, Box<ProgramOption>, Option<OsString>),
+    /// Missing required subcommand
+    // struct name, field name, subcommands
+    MissingRequiredSubcommand(String, String, Vec<String>),
 }
 
 impl InnerError {
@@ -214,6 +218,18 @@ impl InnerError {
         )
     }
 
+    /// Helper which makes MissingRequiredSubcommand
+    pub fn missing_required_subcommand(
+        struct_name: &str,
+        field_name: &str,
+        subcommand_names: &'static [&'static str],
+    ) -> Self {
+        Self::MissingRequiredSubcommand(
+            struct_name.to_owned(),
+            field_name.to_owned(),
+            subcommand_names.iter().map(|x| (*x).to_owned()).collect(),
+        )
+    }
     // A short (one-line) description of the problem
     fn title(&self) -> &'static str {
         match self {
@@ -223,6 +239,7 @@ impl InnerError {
             Self::TooManyArguments(..) => "Too many arguments",
             Self::ValidationFailed(..) => "Validation failed",
             Self::InvalidParameterValue(..) => "Invalid value",
+            Self::MissingRequiredSubcommand(..) => "Missing required subcommand",
         }
     }
 
@@ -235,6 +252,7 @@ impl InnerError {
             Self::TooManyArguments(..) => ErrorKind::TooManyValues,
             Self::ValidationFailed(..) => ErrorKind::ValueValidation,
             Self::InvalidParameterValue(..) => ErrorKind::InvalidValue,
+            Self::MissingRequiredSubcommand(..) => ErrorKind::MissingSubcommand,
         }
     }
 
@@ -248,6 +266,7 @@ impl InnerError {
             Self::TooFewArguments(..) => None,
             Self::TooManyArguments(..) => None,
             Self::ValidationFailed(..) => None,
+            Self::MissingRequiredSubcommand(..) => None,
         }
     }
 
@@ -380,7 +399,6 @@ impl InnerError {
                     )?;
                 }
             }
-
             Self::ValidationFailed(struct_name, instance_id_prefix, err) => {
                 let mut context = format!("  {struct_name} value was invalid");
                 if !instance_id_prefix.is_empty() {
@@ -392,6 +410,15 @@ impl InnerError {
                     "{context}: {err_str}",
                     err_str = Self::format_err_str(err, estimated_len + 2)
                 )?;
+            }
+            Self::MissingRequiredSubcommand(struct_name, field_name, subcommand_names) => {
+                writeln!(
+                    stream,
+                    "  A subcommand must be selected ({struct_name}::{field_name}):"
+                )?;
+                for name in subcommand_names {
+                    writeln!(stream, "    {name}")?;
+                }
             }
         }
         Ok(())

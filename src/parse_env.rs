@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
+/// Represents env variables loaded into memory
 #[derive(Default)]
 pub struct ParsedEnv {
     map: BTreeMap<String, OsString>,
@@ -10,13 +11,13 @@ pub struct ParsedEnv {
 impl ParsedEnv {
     /// Get the OsString. This is useful if you want to raise an error with context if it not valid
     /// utf8.
-    pub fn get<'a>(&'a self, name: &str) -> Option<&'a OsString> {
+    pub(crate) fn get<'a>(&'a self, name: &str) -> Option<&'a OsString> {
         self.map.get(name)
     }
 
     /// Get the OsString as a lossy string, or "" if it's not present.
     /// This is useful when rendering help text
-    pub fn get_lossy_or_default<'a>(&'a self, name: &str) -> Cow<'a, str> {
+    pub(crate) fn get_lossy_or_default<'a>(&'a self, name: &str) -> Cow<'a, str> {
         self.map
             .get(name)
             .map(|os_str| os_str.to_string_lossy())
