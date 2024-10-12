@@ -9,7 +9,6 @@ use std::ffi::OsString;
 /// their config structure in `main()`.
 ///
 /// Hand-written implementations of this trait are not supported.
-///
 #[doc = include_str!("../REFERENCE_derive_conf.md")]
 pub trait Conf: Sized {
     /// Parse self from the process CLI args and environment, and exit the program with a help
@@ -153,7 +152,6 @@ pub trait Conf: Sized {
 /// the `#[conf(subcommands)]` attribute.
 ///
 /// Hand-written implementations of this trait are not supported.
-///
 #[doc = include_str!("../REFERENCE_derive_subcommands.md")]
 pub trait Subcommands: Sized {
     // Get the subcommands associated to this enum.
