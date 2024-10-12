@@ -6,6 +6,7 @@
 [![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/cbeck88/conf-rs/ci-rust.yml?branch=develop&style=flat-square)](https://github.com/cbeck88/conf-rs/actions/workflows/ci-rust.yml?query=branch%3Adevelop)
 
 [API Docs](https://docs.rs/conf/latest/conf/) | [Proc-macro Reference](./REFERENCE.md)
 
