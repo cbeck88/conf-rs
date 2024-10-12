@@ -1,0 +1,65 @@
+name: Continuous Integration (rust)
+
+on:
+  push:
+    branches: [ "develop" ]
+    # See docu here: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#example-including-and-excluding-branches
+    # it seems pretty similar to .gitignore
+    paths:
+      - '**'
+      - '!**.md'
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
+jobs:
+  # builds and tests rust code, with --deny warnings. tests for dirty git
+  build-and-test-rust:
+    runs-on: ubuntu-latest
+
+    env:
+      RUSTFLAGS: --deny warnings
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rustup update
+      run: rustup update
+    - name: Show cargo version
+      run: cargo --version
+    - name: rust build caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: . -> target
+        save-if: ${{ github.ref == 'refs/heads/develop' }}
+    - name: Build Rust
+      run: cargo check --verbose --locked
+    - name: Test Rust
+      run: cargo test --all --verbose --locked
+    - name: Check dirty git
+      uses: ./.github/actions/check-dirty-git
+
+  # lints and checks formatting of rust code
+  lint-rust:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rustup install nightly & update
+      run: rustup toolchain add nightly && rustup component add --toolchain nightly rustfmt && rustup update
+    - name: Show cargo version
+      run: cargo --version
+    - name: rust build caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: lint
+        workspaces: . -> target
+        save-if: ${{ github.ref == 'refs/heads/develop' }}
+    - name: Format
+      run: cargo +nightly fmt -- --check
+    - name: Clippy
+      run: cargo clippy --all --all-features -- -D warnings
