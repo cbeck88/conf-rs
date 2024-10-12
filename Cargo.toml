@@ -15,12 +15,12 @@ include = [
   "Cargo.toml",
   "LICENSE*",
   "README.md",
-  "REFERENCE.md",
+  "REFERENCE*.md",
 ]
 
 [package]
 name = "conf"
-version = "0.1.0"
+version = "0.1.1"
 description = "A derive-based config parser for CLI args and env parameters"
 categories = ["command-line-interface"]
 keywords = [
@@ -40,7 +40,7 @@ include.workspace = true
 bench = false
 
 [dependencies]
-conf_derive = { path = "./conf_derive", version = "0.1" }
+conf_derive = { path = "./conf_derive", version = "0.1.1" }
 clap = { version = "4.5.8", features = ["string"] }
 
 [dev-dependencies]
