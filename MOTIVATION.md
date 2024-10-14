@@ -801,6 +801,8 @@ The initial feature set was the features of `clap-derive` I had used most heavil
 
 I ended up adding more features besides this before the first `crates.io` release as I started migrating more of my projects to this, and encountered things that were either harder to migrate, or were just additional features that I realized I wanted and could fit into the framework with relative ease.
 
+In version 0.1.1, we added support for subcommands.
+
 ## Testing
 
 If we change the same simple program that we used for testing `clap-derive` to use `conf` instead, we can see that the error handling in these scenarios becomes better.

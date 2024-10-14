@@ -1,17 +1,15 @@
 mod common;
-use common::assert_multiline_eq;
-use escargot::{CargoBuild, CargoRun};
-use std::{process::Command, str::from_utf8, sync::OnceLock};
+use common::{assert_multiline_eq, Example};
+use std::str::from_utf8;
 
-fn get_built_showcase_example() -> Command {
-    static ONCE: OnceLock<CargoRun> = OnceLock::new();
-    ONCE.get_or_init(|| CargoBuild::new().example("showcase").run().unwrap())
-        .command()
+struct ShowcaseExample {}
+impl Example for ShowcaseExample {
+    const NAME: &'static str = "showcase";
 }
 
 #[test]
 fn test_showcase_example_no_args() {
-    let mut command = get_built_showcase_example();
+    let mut command = ShowcaseExample::get_command();
     let output = command.output().unwrap();
 
     let expected = &"
@@ -36,7 +34,7 @@ error: A required value was not provided
 
 #[test]
 fn test_showcase_example_some_invalid_args() {
-    let mut command = get_built_showcase_example();
+    let mut command = ShowcaseExample::get_command();
     let output = command
         .args(["--auth-retries=-3"])
         .envs([("MYCO_TELEMETRY_RETRIES", "-2")])
@@ -66,7 +64,7 @@ error: Invalid value
 
 #[test]
 fn test_showcase_example_help() {
-    let mut command = get_built_showcase_example();
+    let mut command = ShowcaseExample::get_command();
     let output = command.args(["--help"]).output().unwrap();
 
     let expected = &"
@@ -144,7 +142,7 @@ Options:
 
 #[test]
 fn test_showcase_example_success_args() {
-    let mut command = get_built_showcase_example();
+    let mut command = ShowcaseExample::get_command();
     let output = command
         .args([
             "--auth-url=https://example.com",
@@ -176,11 +174,11 @@ Config {
     solver_service: SolveServiceConfig {
         listen_addr: 127.0.0.1:4040,
         auth: HttpClientConfig {
-            url: "https://example.com/",
+            url: https://example.com/,
             retries: 7,
         },
         artifact: HttpClientConfig {
-            url: "https://what.com/",
+            url: https://what.com/,
             retries: 9,
         },
     },
@@ -199,12 +197,12 @@ Config {
         round_limit: None,
     },
     peer_urls: [
-        "http://replica1.service.local/",
-        "http://replica2.service.local/",
+        http://replica1.service.local/,
+        http://replica2.service.local/,
     ],
     admin_listen_addr: 127.0.0.1:9090,
     telemetry: HttpClientConfig {
-        url: "https://far.scape/",
+        url: https://far.scape/,
         retries: 2,
     },
 }
@@ -216,7 +214,7 @@ Config {
 
 #[test]
 fn test_showcase_example_success_env() {
-    let mut command = get_built_showcase_example();
+    let mut command = ShowcaseExample::get_command();
     let output = command
         .envs([
             ("MYCO_AUTH_URL", "https://example.com"),
@@ -244,11 +242,11 @@ Config {
     solver_service: SolveServiceConfig {
         listen_addr: 127.0.0.1:4040,
         auth: HttpClientConfig {
-            url: "https://example.com/",
+            url: https://example.com/,
             retries: 7,
         },
         artifact: HttpClientConfig {
-            url: "https://what.com/",
+            url: https://what.com/,
             retries: 9,
         },
     },
@@ -267,12 +265,12 @@ Config {
         round_limit: None,
     },
     peer_urls: [
-        "http://replica1.service.local/",
-        "http://replica2.service.local/",
+        http://replica1.service.local/,
+        http://replica2.service.local/,
     ],
     admin_listen_addr: 127.0.0.1:9090,
     telemetry: HttpClientConfig {
-        url: "https://far.scape/",
+        url: https://far.scape/,
         retries: 2,
     },
 }

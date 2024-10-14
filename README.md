@@ -1,6 +1,6 @@
 # conf
 
-`conf` is a `derive`-based env-and-argument parser aimed at the practically-minded web developer building large web projects.
+`conf` is a `derive`-based config parser aimed at the practically-minded web developer building large web projects.
 
 [![Crates.io](https://img.shields.io/crates/v/conf?style=flat-square)](https://crates.io/crates/conf)
 [![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/cbeck88/conf-rs/ci-rust.yml?branch=develop&style=flat-square)](https://github.com/cbeck88/conf-rs/actions/workflows/ci-rust.yml?query=branch%3Adevelop)
 
-[API Docs](https://docs.rs/conf/latest/conf/) | [Proc-macro Reference](./REFERENCE.md)
+[API Docs](https://docs.rs/conf/latest/conf/) | [Proc-macro Reference](./REFERENCE.md) | [Examples](./examples)
 
 ## Overview
 
@@ -30,12 +30,32 @@ The features that you get for this bargain are:
 * **You can declare fields which represent secrets.** This controls whether or not the entire value should be printed in error messages if it fails to parse.
 * **Support for an optional-flatten syntax**. This can be simpler and more idiomatic than using argument groups and such in `clap-derive`.
 * **Support for user-defined validation predicates**. This allows you to express constraints that can't be expressed in `clap`.
+* **Support for layered config**. This means that you can use data loaded from a file as an additional source for config values, alongside args and env.
+
+As of version ??? `conf` supports using config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
+The same commitment to "All the errors and not just one of them" holds. There are several advantages of this integrated approach:
+
+* Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/latest/clap/) for CLI argument parsing only, and then folding the
+  results of that into a library like [`figment`](https://docs.rs/figment/latest/figment) or [`config`](https://docs.rs/config/latest/config), which can also manage `env`, files, and compositing it all together.
+  * However, typically this creates a maintanence burden, because if a required field could be read via `clap` or could be read from `env` or a config file, it needs to be `Option<T>`
+    for `clap` and `T` in the final config structure, so you end up needing to maintain two parallel structures.
+  * If these structures get out of sync, there isn't really any tooling to help you figure it out and the error messages may be confusing.
+  * Dividing the information between two structures this way means that `clap` isn't aware of the other ways that a value can be read.
+    But `clap` is responsible for generating the `--help` text, and so this causes the documentation of the config to be incomplete and makes it harder
+    for users to figure out how to use your program.
+  * It leads to poor quality error reporting, because crates like `figment` and `config` rely on `serde::Deserialize` to marshall the composited data onto your final structure.
+    This precludes giving multiple error reports if there are multiple problems in different parts of the config. (See [MOTIVATION.md](./MOTIVATION.md) for more discussion.)
+* When using `conf` instead, all of these problems are avoided. Notably, `conf` provides its own proc-macro, and so we can walk the `serde::de::Deserializer` ourselves and
+  ensure that we get comprehensive error reporting, even if `serde_derive::Deserialize` would have stopped at the first error.
+* `conf` can also be used together with `figment` advantageously. See [Multiple config files](#multiple-config-files) for more on this.
+
+------
 
 `conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/latest/clap/) and the earlier [`struct-opt`](https://docs.rs/structopt/latest/structopt/) which I used for years. They are both great and became popular for a reason.
 
-In most cases, `conf` tries to stay extremely close to `clap-derive` syntax and behavior, for familiarity and ease of migrating a large project.
+Where there is overlap, `conf` tries to stay extremely close to `clap-derive` syntax and behavior, in most cases, for familiarity and ease of migrating a large project.
 In some cases, there are small deviations from the behavior of `clap-derive` to either help avoid mistakes, or to make the defaults closer to a good [12-factor app](https://12factor.net/config) behavior.
-For some advanced features of `clap`, `conf` has a way to achieve the same thing, but we took a different approach. This is typically in an attempt to simplify how it works for the user of the `derive` macro, to have fewer named concepts, or to ease maintenance going forward.
+For some advanced features of `clap`, `conf` has a way to achieve the same thing, but we took a different approach. This is typically in an attempt to simplify how it works for the user of the `derive` macro, to have fewer named concepts, or to ease maintenance going forward. (Because we don't offer an analogue of the `clap_builder` API, the design tradeoffs are different.)
 
 The public API here is restricted to the `Conf` and `Subcommands` traits, proc-macros to derive them, and one error type. It is hoped that this will both reduce the learning curve and ease future development and maintenance.
 
@@ -65,6 +85,8 @@ Then, create a `struct` which represents the configuration data your application
 This struct should derive the `Conf` trait, and the `conf` attributes should be used to describe how each field can be read.
 
 ```rust
+use conf::Conf;
+
 #[derive(Conf)]
 pub struct Config {
     /// This is a string parameter, which can be read from args as `--my-param` or from env as `MY_PARAM`.
@@ -271,7 +293,9 @@ This section discusses more advanced features and usage patterns, as well as alt
 
 ### Reading files
 
-Sometimes, a web service needs to read a file on startup. `conf` supports this by using the `value_parser` feature, which works very similarly as in `clap`.
+Sometimes, a web service needs to read a file on startup.
+
+One way this can be done in `conf` is by using the `value_parser` feature, which works very similarly as in `clap`.
 
 A `value_parser` is a function that takes a `&str` and returns either a value or an error.
 
@@ -306,7 +330,11 @@ pub struct Config {
 }
 ```
 
-This can also be a good pattern for things like reading a certificate or a cryptographic key from a file, which you want to check on startup, failing fast if the file is not found or is invalid.
+This can be a good pattern for things like reading a certificate or a cryptographic key from a file, which you want to check on startup.
+This way you will fail fast if the file is not found or is invalid, but also report all other config problems at the same time.
+
+This kind of approach would always read the key from a file, but would allow you to specify the file path either in args or in env.
+This is not the same thing as hierarchical config files though, which we'll discuss next.
 
 ### Hierarchical config
 
@@ -321,18 +349,117 @@ This can also be a good pattern for things like reading a certificate or a crypt
 >    5. System-wide configuration
 >    6. Default configuration shipped with the program.
 
-`conf` has built-in support for (1), (2), and (6) here.
+`conf` has strong built-in support for (1), (2), and (6) here. To get the others, there are basically two approaches.
 
-To get the others when using something like `conf`, a common practice is to use a crate like [`dotenvy`](https://crates.io/crates/dotenvy). This crate can search for an `.env` file, and then set `env` values if they are not already set in your program.
-You can do this right before calling `Config::parse()`, and in this manner achieve hierarchical config. You can load multiple `.env` files this way if you need to.
+#### .env files
 
-In web applications, I often use this approach for *development* rather than production.
+The simplest approach to hierarchical config, IMO, is to use a crate like [`dotenvy`](https://crates.io/crates/dotenvy). This crate can search for an `.env` file, and then set `env` values if they are not already set in your program.
+You can do this right before calling `Config::parse()`, and in this manner achieve hierarchical config, with `args > env > .env file > defaults`. You can load multiple `.env` files this way if you need to, searching user-provided paths, default paths, and so on.
+
+In web applications, I often use this approach for *development* rather than production, and I recommend this approach especially for smaller projects.
 
 If your application has a lot of required values, it may take an engineer a while to figure out how to just run it locally. But you may not want to provide default values in the program that would not be appropriate in production, for safety. Instead, you can provide a `.env` file which is checked in to the repo, with values which are appropriate for local testing / CI. Then an engineer can use `cargo run` and it will just work. When you go to build docker containers, you can leave out these `.env` files, and then be sure that in the deployed environment, kubernetes or similar is in total control, and any missing or misspelled values in the helm charts and whatnot will be loud and fail fast.
 
 These `.env` files work well if you are using [`diesel`](https://crates.io/crates/diesel), because the `diesel` cli tool also [uses `dotenvy` to search for a `.env` file](https://diesel.rs/guides/getting-started) and find the `DATABASE_URL` when manging database migrations locally.
 
-This approach to hierarchical config is much less general than what crates like [`config`](https://crates.io/crates/config) and [`figment`](https://crates.io/crates/figment) offer, but it's also simpler, and it's easy to change and debug. There are other reasons discussed in [MOTIVATION.md](./MOTIVATION.md) that I personally favor this approach. This of course is highly opinionated -- over time `conf` may add more features that support other ways of using it. To start, I only built what I felt I needed. Your mileage may vary.
+You can also pass `.env` files directly to `docker run` if you want to test docker containers locally.
+
+This is a very traditional approach to configuring 12-factor apps.
+You get most of the benefits of having config files, but it's also typically easier to deploy the app if it doesn't require files to be mounted into a container, and the config is typically easier to change in a deployed environment if it is based on environment variables.
+
+The biggest drawback of this approach is that you are limited to things that can easily be expressed in a `.env` format.
+If your config structure logically contains arrays of structs, it may not be very natural to express that in `.env`.
+
+Another drawback is that the `.env` format doesn't really have a spec, and there are many divergent parser implementations. Eventually you may run into incompatibilities between what `docker` does, what `bash` does,
+and what the numerous `dotenv` libraries in different programming languages do. This is typically annoying but not insurmountable.
+
+#### General config files
+
+Alternatively, you may prefer that your application can load layered config from a file in a more structured format.
+
+In the `conf` API, self-describing structured data like this is called a "document". (`conf` doesn't really care if it actually came from a file.)
+
+To use a document as a source for layered config in `conf`, you can do the following:
+
+0. You must have the `serde` feature enabled in `conf`, which is on by default.
+
+   You must annotate your structs with `#[conf(serde)]`. This can create additional build-time requirements -- fields in your structs might need to implement `serde::Deserialize` depending on how they are annotated.
+
+1. First, determine the file path and load the document content. For example,
+
+   ```rust
+   let config_path = std::env::var("CONFIG").ok().or_else("config.yaml".to_owned());
+
+   let doc_content: serde_yaml::Value = serde_yaml::from_reader(fs::File::open(&config_path).unwrap()).unwrap();
+   ```
+
+   Note that `conf` doesn't force you to use any particular library or error handling discipline here.
+   You may prefer to skip the file if it is not specified, or not found, or invalid, and try to proceed without it.
+
+2. Next, use the builder API to parse an instance of your structure.
+
+   ```rust
+   let config = MyConfig::conf_builder()
+                .doc(config_path, doc_content)
+                .parse();
+   ```
+
+   The builder uses `std::env::vars_os` and `std::env::args_os` as env and args sources by default, but these can be overrided if desired.
+   The `config_path` string parameter is used in error messages.
+
+Intuitively what happens is, `conf` attempts to initialize your struct, mapping the yaml data onto it, similar to `serde::Deserialize`.
+However, for any fields in your `Conf` struct, if there are multiple value sources, the priority is `args > env > serde > defaults`. So values
+from the `serde::Deserializer` can be shadowed, and also holes in the `serde` data can be filled from defaults and so on.
+
+Any `value_parser` is run only after the available value sources and their priorities have been resolved.
+
+`conf` will work best if you use a "self-describing" format, which has a type like `serde_yaml::Value` or `serde_json::Value`
+which can hold any valid yaml or json, and you deserialize into that first. In particular, it's not recommended to do the following, even if it would avoid some copies:
+
+```rust
+   // Not recommended
+   let config = MyConfig::conf_builder()
+                .doc(config_path, serde_yaml::Deserializer::from_reader(fs::File::open(&config_path).unwrap()))
+                .parse();
+```
+
+If the file is not valid yaml or json, then at some point in the middle of the walk, the deserializer may be in a broken state, and any further attempts to interact with it will yield errors.
+Then `conf` may report numerous errors as it tries to read data for different parts of your structure, giving up on failing branches and continuing to try on other branches.
+These errors may distract from the root cause. By deserializing into a `Value` type first, and failing fast if that doesn't work, you can avoid this scenario.
+
+See a [worked example](./examples/serde/basic.rs) which is under test if you like.
+
+#### Multiple config files
+
+A limitation of `conf` is that you can only pass it one document in this manner -- you can't call [`ConfBuilder::doc`] multiple times and pass a series of progressively lower-priority file contents.
+
+However, you can use other libraries to help with this.
+
+```rust
+   let content: figment::Value
+     = Figment::new()
+       .merge(Json::file("file1"))
+       .merge(Json::file("file2"))
+       .extract()?;
+```
+
+The [`Figment::extract` function](https://docs.rs/figment/latest/figment/struct.Figment.html#method.extract) invokes [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html), and so can only report one error. But extracting into a [`figment::Value`](https://docs.rs/figment/latest/figment/value/enum.Value.html) is not expected to fail, since this is the internal representation that `figment` uses.
+The `figment::Value` can then be passed to `conf` as a document, since it implements [`serde::de::Deserializer`](https://docs.rs/serde/latest/serde/trait.Deserializer.html). Then `conf` is driving the initialization of your struct, and not `serde_derive`, which retains all the benefits of `conf`'s design.
+
+In this manner, you can get all 6 categories of hierarchical config in your app if needed, without significant restrictions on config file formats.
+
+You can see a more complete [example](./example/serde/figment.rs) and tests in the repo.
+
+In the future, we may extend our API so that the [`figment::Metadata`](https://docs.rs/figment/latest/figment/struct.Metadata.html), which tracks the provenance of individual values, can also be passed on to `conf` and used in error messages.
+
+#### Documenting the config file format
+
+The suggested way to help users of your program understand the config file format is:
+
+* Have some examples committed to your repo, and have tests that they parse correctly
+* Either distribute these with the documentation, or along with the release artifacts, or bake them into the binary and add a CLI option which makes the binary emit them.
+
+For example, the AWS CLI tool provides options to emit a config skeleton for many commands, such as, [`aws ecs register-task-definition --generate-cli-skeleton`](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-definition-template.html).
 
 ### Secrets
 
@@ -355,7 +482,7 @@ We'll offer just three points of guidance around this tool.
 
 1. The more valuable the secrets are, and the more challenging the threat model is, the more time it makes sense to spend working on defensive measures. The converse is also true.
    No one really has context to judge this except you, so instead of offering one-size-fits-all guidance, I prefer to think in terms of a sliding scale.
-2. If you're at a point where systematically marking things `secret` seems like a good idea, then you should also be using special types to manage the secrets.
+2. If you're at a point where *systematically marking things `secret`* seems like a good idea, then you should also be *using special types to manage the secrets*.
    For example, using [`SecretString` from the `secrecy` crate](https://docs.rs/secrecy/0.8.0/secrecy/type.SecretString.html) instead of `String` will prevent your password from appearing in debug logs *after* it has been loaded.
    There are alternatives out there if `secrecy` crate doesn't work for your use-case. This is usually a pretty low-effort improvement, and it goes hand-in-hand with what the `secret` marking does.
    * It's very easy to expose your secret by accident if you don't do something like this. For example, just by putting a `#[tracing::instrument]` annotation on a function that some day takes a `config` struct, you could accidentally log your password.
@@ -368,8 +495,8 @@ We'll offer just three points of guidance around this tool.
 
 ### Argument groups and constraints
 
-`clap` has support for the concept of "argument groups" (`ArgGroup`) and also "dependencies" among `Arg`'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
-`clap` provides many functions on `Arg` and on `ArgGroup` which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
+`clap` has support for the concept of "argument groups" ([`ArgGroup`](https://docs.rs/figment/latest/figment/struct.Metadata.html)) and also "dependencies" among [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html)'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
+`clap` [provides](https://docs.rs/clap/latest/clap/struct.Arg.html#method.conflicts_with) [many](https://docs.rs/clap/latest/clap/struct.Arg.html#method.exclusive) [functions](https://docs.rs/clap/latest/clap/struct.Arg.html#method.overrides_with) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_if_eq) [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html) [and](https://docs.rs/clap/latest/clap/struct.Arg.html#method.requires_if) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_unless_present) [`ArgGroup`](https://docs.rs/figment/latest/figment/struct.Metadata.html) which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
 
 The main reason to use these features in `clap` is that it will generate nicely formatted errors if these constraints are violated, and then you don't have to worry about handling the situation in your application code.
 

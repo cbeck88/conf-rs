@@ -2,6 +2,8 @@
 
 use conf::Error;
 use core::cmp::min;
+use escargot::{CargoBuild, CargoRun};
+use std::{process::Command, sync::OnceLock};
 
 // Helper for making Vec<String> concisely
 pub fn vec_str(list: impl IntoIterator<Item = &'static str>) -> Vec<String> {
@@ -147,4 +149,24 @@ pub fn assert_error_contains_text_and_not_other_text<T: core::fmt::Debug>(
             }
         }
     }
+}
+
+// Helper for running examples in integration tests, so that we can test process behavior and output
+// end to end.
+pub trait Example {
+    const NAME: &'static str;
+
+    fn get_built_example() -> &'static CargoRun {
+        static ONCE: OnceLock<CargoRun> = OnceLock::new();
+        ONCE.get_or_init(|| CargoBuild::new().example(Self::NAME).run().unwrap())
+    }
+
+    fn get_command() -> Command {
+        Self::get_built_example().command()
+    }
+}
+
+// Helper for finding the example directory
+pub fn examples_dir() -> &'static str {
+    concat!(env!("CARGO_MANIFEST_DIR"), "/examples")
 }

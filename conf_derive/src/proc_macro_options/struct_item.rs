@@ -1,17 +1,55 @@
 use super::FieldItem;
 use crate::util::*;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{cmp::Ordering, collections::HashMap};
-use syn::{Attribute, Expr, Ident, LitStr};
+use syn::{meta::ParseNestedMeta, token, Attribute, Error, Expr, Ident, LitStr};
+
+/// #[conf(serde(...))] options listed on a struct which has `#[derive(Conf)]`
+pub struct StructSerdeItem {
+    pub allow_unknown_fields: bool,
+    span: Span,
+}
+
+impl StructSerdeItem {
+    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+        let mut result = Self {
+            allow_unknown_fields: false,
+            span: meta.input.span(),
+        };
+
+        if meta.input.peek(token::Paren) {
+            meta.parse_nested_meta(|meta| {
+                let path = meta.path.clone();
+                if path.is_ident("allow_unknown_fields") {
+                    result.allow_unknown_fields = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized conf(serde) option"))
+                }
+            })?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl GetSpan for StructSerdeItem {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
 
 /// #[conf(...)] options listed on a struct which has `#[derive(Conf)]`
+///
+/// Also assists with code generation related to these, such as for validations
 pub struct StructItem {
     pub struct_ident: Ident,
     pub about: Option<LitStr>,
     pub name: Option<LitStr>,
     pub no_help_flag: bool,
     pub env_prefix: Option<LitStr>,
+    pub serde: Option<StructSerdeItem>,
     pub one_of_fields: Vec<(Ordering, List<Ident>)>,
     pub validation_predicate: Option<Expr>,
     pub doc_string: Option<String>,
@@ -19,13 +57,14 @@ pub struct StructItem {
 
 impl StructItem {
     /// Parse conf options out of attributes on a struct
-    pub fn new(struct_ident: &Ident, attrs: &[Attribute]) -> Result<Self, syn::Error> {
+    pub fn new(struct_ident: &Ident, attrs: &[Attribute]) -> Result<Self, Error> {
         let mut result = Self {
             struct_ident: struct_ident.clone(),
             about: None,
             name: None,
             no_help_flag: false,
             env_prefix: None,
+            serde: None,
             one_of_fields: Vec::default(),
             validation_predicate: None,
             doc_string: None,
@@ -57,6 +96,8 @@ impl StructItem {
                             &mut result.env_prefix,
                             Some(parse_required_value::<LitStr>(meta)?),
                         )
+                    } else if path.is_ident("serde") {
+                        set_once(&path, &mut result.serde, Some(StructSerdeItem::new(meta)?))
                     } else if path.is_ident("validation_predicate") {
                         set_once(
                             &path,
@@ -106,7 +147,7 @@ impl StructItem {
     }
 
     /// Generate a conf::ParserConfig expression, based on top-level options in this struct
-    pub fn gen_parser_config(&self) -> Result<TokenStream, syn::Error> {
+    pub fn gen_parser_config(&self) -> Result<TokenStream, Error> {
         // This default if name is not explicitly set matches what clap-derive does.
         let name = self
             .name
@@ -134,7 +175,7 @@ impl StructItem {
     pub fn gen_post_process_program_options(
         &self,
         program_options_ident: &Ident,
-    ) -> Result<Option<TokenStream>, syn::Error> {
+    ) -> Result<Option<TokenStream>, Error> {
         if self.env_prefix.is_none() {
             return Ok(None);
         }
@@ -152,25 +193,20 @@ impl StructItem {
         }))
     }
 
-    /// Generate an (optional) ConfContext pre-processing step.
-    pub fn gen_pre_process_conf_context(
-        &self,
-        _conf_context_ident: &Ident,
-    ) -> Result<Option<TokenStream>, syn::Error> {
-        Ok(None)
-    }
-
     /// Generate tokens that apply any validations to an instance
     ///
-    /// These tokens are the body of a validation function with signature
-    /// fn validation(#instance_ident: &Self, #instance_id_prefix_ident: &str) -> Result<(),
-    /// Vec<conf::InnerError>>
+    /// These tokens are the body of a validation function with signature:
+    ///
+    /// fn validation(
+    ///     #instance_ident: &Self,
+    ///     #instance_id_prefix_ident: &str
+    /// ) -> Result<(), Vec<conf::InnerError>>
     pub fn gen_validation_routine(
         &self,
         instance: &Ident,
         conf_context_ident: &Ident,
         fields: &[FieldItem],
-    ) -> Result<TokenStream, syn::Error> {
+    ) -> Result<TokenStream, Error> {
         let struct_ident = &self.struct_ident;
         let struct_name = self.struct_ident.to_string();
         let mut predicate_evaluations = Vec::<TokenStream>::new();
@@ -190,7 +226,13 @@ impl StructItem {
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<String>>();
-                quote! { Err(#conf_context_ident.too_few_arguments_error(#struct_name, &[#(#id_list),*], &[#(#quoted_flattened_id_list),*])) }
+                quote! {
+                  Err(#conf_context_ident.too_few_arguments_error(
+                      #struct_name,
+                      &[#(#id_list),*],
+                      &[#(#quoted_flattened_id_list),*]
+                  ))
+                }
             };
 
             // Depending on ordering parameter, a count of > 1 is either okay or an error
@@ -199,7 +241,7 @@ impl StructItem {
             } else {
                 let quoted_flattened_id_and_value_source_list = flattened_list
                     .iter()
-                    .map(|ident| -> Result<TokenStream, syn::Error> {
+                    .map(|ident| -> Result<TokenStream, Error> {
                         let field_name = ident.to_string();
                         let get_value_source_expr =
                             fields_helper.make_get_value_source_expr(ident)?;
@@ -212,14 +254,22 @@ impl StructItem {
                 // fail and early return with ?, but this isn't really expected to happen.
                 // The functions that it is calling will all be failing earlier in the process if
                 // they fail at all.
+                //
+                // Early returning from this block may have unexpected consequences.
                 quote! {
                     {
-                        let flattened_ids_and_value_sources: Result<Vec<(&'static str, Option<(&str, ::conf::ConfValueSource::<&str>)>)>, ::conf::InnerError> =
+                        let flattened_ids_and_value_sources: Result<
+                            Vec<(&'static str, Option<(&str, ::conf::ConfValueSource::<&str>)>)>,
+                            ::conf::InnerError
+                         > =
                             (|| Ok(vec![#(#quoted_flattened_id_and_value_source_list),*]))();
-                        match flattened_ids_and_value_sources {
-                            Ok(flattened_ids_and_value_sources) => Err(#conf_context_ident.too_many_arguments_error(#struct_name, &[#(#id_list),*], flattened_ids_and_value_sources)),
-                            Err(err) => Err(err)
-                        }
+                        flattened_ids_and_value_sources.and_then(|ids_and_sources| {
+                            Err(#conf_context_ident.too_many_arguments_error(
+                                #struct_name,
+                                &[#(#id_list),*],
+                                ids_and_sources
+                            ))
+                        })
                     }
                 }
             };
@@ -241,10 +291,19 @@ impl StructItem {
         if let Some(user_validation_predicate) = self.validation_predicate.as_ref() {
             predicate_evaluations.push(quote! {
                 {
-                    fn __validation_predicate__(#instance: & #struct_ident) -> Result<(), impl ::core::fmt::Display> {
+                    fn __validation_predicate__(
+                      #instance: & #struct_ident
+                    ) -> Result<(), impl ::core::fmt::Display>
+                    {
                         #user_validation_predicate(#instance)
                     }
-                    __validation_predicate__(#instance).map_err(|err| ::conf::InnerError::validation(#struct_name, & #conf_context_ident .get_id_prefix(), err))
+                    __validation_predicate__(#instance).map_err(|err|
+                      ::conf::InnerError::validation(
+                        #struct_name,
+                        & #conf_context_ident .get_id_prefix(),
+                        err
+                      )
+                    )
                 }
             });
         }
@@ -256,7 +315,10 @@ impl StructItem {
             }
         } else {
             quote! {
-               let errors = [#(#predicate_evaluations),*].into_iter().filter_map(|result| result.err()).collect::<Vec<::conf::InnerError>>();
+               let errors = [#(#predicate_evaluations),*]
+                            .into_iter()
+                            .filter_map(|result| result.err())
+                            .collect::<Vec<::conf::InnerError>>();
                if errors.is_empty() {
                    Ok(())
                } else {
@@ -268,7 +330,8 @@ impl StructItem {
 }
 
 // struct which caches lookup from ident to FieldItem, and generates tokenstreams for checking if
-// these fields are present in the struct instance etc.
+// these fields are present in the struct instance etc. This is used in code-gen for the built-in
+// validation predicates.
 struct FieldsHelper<'a> {
     instance: &'a Ident,
     conf_context_ident: &'a Ident,
@@ -290,7 +353,7 @@ impl<'a> FieldsHelper<'a> {
         }
     }
 
-    pub fn get_field(&mut self, ident: &Ident) -> Result<&'a FieldItem, syn::Error> {
+    pub fn get_field(&mut self, ident: &Ident) -> Result<&'a FieldItem, Error> {
         let field_item = if let Some(val) = self.cache.get(ident) {
             val
         } else {
@@ -298,21 +361,25 @@ impl<'a> FieldsHelper<'a> {
                 .fields
                 .iter()
                 .find(|field| field.get_field_name() == ident)
-                .ok_or_else(|| syn::Error::new(ident.span(), "identifier not found in struct"))?;
+                .ok_or_else(|| Error::new(ident.span(), "identifier not found in struct"))?;
             self.cache.insert(ident.clone(), field);
             field
         };
         Ok(field_item)
     }
 
-    pub fn get_is_present_expr(&mut self, ident: &Ident) -> Result<TokenStream, syn::Error> {
+    pub fn get_is_present_expr(&mut self, ident: &Ident) -> Result<TokenStream, Error> {
         let field_item = self.get_field(ident)?;
         let field_type = field_item.get_field_type();
         let instance = &self.instance;
 
         if let FieldItem::Parameter(item) = field_item {
             if item.get_default_value().is_some() {
-                return Err(syn::Error::new(ident.span(), "using one_of_fields constraint with a field that has a default_value is invalid, since it will always be present."));
+                return Err(Error::new(
+                    ident.span(),
+                    "using one_of_fields constraint with a field \
+                        that has a default_value is invalid, since it will always be present.",
+                ));
             }
         };
 
@@ -323,7 +390,7 @@ impl<'a> FieldsHelper<'a> {
         } else if type_is_vec(&field_type)?.is_some() {
             quote! { !#instance.#ident.is_empty() }
         } else {
-            return Err(syn::Error::new(
+            return Err(Error::new(
                 ident.span(),
                 "field must be bool, Option<T>, or Vec<T> to use with one_of_fields constraint",
             ));
@@ -335,11 +402,11 @@ impl<'a> FieldsHelper<'a> {
     pub fn make_count_expr_for_field_list(
         &mut self,
         list: &List<Ident>,
-    ) -> Result<TokenStream, syn::Error> {
+    ) -> Result<TokenStream, Error> {
         let u32_exprs: Vec<TokenStream> = list
             .elements
             .iter()
-            .map(|ident| -> Result<TokenStream, syn::Error> {
+            .map(|ident| -> Result<TokenStream, Error> {
                 let bool_expr = self.get_is_present_expr(ident)?;
                 Ok(quote! { #bool_expr as u32 })
             })
@@ -352,7 +419,7 @@ impl<'a> FieldsHelper<'a> {
     pub fn split_single_options_and_flattened(
         &mut self,
         list: &List<Ident>,
-    ) -> Result<(Vec<String>, Vec<Ident>), syn::Error> {
+    ) -> Result<(Vec<String>, Vec<Ident>), Error> {
         let mut single_opts = Vec::<String>::new();
         let mut groups = Vec::<Ident>::new();
 
@@ -367,13 +434,13 @@ impl<'a> FieldsHelper<'a> {
         Ok((single_opts, groups))
     }
 
-    pub fn make_get_value_source_expr(&mut self, ident: &Ident) -> Result<TokenStream, syn::Error> {
+    pub fn make_get_value_source_expr(&mut self, ident: &Ident) -> Result<TokenStream, Error> {
         let field_item = self.get_field(ident)?;
         match field_item {
             FieldItem::Flatten(flatten_item) => {
                 Ok(flatten_item.any_program_options_appeared_expr(self.conf_context_ident)?)
             }
-            _ => Err(syn::Error::new(
+            _ => Err(Error::new(
                 ident.span(),
                 "field is not flattened, this is an internal error",
             )),

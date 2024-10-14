@@ -35,11 +35,38 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: . -> target
+        key: default-features
         save-if: ${{ github.ref == 'refs/heads/develop' }}
     - name: Build Rust
       run: cargo check --verbose --locked
     - name: Test Rust
       run: cargo test --all --verbose --locked
+    - name: Check dirty git
+      uses: ./.github/actions/check-dirty-git
+
+  # builds and tests rust code, with --no-default-features, with --deny warnings. tests for dirty git
+  build-and-test-rust-no-default-features:
+    runs-on: ubuntu-latest
+
+    env:
+      RUSTFLAGS: --deny warnings
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rustup update
+      run: rustup update
+    - name: Show cargo version
+      run: cargo --version
+    - name: rust build caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: . -> target
+        key: no-default-features
+        save-if: ${{ github.ref == 'refs/heads/develop' }}
+    - name: Build Rust
+      run: cargo check --no-default-features --verbose --locked
+    - name: Test Rust
+      run: cargo test --no-default-features --verbose --locked
     - name: Check dirty git
       uses: ./.github/actions/check-dirty-git
 

@@ -1,0 +1,7 @@
+# This file has intentional mistakes
+listen_addr = "0.0.0.0:81"
+db.retries = "xxx"
+
+[migrations]
+sql_file = "foo.sql"
+unexpected_arg = 4

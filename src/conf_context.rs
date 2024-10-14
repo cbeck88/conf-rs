@@ -13,6 +13,7 @@ where
 {
     Args,
     Env(S),
+    Document(S),
     Default,
 }
 
@@ -21,8 +22,13 @@ impl<'a> ConfValueSource<&'a str> {
         match self {
             Self::Args => ConfValueSource::Args,
             Self::Env(s) => ConfValueSource::Env(s.to_owned()),
+            Self::Document(s) => ConfValueSource::Document(s.to_owned()),
             Self::Default => ConfValueSource::Default,
         }
+    }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
     }
 }
 

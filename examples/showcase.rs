@@ -1,6 +1,6 @@
 use conf::Conf;
+use http::Uri as Url;
 use std::net::SocketAddr;
-use url::Url;
 
 /// Configuration for an http client
 #[derive(Conf, Debug)]

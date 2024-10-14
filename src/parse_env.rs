@@ -29,8 +29,8 @@ impl ParsedEnv {
 /// and store it in a searchable container.
 pub fn parse_env<K, V>(env_vars_os: impl IntoIterator<Item = (K, V)>) -> ParsedEnv
 where
-    K: Into<OsString> + Clone,
-    V: Into<OsString> + Clone,
+    K: Into<OsString>,
+    V: Into<OsString>,
 {
     // Drop any non-utf8 env keys, since there's no way the parser can read them anyways, since we
     // don't give the user a way to specify a non-utf8 env value that should be read.

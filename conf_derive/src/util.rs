@@ -1,11 +1,11 @@
 use heck::{ToKebabCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use std::fmt::Display;
+use std::{borrow::Borrow, fmt::Display};
 use syn::{
     bracketed, meta::ParseNestedMeta, parenthesized, parse::Parse, punctuated::Punctuated,
-    spanned::Spanned, Error, Expr, ExprLit, GenericArgument, Lit, LitChar, LitStr, Meta, Path,
-    PathArguments, Token, Type,
+    spanned::Spanned, Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Lifetime,
+    LifetimeParam, Lit, LitChar, LitStr, Meta, Path, PathArguments, Token, Type,
 };
 
 /// Helper for determining if a type is likely bool
@@ -169,7 +169,8 @@ pub fn set_once<T: GetSpan>(
 
 /// Helper for appending a doc string attribute to the description string, if it is a doc string
 /// attribute.
-// Based on code here: https://github.com/cyqsimon/documented/blob/e9a465c9e1666839ea08efbe9ce54480d7ee769f/documented-derive/src/lib.rs#L411
+// Based on code here:
+// https://github.com/cyqsimon/documented/blob/e9a465c9e1666839ea08efbe9ce54480d7ee769f/documented-derive/src/lib.rs#L411
 pub fn maybe_append_doc_string(
     description: &mut Option<String>,
     attr_meta: &Meta,
@@ -288,4 +289,26 @@ impl<T: Parse + ToTokens> GetSpan for List<T> {
     fn get_span(&self) -> Span {
         self.elements.span()
     }
+}
+
+/// Make a lifetime from a string
+pub fn make_lifetime(lt: impl AsRef<str>) -> Lifetime {
+    Lifetime::new(lt.as_ref(), Span::call_site())
+}
+
+/// Helper for adding new lifetime params to the beginning of a list of Generics
+pub fn prepend_generic_lifetimes<R: Borrow<Lifetime>>(
+    generics: &Generics,
+    lifetimes: impl AsRef<[R]>,
+) -> Generics {
+    let mut generics = generics.clone();
+
+    for lt in lifetimes.as_ref().iter().rev() {
+        generics.params.insert(
+            0,
+            GenericParam::Lifetime(LifetimeParam::new(lt.borrow().clone())),
+        );
+    }
+
+    generics
 }
