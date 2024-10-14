@@ -51,7 +51,7 @@ pub struct StructItem {
     pub env_prefix: Option<LitStr>,
     pub serde: Option<StructSerdeItem>,
     pub one_of_fields: Vec<(Ordering, List<Ident>)>,
-    pub validation_predicate: Option<Expr>,
+    pub validation_predicates: Vec<Expr>,
     pub doc_string: Option<String>,
 }
 
@@ -66,7 +66,7 @@ impl StructItem {
             env_prefix: None,
             serde: None,
             one_of_fields: Vec::default(),
-            validation_predicate: None,
+            validation_predicates: Vec::default(),
             doc_string: None,
         };
 
@@ -99,11 +99,10 @@ impl StructItem {
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(StructSerdeItem::new(meta)?))
                     } else if path.is_ident("validation_predicate") {
-                        set_once(
-                            &path,
-                            &mut result.validation_predicate,
-                            Some(parse_required_value::<Expr>(meta)?),
-                        )
+                        result
+                            .validation_predicates
+                            .push(parse_required_value::<Expr>(meta)?);
+                        Ok(())
                     } else if path.is_ident("one_of_fields") {
                         let idents: List<Ident> = meta.input.parse()?;
                         if idents.elements.len() < 2 {
@@ -288,7 +287,7 @@ impl StructItem {
         }
 
         // Apply user-provided validation predicate, if any
-        if let Some(user_validation_predicate) = self.validation_predicate.as_ref() {
+        for user_validation_predicate in self.validation_predicates.iter() {
             predicate_evaluations.push(quote! {
                 {
                     fn __validation_predicate__(
