@@ -697,6 +697,8 @@ works on that struct. Attributes that are not "top-level only" will still have a
    Creates a validation constraint that must be satisfied after parsing this struct succeeds, from a user-defined function.
    The function should have signature `fn(&T) -> Result<(), impl Display>`.
 
+   The `validation_prediate = ...` attribute is allowed to repeat multiple times, to set multiple validation prediates.
+
 
 [^1]: Actually, the *tokens* of the type are used, so e.g. it must be `bool` and not an alias for `bool`.
 
