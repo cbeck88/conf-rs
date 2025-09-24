@@ -4,7 +4,7 @@ use heck::{ToKebabCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
-use syn::{meta::ParseNestedMeta, spanned::Spanned, token, Error, Field, Ident, LitStr, Type};
+use syn::{Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, spanned::Spanned, token};
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
 pub struct FlattenSerdeItem {
@@ -285,8 +285,9 @@ impl FlattenItem {
         let inner_type: &Type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
         let type_name = quote! { inner_type }.to_string();
         let panic_message = format!(
-          "It is not supported to declare subcommands in a flattened structure '{type_name}', only \
-          at top level. (Needs design work around prefixing.)");
+            "It is not supported to declare subcommands in a flattened structure '{type_name}', only \
+          at top level. (Needs design work around prefixing.)"
+        );
 
         Ok(quote! {
             if !<#inner_type as conf::Conf>::get_subcommands(#parsed_env_ident)?.is_empty() {

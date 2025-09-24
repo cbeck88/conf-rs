@@ -103,7 +103,8 @@ impl GenSubcommandsEnum {
     #[allow(clippy::wrong_self_convention)]
     fn from_conf_context_impl(&self) -> Result<TokenStream, syn::Error> {
         let conf_context_ident = Ident::new("conf_context__", Span::call_site());
-        let variant_match_arms: Vec<TokenStream> = self.variants
+        let variant_match_arms: Vec<TokenStream> = self
+            .variants
             .iter()
             .map(|var| var.gen_from_conf_context_match_arm(&conf_context_ident))
             .collect::<Result<Vec<_>, syn::Error>>()?;
@@ -179,7 +180,12 @@ impl GenSubcommandsEnum {
             .variants
             .iter()
             .filter(|var| !var.get_serde_skip())
-            .map(|var| var.gen_from_conf_serde_context_match_arm(&conf_context_ident, &next_value_producer_ident))
+            .map(|var| {
+                var.gen_from_conf_serde_context_match_arm(
+                    &conf_context_ident,
+                    &next_value_producer_ident,
+                )
+            })
             .collect::<Result<Vec<_>, syn::Error>>()?;
 
         Ok(quote! {

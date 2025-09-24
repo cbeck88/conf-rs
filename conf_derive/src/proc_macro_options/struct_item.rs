@@ -3,7 +3,7 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{cmp::Ordering, collections::HashMap};
-use syn::{meta::ParseNestedMeta, token, Attribute, Error, Expr, Ident, LitStr};
+use syn::{Attribute, Error, Expr, Ident, LitStr, meta::ParseNestedMeta, token};
 
 /// #[conf(serde(...))] options listed on a struct which has `#[derive(Conf)]`
 pub struct StructSerdeItem {

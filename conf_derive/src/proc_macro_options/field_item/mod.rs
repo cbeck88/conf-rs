@@ -3,7 +3,7 @@ use crate::util::type_is_bool;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{punctuated::Punctuated, Error, Field, Ident, LitStr, Meta, Token, Type};
+use syn::{Error, Field, Ident, LitStr, Meta, Token, Type, punctuated::Punctuated};
 
 mod flag_item;
 mod flatten_item;

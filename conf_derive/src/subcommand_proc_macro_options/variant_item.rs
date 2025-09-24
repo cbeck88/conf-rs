@@ -3,8 +3,8 @@ use heck::{ToKebabCase, ToSnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    meta::ParseNestedMeta, spanned::Spanned, token, Error, Fields, FieldsUnnamed, Ident, LitStr,
-    Type, Variant,
+    Error, Fields, FieldsUnnamed, Ident, LitStr, Type, Variant, meta::ParseNestedMeta,
+    spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -65,25 +65,34 @@ impl VariantItem {
         let variant_name = variant.ident.clone();
 
         let (variant_type, is_optional_type) = match variant.fields {
-            Fields::Unit => { (None, None) },
+            Fields::Unit => (None, None),
             Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) => {
-                if unnamed.len() != 1 {
-                    return Err(Error::new(
-                        unnamed.span(),
-                        "Subcommands variant must contain zero or one unnamed fields which implement Conf",
-                    ));
+                match unnamed.len() {
+                    //0 => (None, None),
+                    1 => {
+                        let field = unnamed.first().unwrap();
+
+                        let variant_type = field.ty.clone();
+                        let is_optional_type = type_is_option(&variant_type)?;
+
+                        (Some(variant_type), is_optional_type)
+                    }
+                    n => {
+                        return Err(Error::new(
+                            unnamed.span(),
+                            format!(
+                                "Subcommands variant '{variant_name}' must contain zero or one unnamed fields which implement Conf, found {n}"
+                            ),
+                        ));
+                    }
                 }
-                let field = unnamed.first().unwrap();
-
-                let variant_type = field.ty.clone();
-                let is_optional_type = type_is_option(&variant_type)?;
-
-                (Some(variant_type), is_optional_type)
-            },
-            _ => {
+            }
+            Fields::Named(_) => {
                 return Err(Error::new(
                     variant.fields.span(),
-                    "Subcommands variant must contain zero or one unnamed fields which implement Conf",
+                    format!(
+                        "Subcommands variant '{variant_name}' must contain zero or one unnamed fields which implement Conf, found named fields"
+                    ),
                 ));
             }
         };
@@ -155,7 +164,10 @@ impl VariantItem {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
     }
 
-    pub fn gen_from_conf_context_match_arm(&self, conf_context_ident: &Ident) -> Result<TokenStream, Error> {
+    pub fn gen_from_conf_context_match_arm(
+        &self,
+        conf_context_ident: &Ident,
+    ) -> Result<TokenStream, Error> {
         let name = self.get_name();
         let command_name = self.get_command_name();
 
@@ -170,7 +182,11 @@ impl VariantItem {
         }
     }
 
-    pub fn gen_from_conf_serde_context_match_arm(&self, conf_context_ident: &Ident, next_value_producer_ident: &Ident) -> Result<TokenStream, Error> {
+    pub fn gen_from_conf_serde_context_match_arm(
+        &self,
+        conf_context_ident: &Ident,
+        next_value_producer_ident: &Ident,
+    ) -> Result<TokenStream, Error> {
         let name = self.get_name();
         let command_name = self.get_command_name();
 

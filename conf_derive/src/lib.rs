@@ -1,8 +1,8 @@
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
 use syn::{Data, DataEnum, DataStruct, Error, Fields};
+use syn::{DeriveInput, parse_macro_input};
 
 mod proc_macro_options;
 use proc_macro_options::GenConfStruct;

@@ -9,7 +9,7 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{parse_quote, Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Token, Type};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Token, Type, parse_quote};
 
 mod field_item;
 use field_item::FieldItem;

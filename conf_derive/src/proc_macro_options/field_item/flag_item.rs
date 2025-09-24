@@ -3,8 +3,8 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    meta::ParseNestedMeta, parse_quote, spanned::Spanned, token, Error, Field, Ident, LitChar,
-    LitStr, Type,
+    Error, Field, Ident, LitChar, LitStr, Type, meta::ParseNestedMeta, parse_quote,
+    spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flag kind

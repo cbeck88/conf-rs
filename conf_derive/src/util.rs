@@ -1,11 +1,11 @@
 use heck::{ToKebabCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use std::{borrow::Borrow, fmt::Display};
 use syn::{
-    bracketed, meta::ParseNestedMeta, parenthesized, parse::Parse, punctuated::Punctuated,
-    spanned::Spanned, Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Lifetime,
-    LifetimeParam, Lit, LitChar, LitStr, Meta, Path, PathArguments, Token, Type,
+    Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Lifetime, LifetimeParam, Lit,
+    LitChar, LitStr, Meta, Path, PathArguments, Token, Type, bracketed, meta::ParseNestedMeta,
+    parenthesized, parse::Parse, punctuated::Punctuated, spanned::Spanned,
 };
 
 /// Helper for determining if a type is likely bool
@@ -188,7 +188,7 @@ pub fn maybe_append_doc_string(
             return Err(Error::new(
                 other.span(),
                 "Doc comment is not a string literal",
-            ))
+            ));
         }
     };
 
