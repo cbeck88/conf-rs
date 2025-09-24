@@ -3,13 +3,14 @@ resolver = "2"
 members = [
   ".",
   "conf_derive",
+  "conf_extra",
 ]
 
 [workspace.package]
 repository = "https://github.com/cbeck88/conf-rs"
 license = "MIT OR Apache-2.0"
-edition = "2021"
-rust-version = "1.74"  # MSRV
+edition = "2024"
+rust-version = "1.85"  # MSRV
 include = [
   "src/**/*",
   "Cargo.toml",
@@ -22,7 +23,7 @@ include = [
 name = "conf"
 version = "0.1.1"
 description = "A derive-based config parser for CLI args, env, and structured config files"
-categories = ["configuration"]
+categories = ["command-line-interface"]
 keywords = [
   "argument",
   "config",
