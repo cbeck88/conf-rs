@@ -176,7 +176,7 @@ pub fn maybe_append_doc_string(
     attr_meta: &Meta,
 ) -> Result<(), Error> {
     let doc_expr = match attr_meta {
-        Meta::NameValue(ref name_value) if name_value.path.is_ident("doc") => &name_value.value,
+        Meta::NameValue(name_value) if name_value.path.is_ident("doc") => &name_value.value,
         _ => return Ok(()),
     };
 

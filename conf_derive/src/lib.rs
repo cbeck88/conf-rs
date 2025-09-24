@@ -29,9 +29,9 @@ fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
             fields: Fields::Named(fields),
             ..
         }) => {
-            let gen = GenConfStruct::new(ident, &input.attrs, fields)?;
-            let conf_impl = gen.gen_conf_impl(&input.generics)?;
-            let maybe_serde = gen.maybe_gen_conf_serde_impl(&input.generics)?;
+            let gener = GenConfStruct::new(ident, &input.attrs, fields)?;
+            let conf_impl = gener.gen_conf_impl(&input.generics)?;
+            let maybe_serde = gener.maybe_gen_conf_serde_impl(&input.generics)?;
 
             Ok(quote! {
                 #conf_impl
@@ -61,9 +61,9 @@ fn derive_subcommands(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
 
     match &input.data {
         Data::Enum(DataEnum { variants, .. }) => {
-            let gen = GenSubcommandsEnum::new(ident, &input.attrs, variants.into_iter())?;
-            let subcommands_impl = gen.gen_subcommands_impl(&input.generics)?;
-            let maybe_serde = gen.maybe_gen_subcommands_serde_impl(&input.generics)?;
+            let gener = GenSubcommandsEnum::new(ident, &input.attrs, variants.into_iter())?;
+            let subcommands_impl = gener.gen_subcommands_impl(&input.generics)?;
+            let maybe_serde = gener.maybe_gen_subcommands_serde_impl(&input.generics)?;
 
             Ok(quote! {
                 #subcommands_impl

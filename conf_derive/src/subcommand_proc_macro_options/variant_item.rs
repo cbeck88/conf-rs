@@ -53,8 +53,8 @@ impl GetSpan for VariantSerdeItem {
 /// Proc macro annotations parsed from a variant within a Subcommands enum
 pub struct VariantItem {
     variant_name: Ident,
-    variant_type: Type,
-    is_optional_type: Option<Type>,
+    variant_type: Option<Type>, // None when we have a unit variant, Some otherwise
+    is_optional_type: Option<Type>, // Some when we have a single unnamed field which is Option<T>
     command_name: LitStr,
     serde: Option<VariantSerdeItem>,
     doc_string: Option<String>,
@@ -62,23 +62,31 @@ pub struct VariantItem {
 
 impl VariantItem {
     pub fn new(variant: &Variant, _enum_ident: &Ident) -> Result<Self, Error> {
-        let Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) = variant.fields else {
-            return Err(Error::new(
-                variant.fields.span(),
-                "Subcommands variant must contain a single unnamed field which implements Conf",
-            ));
-        };
-        if unnamed.len() != 1 {
-            return Err(Error::new(
-                unnamed.span(),
-                "Subcommands variant must contain a single unnamed field which implements Conf",
-            ));
-        }
-        let field = unnamed.first().unwrap();
-
         let variant_name = variant.ident.clone();
-        let variant_type = field.ty.clone();
-        let is_optional_type = type_is_option(&variant_type)?;
+
+        let (variant_type, is_optional_type) = match variant.fields {
+            Fields::Unit => { (None, None) },
+            Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) => {
+                if unnamed.len() != 1 {
+                    return Err(Error::new(
+                        unnamed.span(),
+                        "Subcommands variant must contain zero or one unnamed fields which implement Conf",
+                    ));
+                }
+                let field = unnamed.first().unwrap();
+
+                let variant_type = field.ty.clone();
+                let is_optional_type = type_is_option(&variant_type)?;
+
+                (Some(variant_type), is_optional_type)
+            },
+            _ => {
+                return Err(Error::new(
+                    variant.fields.span(),
+                    "Subcommands variant must contain zero or one unnamed fields which implement Conf",
+                ));
+            }
+        };
 
         let mut result = Self {
             command_name: LitStr::new(
@@ -131,10 +139,6 @@ impl VariantItem {
         &self.command_name
     }
 
-    pub fn get_type(&self) -> Type {
-        self.variant_type.clone()
-    }
-
     pub fn get_serde_name(&self) -> LitStr {
         self.serde
             .as_ref()
@@ -151,19 +155,72 @@ impl VariantItem {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
     }
 
+    pub fn gen_from_conf_context_match_arm(&self, conf_context_ident: &Ident) -> Result<TokenStream, Error> {
+        let name = self.get_name();
+        let command_name = self.get_command_name();
+
+        if let Some(ty) = self.variant_type.as_ref() {
+            Ok(quote! {
+                #command_name => Ok(Self::#name(<#ty as Conf>::from_conf_context(#conf_context_ident)?))
+            })
+        } else {
+            Ok(quote! {
+                #command_name => Ok(Self::#name)
+            })
+        }
+    }
+
+    pub fn gen_from_conf_serde_context_match_arm(&self, conf_context_ident: &Ident, next_value_producer_ident: &Ident) -> Result<TokenStream, Error> {
+        let name = self.get_name();
+        let command_name = self.get_command_name();
+
+        if self.get_serde_skip() {
+            Ok(quote! {})
+        } else if let Some(ty) = self.variant_type.as_ref() {
+            let serde_name = self.get_serde_name();
+            Ok(quote! {
+                #command_name => {
+                  let document_name = #conf_context_ident.document_name;
+                  let seed = <#ty as ConfSerde>::Seed::from(ctxt);
+                  Ok(Self::#name(#next_value_producer_ident.next_value_seed(seed).map_err(|err| {
+                   vec![InnerError::serde(
+                     document_name,
+                     #serde_name,
+                     err
+                   )]
+                  })??))
+                }
+            })
+        } else {
+            Ok(quote! {
+                #command_name => Ok(Self::#name)
+            })
+        }
+    }
+
     pub fn gen_push_parsers(
         &self,
         parsers_ident: &Ident,
         parsed_env_ident: &Ident,
     ) -> Result<TokenStream, Error> {
-        let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.variant_type);
         let command_name = &self.command_name;
 
-        Ok(quote! {
-          #parsers_ident.push(
-            <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident)?
-              .rename(#command_name)
-          );
-        })
+        if let Some(ty) = self.variant_type.as_ref() {
+            let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
+
+            Ok(quote! {
+              #parsers_ident.push(
+                <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident)?
+                  .rename(#command_name)
+              );
+            })
+        } else {
+            Ok(quote! {
+              #parsers_ident.push(
+                ::conf::Parser::new(::conf::ParserConfig::default(), &[], &[], #parsed_env_ident)?
+                  .rename(#command_name)
+              );
+            })
+        }
     }
 }

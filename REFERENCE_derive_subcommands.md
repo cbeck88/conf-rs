@@ -33,10 +33,13 @@ pub enum MySubcommands {
     // This is also a variant-level attribute
     #[conf(name = "validate")]
     RunValidation(ValidateConfig),
+    // This is also a variant-level attribute
+    #[conf(name = "stat")]
+    Stat,
 }
 ```
 
-Each enum variant must have one unnamed field, which is a `struct` type which implements [`Conf`] [^compat-note-1].
+Each enum variant must have zero or one unnamed fields, which if present is a `struct` type which implements [`Conf`] [^compat-note-1].
 
 ## Enum-level attributes
 

@@ -102,22 +102,16 @@ impl GenSubcommandsEnum {
     /// Generate Subcommands::from_conf_context implementation
     #[allow(clippy::wrong_self_convention)]
     fn from_conf_context_impl(&self) -> Result<TokenStream, syn::Error> {
+        let conf_context_ident = Ident::new("conf_context__", Span::call_site());
         let variant_match_arms: Vec<TokenStream> = self.variants
             .iter()
-            .map(|var| {
-                let name = var.get_name();
-                let command_name = var.get_command_name();
-                let ty = var.get_type();
-                quote! {
-                    #command_name => Ok(Self::#name(<#ty as Conf>::from_conf_context(conf_context)?))
-                }
-            })
-            .collect();
+            .map(|var| var.gen_from_conf_context_match_arm(&conf_context_ident))
+            .collect::<Result<Vec<_>, syn::Error>>()?;
 
         Ok(quote! {
           fn from_conf_context(
             command_name: String,
-            conf_context: ::conf::ConfContext<'_>
+            #conf_context_ident: ::conf::ConfContext<'_>
           ) -> Result<Self, Vec<::conf::InnerError>> {
             match command_name.as_str() {
               #(#variant_match_arms,)*
@@ -178,37 +172,20 @@ impl GenSubcommandsEnum {
     }
 
     fn gen_from_conf_serde_context(&self) -> Result<TokenStream, syn::Error> {
+        let conf_context_ident = Ident::new("ctxt", Span::call_site());
         let next_value_producer_ident = Ident::new("__next_value_producer__", Span::call_site());
 
         let variant_match_arms: Vec<TokenStream> = self
             .variants
             .iter()
             .filter(|var| !var.get_serde_skip())
-            .map(|var| {
-                let name = var.get_name();
-                let command_name = var.get_command_name();
-                let serde_name = var.get_serde_name();
-                let ty = var.get_type();
-                quote! {
-                    #command_name => {
-                      let document_name = ctxt.document_name;
-                      let seed = <#ty as ConfSerde>::Seed::from(ctxt);
-                      Ok(Self::#name(#next_value_producer_ident.next_value_seed(seed).map_err(|err| {
-                       vec![InnerError::serde(
-                         document_name,
-                         #serde_name,
-                         err
-                       )]
-                      })??))
-                    }
-                }
-            })
-            .collect();
+            .map(|var| var.gen_from_conf_serde_context_match_arm(&conf_context_ident, &next_value_producer_ident))
+            .collect::<Result<Vec<_>, syn::Error>>()?;
 
         Ok(quote! {
             fn from_conf_serde_context<'de, NVP>(
                command_name: &str,
-               ctxt: ::conf::ConfSerdeContext,
+               #conf_context_ident: ::conf::ConfSerdeContext,
                #next_value_producer_ident: NVP
             ) -> Result<Self, Vec<::conf::InnerError>>
                where NVP: ::conf::NextValueProducer<'de>
