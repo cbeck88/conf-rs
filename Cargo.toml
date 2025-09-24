@@ -21,7 +21,7 @@ include = [
 
 [package]
 name = "conf"
-version = "0.1.1"
+version = "0.1.2"
 description = "A derive-based config parser for CLI args, env, and structured config files"
 categories = ["command-line-interface"]
 keywords = [
