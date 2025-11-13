@@ -217,19 +217,23 @@ impl<'a> ConfContext<'a> {
                 )
             });
 
-        if let Some(val) = self.args.arg_matches.get_many::<String>(&id) {
-            let value_source = self
-                .args
-                .arg_matches
-                .value_source(&id)
-                .expect("Id not found, this is an internal error");
-            // Note: We don't support user-defined default value on this one right now, and we don't
-            // give default values to clap so this should be the only possibility
-            assert_eq!(value_source, ValueSource::CommandLine);
+        // Only try to access arg_matches if this option has a short or long form.
+        // Options with only env (no short/long) are not registered with clap.
+        if opt.short_form.is_some() || opt.long_form.is_some() {
+            if let Some(val) = self.args.arg_matches.get_many::<String>(&id) {
+                let value_source = self
+                    .args
+                    .arg_matches
+                    .value_source(&id)
+                    .expect("Id not found, this is an internal error");
+                // Note: We don't support user-defined default value on this one right now, and we don't
+                // give default values to clap so this should be the only possibility
+                assert_eq!(value_source, ValueSource::CommandLine);
 
-            let results: Vec<&'a str> = val.map(String::as_str).collect();
+                let results: Vec<&'a str> = val.map(String::as_str).collect();
 
-            return Ok((value_source.into(), results, opt));
+                return Ok((value_source.into(), results, opt));
+            }
         }
 
         if let Some(env_form) = opt.env_form.as_deref() {
