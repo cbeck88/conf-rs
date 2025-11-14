@@ -255,7 +255,10 @@ impl<'a> Parser<'a> {
     ) -> Result<MaybeArg, Error> {
         // Handle positional arguments
         if option.is_positional {
-            debug_assert!(matches!(option.parse_type, ParseType::Parameter | ParseType::Repeat));
+            debug_assert!(matches!(
+                option.parse_type,
+                ParseType::Parameter | ParseType::Repeat
+            ));
             debug_assert!(option.short_form.is_none());
             debug_assert!(option.long_form.is_none());
             debug_assert!(positional_index.is_some());

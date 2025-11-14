@@ -32,24 +32,22 @@ struct RepeatPositionalOptional {
 #[test]
 fn test_single_repeat_positional() {
     // Test with no arguments
-    let result = SingleRepeatPositional::try_parse_from::<&str, &str, &str>(
-        vec!["."],
-        vec![],
-    ).unwrap();
+    let result =
+        SingleRepeatPositional::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).unwrap();
     assert_eq!(result.files.len(), 0);
 
     // Test with one argument
-    let result = SingleRepeatPositional::try_parse_from::<&str, &str, &str>(
-        vec![".", "file1.txt"],
-        vec![],
-    ).unwrap();
+    let result =
+        SingleRepeatPositional::try_parse_from::<&str, &str, &str>(vec![".", "file1.txt"], vec![])
+            .unwrap();
     assert_eq!(result.files, vec!["file1.txt"]);
 
     // Test with multiple arguments
     let result = SingleRepeatPositional::try_parse_from::<&str, &str, &str>(
         vec![".", "file1.txt", "file2.txt", "file3.txt"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.files, vec!["file1.txt", "file2.txt", "file3.txt"]);
 }
 
@@ -59,7 +57,8 @@ fn test_repeat_positional_with_regular_positional() {
     let result = RepeatPositionalWithRegularPositional::try_parse_from::<&str, &str, &str>(
         vec![".", "echo"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.command, "echo");
     assert_eq!(result.args.len(), 0);
 
@@ -67,7 +66,8 @@ fn test_repeat_positional_with_regular_positional() {
     let result = RepeatPositionalWithRegularPositional::try_parse_from::<&str, &str, &str>(
         vec![".", "echo", "hello"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.command, "echo");
     assert_eq!(result.args, vec!["hello"]);
 
@@ -75,7 +75,8 @@ fn test_repeat_positional_with_regular_positional() {
     let result = RepeatPositionalWithRegularPositional::try_parse_from::<&str, &str, &str>(
         vec![".", "ls", "-l", "-a", "/tmp"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.command, "ls");
     assert_eq!(result.args, vec!["-l", "-a", "/tmp"]);
 }
@@ -83,10 +84,8 @@ fn test_repeat_positional_with_regular_positional() {
 #[test]
 fn test_repeat_positional_with_optional_positional() {
     // Test with no output, no inputs
-    let result = RepeatPositionalOptional::try_parse_from::<&str, &str, &str>(
-        vec!["."],
-        vec![],
-    ).unwrap();
+    let result =
+        RepeatPositionalOptional::try_parse_from::<&str, &str, &str>(vec!["."], vec![]).unwrap();
     assert_eq!(result.output, None);
     assert_eq!(result.inputs.len(), 0);
 
@@ -94,7 +93,8 @@ fn test_repeat_positional_with_optional_positional() {
     let result = RepeatPositionalOptional::try_parse_from::<&str, &str, &str>(
         vec![".", "output.txt"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.output, Some("output.txt".to_string()));
     assert_eq!(result.inputs.len(), 0);
 
@@ -102,7 +102,8 @@ fn test_repeat_positional_with_optional_positional() {
     let result = RepeatPositionalOptional::try_parse_from::<&str, &str, &str>(
         vec![".", "output.txt", "input1.txt"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.output, Some("output.txt".to_string()));
     assert_eq!(result.inputs, vec!["input1.txt"]);
 
@@ -110,7 +111,8 @@ fn test_repeat_positional_with_optional_positional() {
     let result = RepeatPositionalOptional::try_parse_from::<&str, &str, &str>(
         vec![".", "output.txt", "input1.txt", "input2.txt"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.output, Some("output.txt".to_string()));
     assert_eq!(result.inputs, vec!["input1.txt", "input2.txt"]);
 }
@@ -128,14 +130,16 @@ fn test_repeat_positional_with_env() {
     let result = RepeatPositionalWithEnv::try_parse_from::<&str, &str, &str>(
         vec!["."],
         vec![("FILES", "file1.txt,file2.txt")],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.files, vec!["file1.txt", "file2.txt"]);
 
     // Test with positional args (should override env)
     let result = RepeatPositionalWithEnv::try_parse_from::<&str, &str, &str>(
         vec![".", "override1.txt", "override2.txt"],
         vec![("FILES", "file1.txt,file2.txt")],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.files, vec!["override1.txt", "override2.txt"]);
 }
 
@@ -152,13 +156,15 @@ fn test_repeat_positional_with_value_parser() {
     let result = RepeatPositionalWithValueParser::try_parse_from::<&str, &str, &str>(
         vec![".", "1", "2", "3", "42"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.numbers, vec![1, 2, 3, 42]);
 
     // Test with negative numbers (allow_hyphen_values should be automatic for signed types)
     let result = RepeatPositionalWithValueParser::try_parse_from::<&str, &str, &str>(
         vec![".", "-5", "10", "-15"],
         vec![],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(result.numbers, vec![-5, 10, -15]);
 }
