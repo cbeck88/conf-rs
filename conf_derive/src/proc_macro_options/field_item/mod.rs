@@ -18,6 +18,7 @@ use repeat_item::RepeatItem;
 use subcommands_item::SubcommandsItem;
 
 /// #[conf(...)] options listed in a field of a struct which has `#[derive(Conf)]`
+#[allow(clippy::large_enum_variant)]
 pub enum FieldItem {
     Flag(FlagItem),
     Parameter(ParameterItem),
