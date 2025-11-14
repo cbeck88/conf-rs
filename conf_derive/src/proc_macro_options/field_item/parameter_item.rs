@@ -71,6 +71,7 @@ pub struct ParameterItem {
     value_parser: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
     doc_string: Option<String>,
+    is_positional: bool,
 }
 
 impl ParameterItem {
@@ -99,6 +100,7 @@ impl ParameterItem {
             value_parser: None,
             serde: None,
             doc_string: None,
+            is_positional: false,
         };
 
         for attr in &field.attrs {
@@ -168,10 +170,29 @@ impl ParameterItem {
                             &mut result.serde,
                             Some(ParameterSerdeItem::new(meta)?),
                         )
+                    } else if path.is_ident("pos") {
+                        result.is_positional = true;
+                        Ok(())
                     } else {
                         Err(meta.error("unrecognized conf parameter option"))
                     }
                 })?;
+            }
+        }
+
+        // Validate positional argument constraints
+        if result.is_positional {
+            if result.short_switch.is_some() {
+                return Err(Error::new(
+                    field.span(),
+                    "#[conf(pos)] cannot be used with #[conf(short)]",
+                ));
+            }
+            if result.long_switch.is_some() {
+                return Err(Error::new(
+                    field.span(),
+                    "#[conf(pos)] cannot be used with #[conf(long)]",
+                ));
             }
         }
 
@@ -180,13 +201,14 @@ impl ParameterItem {
             && result.long_switch.is_none()
             && result.env_name.is_none()
             && result.default_value.is_none()
+            && !result.is_positional
             && struct_item.serde.is_none()
         {
             return Err(Error::new(
                 field.span(),
                 "There is no way for the user to give this parameter a value. \
-                Trying using #[arg(short)], #[arg(long)], or #[arg(env)] to specify a switch \
-                or an env associated to this value, or specify a default value.",
+                Trying using #[arg(short)], #[arg(long)], #[arg(env)], or #[arg(pos)] to specify a switch, \
+                positional argument, or an env associated to this value, or specify a default value.",
             ));
         }
 
@@ -276,6 +298,7 @@ impl ParameterItem {
         let default_value = quote_opt_into(&self.default_value);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
+        let is_positional = self.is_positional;
 
         Ok(quote! {
             #program_options_ident.push(::conf::ProgramOption {
@@ -291,6 +314,7 @@ impl ParameterItem {
                 is_required: #is_required,
                 allow_hyphen_values: #allow_hyphen_values,
                 secret: #secret,
+                is_positional: #is_positional,
             });
         })
     }

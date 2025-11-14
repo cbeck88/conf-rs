@@ -21,6 +21,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
   * [Parameter](#parameter)
     * [short](#parameter-short)
     * [long](#parameter-long)
+    * [pos](#parameter-pos)
     * [env](#parameter-env)
     * [aliases](#parameter-aliases)
     * [env_aliases](#parameter-env-aliases)
@@ -237,6 +238,81 @@ A parameter represents a single value that can be parsed from a string.
    example command-line: `./my_prog --param foo` or `./my_prog --param=foo` sets the parameter using the string value `foo`
 
    *Note*: This behavior is the same as in `clap-derive`.
+
+*  <a name="parameter-pos"></a> `pos` (no arguments)
+
+   Specifies that this parameter is a positional argument.
+   Positional arguments are identified by their position in the command line, not by a flag name.
+   The order of positional arguments is determined by the order of fields in the struct.
+
+   example: `#[arg(pos)]`
+
+   example command-line: `./my_prog input.txt output.txt` where the first positional is assigned to the first `pos` field, the second to the second `pos` field, etc.
+
+   **Positional argument filling**:
+   - Positional arguments are filled left-to-right based on their declaration order in the struct
+   - You cannot skip a positional argument to provide a later one
+   - If you have multiple optional positionals and provide fewer arguments, they fill from left to right
+
+   **Optional positionals**:
+   - A positional parameter can be optional by using `Option<T>` as the field type
+   - All optional positional arguments must come after all required positional arguments
+   - The parser will panic at construction time if a required positional follows an optional positional
+
+   **Compatibility**:
+   - `pos` is mutually exclusive with `short` and `long` (you cannot have a positional argument with flag names)
+   - `pos` is compatible with `env` (the value can be provided via environment variable or positional argument)
+   - `pos` is supported in regular `flatten` and in subcommands
+   - `pos` is NOT supported in `flatten` with `Option<T>` (flatten optional) - this will produce an error
+
+   **Examples**:
+
+   Valid configuration:
+   ```rust
+   #[derive(Conf)]
+   struct MyConfig {
+       /// Input file (required positional)
+       #[conf(pos)]
+       input: String,
+
+       /// Output file (required positional)
+       #[conf(pos)]
+       output: String,
+
+       /// Optional log file (optional positional - OK because it's at the end)
+       #[conf(pos)]
+       log_file: Option<String>,
+   }
+   ```
+
+   Command-line usage: `./my_prog input.txt output.txt` or `./my_prog input.txt output.txt debug.log`
+
+   Invalid configuration (will panic):
+   ```rust
+   #[derive(Conf)]
+   struct BadConfig {
+       #[conf(pos)]
+       first: String,
+
+       #[conf(pos)]
+       second: Option<String>,  // optional
+
+       #[conf(pos)]
+       third: String,  // ERROR: required after optional!
+   }
+   ```
+
+   Positional with environment variable fallback:
+   ```rust
+   #[derive(Conf)]
+   struct MyConfig {
+       /// Can be provided as first positional arg or via INPUT env var
+       #[conf(pos, env)]
+       input: String,
+   }
+   ```
+
+   Command-line usage: `./my_prog input.txt` or `INPUT=input.txt ./my_prog`
 
 *  <a name="parameter-env"></a> `env` (optional string argument)
 

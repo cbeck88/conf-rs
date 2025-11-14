@@ -1,5 +1,5 @@
 use crate::{ConfValueSource, FlattenedOptionalDebugInfo, ProgramOption};
-use clap::{builder::Styles, error::ErrorKind, Command, Error as ClapError};
+use clap::{Command, Error as ClapError, builder::Styles, error::ErrorKind};
 use std::{ffi::OsString, fmt, fmt::Write};
 
 /// An error which occurs when a `Conf::parse` function is called.
@@ -42,8 +42,23 @@ impl Error {
         field_name: &'static str,
         field_type_name: &'static str,
     ) -> Self {
-        let buf = format!("Internal error (invalid skip short)\n  When flattening {field_type_name} at {field_name}, these short options were not found: {not_found_chars:?}\n  To fix this error, remove them from the skip_short attribute list.");
+        let buf = format!(
+            "Internal error (invalid skip short)\n  When flattening {field_type_name} at {field_name}, these short options were not found: {not_found_chars:?}\n  To fix this error, remove them from the skip_short attribute list."
+        );
         ClapError::raw(ErrorKind::UnknownArgument, buf).into()
+    }
+
+    // An error reported when positional arguments are used in flatten optional
+    #[doc(hidden)]
+    pub fn positional_in_flatten_optional(
+        field_name: &str,
+        field_type_name: &str,
+        option_id: &str,
+    ) -> Self {
+        let buf = format!(
+            "Cannot use flatten optional with struct '{field_type_name}' at field '{field_name}' because it contains positional argument '{option_id}'. Positional arguments are not supported in flatten optional structs (but are supported in regular flatten)."
+        );
+        ClapError::raw(ErrorKind::ArgumentConflict, buf).into()
     }
 }
 
@@ -378,7 +393,10 @@ impl InnerError {
                     instance_id_prefix.insert_str(0, " @ .");
                     remove_trailing_dot(&mut instance_id_prefix);
                 }
-                writeln!(stream, "  One of these must be provided: (constraint on {struct_name}{instance_id_prefix}): ")?;
+                writeln!(
+                    stream,
+                    "  One of these must be provided: (constraint on {struct_name}{instance_id_prefix}): "
+                )?;
                 for opt in single_opts {
                     write!(stream, "  ")?;
                     print_opt_requirements(stream, opt, "")?;
@@ -402,7 +420,10 @@ impl InnerError {
                     instance_id_prefix.insert_str(0, " @ .");
                     remove_trailing_dot(&mut instance_id_prefix);
                 }
-                writeln!(stream, "  Too many arguments, provide at most one of these: (constraint on {struct_name}{instance_id_prefix}): ")?;
+                writeln!(
+                    stream,
+                    "  Too many arguments, provide at most one of these: (constraint on {struct_name}{instance_id_prefix}): "
+                )?;
                 for (opt, source) in single_opts {
                     let provided_opt = render_provided_opt(opt, source);
                     writeln!(stream, "    {provided_opt}")?;
@@ -474,6 +495,23 @@ fn print_opt_requirements(
     opt: &ProgramOption,
     trailing_text: &str,
 ) -> fmt::Result {
+    // Handle positional arguments
+    if opt.is_positional {
+        let pos_name = format!("<{}>", opt.id);
+        match opt.env_form.as_deref() {
+            Some(name) => {
+                let trailing_text = if trailing_text.is_empty() {
+                    "".to_owned()
+                } else {
+                    ", ".to_owned() + trailing_text
+                };
+                writeln!(stream, "  env '{name}', or '{pos_name}'{trailing_text}")?
+            }
+            None => writeln!(stream, "  '{pos_name}' {trailing_text}")?,
+        }
+        return Ok(());
+    }
+
     let maybe_switch = render_help_switch(opt);
     match (maybe_switch, opt.env_form.as_deref()) {
         (Some(switch), Some(name)) => {
@@ -487,7 +525,10 @@ fn print_opt_requirements(
         (Some(switch), None) => writeln!(stream, "  '{switch}' {trailing_text}")?,
         (None, Some(name)) => writeln!(stream, "  env '{name}' {trailing_text}")?,
         (None, None) => {
-            debug_assert!(false, "This should be unreachable, we should not be printing opt requirements for an option with no way to specify it");
+            debug_assert!(
+                false,
+                "This should be unreachable, we should not be printing opt requirements for an option with no way to specify it"
+            );
             writeln!(
                 stream,
                 "  There is no way to provide this value, this is an internal error ({id})",

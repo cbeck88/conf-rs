@@ -381,7 +381,12 @@ fn test_service_config_program_options() {
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."));
+    assert_eq!(
+        opt.description.as_deref(),
+        Some(
+            "This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."
+        )
+    );
 
     assert_matches!(iter.next(), None);
 }
@@ -626,7 +631,12 @@ fn frob_config_program_options() {
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."));
+    assert_eq!(
+        opt.description.as_deref(),
+        Some(
+            "This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."
+        )
+    );
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Repeat);
@@ -662,7 +672,12 @@ fn frob_config_program_options() {
     );
     assert_eq!(opt.default_value.as_deref(), Some("1000"));
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"));
+    assert_eq!(
+        opt.description.as_deref(),
+        Some(
+            "Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"
+        )
+    );
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);
@@ -973,7 +988,12 @@ fn frob_config2_program_options() {
     assert_eq!(opt.env_form.as_deref(), None);
     assert_eq!(opt.default_value.as_deref(), None);
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."));
+    assert_eq!(
+        opt.description.as_deref(),
+        Some(
+            "This is a very important option which must be used very, very carefully.\nI literally could write an entire book about this option and it's proper use.\nIn fact I'm essentially doing that right now.\n\nI really hope to god that someone actually reads all this and that by\nthe time all this text is displayed to the operator via the CLI --help,\nit has not been hopelessly mangled."
+        )
+    );
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Repeat);
@@ -1009,7 +1029,12 @@ fn frob_config2_program_options() {
     );
     assert_eq!(opt.default_value.as_deref(), Some("1000"));
     assert!(!opt.is_required);
-    assert_eq!(opt.description.as_deref(), Some("Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"));
+    assert_eq!(
+        opt.description.as_deref(),
+        Some(
+            "Peering:\nIf a peer's badness score exceeds this limit, the peer is automatically disconnected\nThis will lead to an alert and we will not reconnect to the peer until an administrator\nauthorizes blah blah blah"
+        )
+    );
 
     let opt = iter.next().unwrap();
     assert_eq!(opt.parse_type, ParseType::Parameter);

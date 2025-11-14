@@ -1,5 +1,5 @@
 mod common;
-use common::{assert_multiline_eq, Example};
+use common::{Example, assert_multiline_eq};
 use std::str::from_utf8;
 
 struct ShowcaseExample {}

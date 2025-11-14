@@ -245,10 +245,29 @@ impl FlattenItem {
 
         // The initializer simply gets all program options, modifies as needed,
         // and then checks for a skip-short error.
+        let positional_check = if self.is_optional_type.is_some() {
+            quote! {
+              // Check for positional args in flatten optional
+              for opt in __inner_options__ {
+                  if opt.is_positional {
+                      return Err(::conf::Error::positional_in_flatten_optional(
+                          #field_name,
+                          <#inner_type as ::conf::Conf>::get_name(),
+                          &opt.id
+                      ));
+                  }
+              }
+            }
+        } else {
+            quote! {}
+        };
+
         let push_expr = quote! {
           let mut #was_skipped_ident = [false; #skip_short_len];
+          let __inner_options__ = <#inner_type as ::conf::Conf>::get_program_options()?;
+          #positional_check
           #program_options_ident.extend(
-            <#inner_type as ::conf::Conf>::get_program_options()?.iter().cloned().map(
+            __inner_options__.iter().cloned().map(
               |program_option|
                 program_option
                   #modify_program_option

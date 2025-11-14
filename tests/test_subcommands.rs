@@ -335,11 +335,7 @@ fn test_nested_subcommands() {
     };
     assert_eq!(r.times, 9);
 
-    let result = DConfig::try_parse_from::<&str, &str, &str>(
-        vec![".", "stat"],
-        vec![],
-    )
-    .unwrap();
+    let result = DConfig::try_parse_from::<&str, &str, &str>(vec![".", "stat"], vec![]).unwrap();
     assert!(!result.x);
     let DCommand::Stat = result.command else {
         panic!("Unexpected enum value")

@@ -1,8 +1,8 @@
 use conf::Conf;
 use figment::{
+    Figment,
     providers::{Format, Json, Toml},
     value::Value,
-    Figment,
 };
 use std::env;
 

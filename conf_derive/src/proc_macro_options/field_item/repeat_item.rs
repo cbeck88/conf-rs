@@ -293,6 +293,7 @@ impl RepeatItem {
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
               secret: #secret,
+              is_positional: false,
             });
         })
     }

@@ -35,7 +35,9 @@ pub fn assert_multiline_eq(left: &str, right: &str, file: &str, line: u32, col: 
             .enumerate()
             .find(|(_idx, (left_char, right_char))| left_char != right_char)
         {
-            eprintln!("First difference at index = {index}, left_char {left_char:?} != right_char {right_char:?}\n");
+            eprintln!(
+                "First difference at index = {index}, left_char {left_char:?} != right_char {right_char:?}\n"
+            );
             index
         } else {
             eprintln!("One string ends early");
@@ -101,7 +103,9 @@ pub fn assert_error_contains_text<T: core::fmt::Debug>(
             let err_text = e.to_string();
             for substr in right {
                 if !err_text.contains(substr) {
-                    eprintln!("Assertion failed: error does not contain expected text at {file}:{line}:{col}");
+                    eprintln!(
+                        "Assertion failed: error does not contain expected text at {file}:{line}:{col}"
+                    );
                     eprintln!("Error text:");
                     eprintln!("{err_text}");
                     eprintln!("Expected substring:");
@@ -129,7 +133,9 @@ pub fn assert_error_contains_text_and_not_other_text<T: core::fmt::Debug>(
             let err_text = e.to_string();
             for substr in yes {
                 if !err_text.contains(substr) {
-                    eprintln!("Assertion failed: error does not contain expected text at {file}:{line}:{col}");
+                    eprintln!(
+                        "Assertion failed: error does not contain expected text at {file}:{line}:{col}"
+                    );
                     eprintln!("Error text:");
                     eprintln!("{err_text}");
                     eprintln!("Expected substring:");

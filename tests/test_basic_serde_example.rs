@@ -1,7 +1,7 @@
 #![cfg(feature = "serde")]
 
 mod common;
-use common::{assert_multiline_eq, examples_dir, Example};
+use common::{Example, assert_multiline_eq, examples_dir};
 use std::str::from_utf8;
 
 struct SerdeBasicExample {}

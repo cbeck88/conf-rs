@@ -59,6 +59,8 @@ pub struct ProgramOption {
     pub allow_hyphen_values: bool,
     /// If set, then the user has specified that this is (or is not) a secret value, explicitly.
     pub secret: Option<bool>,
+    /// Whether this is a positional argument (has no short/long form, accepts value by position)
+    pub is_positional: bool,
 }
 
 impl ProgramOption {
@@ -86,6 +88,7 @@ impl ProgramOption {
             is_required,
             allow_hyphen_values,
             secret,
+            is_positional,
         } = self;
 
         id.to_mut().insert_str(0, id_prefix);
@@ -151,6 +154,7 @@ impl ProgramOption {
             is_required,
             allow_hyphen_values,
             secret,
+            is_positional,
         }
     }
 

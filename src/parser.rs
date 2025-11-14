@@ -109,8 +109,32 @@ impl<'a> Parser<'a> {
         let mut args = Vec::<Arg>::new();
         let mut env_only_help_text = Vec::<String>::new();
 
+        // Collect positional args and assign indices
+        let mut positional_index = 1usize;
+        let mut positional_indices = HashMap::new();
+        let mut last_optional_positional: Option<&str> = None;
         for opt in options.iter() {
-            match Self::make_arg(&parser_config, env, opt)? {
+            if opt.is_positional {
+                // Validate: optional positionals can only appear at the end
+                if let Some(last_optional) = last_optional_positional {
+                    if opt.is_required {
+                        panic!(
+                            "Required positional argument '{}' cannot come after optional positional argument '{}'",
+                            opt.id, last_optional
+                        );
+                    }
+                }
+                if !opt.is_required {
+                    last_optional_positional = Some(&opt.id);
+                }
+                positional_indices.insert(&*opt.id, positional_index);
+                positional_index += 1;
+            }
+        }
+
+        for opt in options.iter() {
+            let index = positional_indices.get(&*opt.id).copied();
+            match Self::make_arg(&parser_config, env, opt, index)? {
                 MaybeArg::Arg(arg) => {
                     args.push(arg);
                 }
@@ -210,7 +234,53 @@ impl<'a> Parser<'a> {
         _parser_config: &ParserConfig,
         env: &ParsedEnv,
         option: &'a ProgramOption,
+        positional_index: Option<usize>,
     ) -> Result<MaybeArg, Error> {
+        // Handle positional arguments
+        if option.is_positional {
+            debug_assert_eq!(option.parse_type, ParseType::Parameter);
+            debug_assert!(option.short_form.is_none());
+            debug_assert!(option.long_form.is_none());
+            debug_assert!(positional_index.is_some());
+
+            let mut arg = Arg::new(option.id.clone().into_owned())
+                .index(positional_index.unwrap())
+                .required(false) // All args are optional from clap's view, we check requirements later
+                .action(ArgAction::Set)
+                .allow_hyphen_values(option.allow_hyphen_values);
+
+            // Build help text (env is allowed for positional args!)
+            let mut help_text = String::new();
+
+            if let Some(env_form) = option.env_form.as_deref() {
+                let cur_val = env.get_lossy_or_default(env_form);
+                help_text += &format!("\n[env {env_form}={cur_val}]");
+            }
+            for env_alias in option.env_aliases.iter() {
+                let cur_val = env.get_lossy_or_default(env_alias);
+                help_text += &format!("\n[env {env_alias}={cur_val}]");
+            }
+
+            if let Some(def) = option.default_value.as_ref() {
+                help_text += &format!("\n[default: {def}]");
+            }
+
+            if option.is_secret() {
+                help_text += "\n[secret]";
+            }
+
+            // Prepend description
+            if let Some(desc) = option.description.as_deref() {
+                help_text.insert_str(0, desc);
+            }
+
+            if !help_text.is_empty() {
+                arg = arg.help(help_text);
+            }
+
+            return Ok(MaybeArg::Arg(arg));
+        }
+
         if option.short_form.is_none() && option.long_form.is_none() {
             // If there is no short form and no long form, clap is going to make it a positional
             // argument, but we don't want that and there's no way to disable the behavior.
@@ -223,14 +293,18 @@ impl<'a> Parser<'a> {
             } else if option.default_value.is_some() {
                 Ok(MaybeArg::DefaultOnly)
             } else {
-                panic!("Program option {option:#?} has no way to receive a value, this is an internal error.");
+                panic!(
+                    "Program option {option:#?} has no way to receive a value, this is an internal error."
+                );
             };
         }
 
         if option.is_secret() {
             let mut buf = String::new();
             option.print(&mut buf, Some(env)).unwrap();
-            panic!("The secret feature is not compatible with arguments that can be read from CLI args. See documentation for more about this.\n\n{buf}")
+            panic!(
+                "The secret feature is not compatible with arguments that can be read from CLI args. See documentation for more about this.\n\n{buf}"
+            )
         }
 
         let mut arg = Arg::new(option.id.clone().into_owned());

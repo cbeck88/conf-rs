@@ -20,5 +20,3 @@ fn test_repeat2() {
     assert_eq!(result.asset_pairs, vec_str([]));
     assert_eq!(result.error_pause, "10s");
 }
-
-

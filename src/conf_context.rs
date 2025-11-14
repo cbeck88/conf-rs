@@ -1,4 +1,4 @@
-use crate::{str_to_bool, InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption};
+use crate::{InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption, str_to_bool};
 use clap::parser::ValueSource;
 use core::fmt::Debug;
 
@@ -154,7 +154,7 @@ impl<'a> ConfContext<'a> {
                     self.args.id_to_option()
                 )
             });
-        if opt.short_form.is_some() || opt.long_form.is_some() {
+        if opt.short_form.is_some() || opt.long_form.is_some() || opt.is_positional {
             if let Some(val) = self.args.arg_matches.get_one::<String>(&id) {
                 let value_source = self
                     .args

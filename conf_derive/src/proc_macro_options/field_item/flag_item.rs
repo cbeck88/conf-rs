@@ -212,6 +212,7 @@ impl FlagItem {
                 is_required: false,
                 allow_hyphen_values: false,
                 secret: Some(false),
+                is_positional: false,
             });
         })
     }
