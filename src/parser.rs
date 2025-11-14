@@ -186,6 +186,12 @@ impl<'a> Parser<'a> {
         self
     }
 
+    /// Add an alias to a parser. (This is used by subcommands)
+    pub fn add_alias(mut self, alias: impl Into<String>) -> Self {
+        self.command = self.command.alias(alias.into());
+        self
+    }
+
     /// Get command associated to this parser
     pub fn get_command(&self) -> &Command {
         &self.command

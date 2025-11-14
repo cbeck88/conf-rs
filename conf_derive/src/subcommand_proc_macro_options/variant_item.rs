@@ -56,6 +56,7 @@ pub struct VariantItem {
     variant_type: Option<Type>, // None when we have a unit variant, Some otherwise
     is_optional_type: Option<Type>, // Some when we have a single unnamed field which is Option<T>
     command_name: LitStr,
+    aliases: Vec<LitStr>,
     serde: Option<VariantSerdeItem>,
     doc_string: Option<String>,
 }
@@ -105,6 +106,7 @@ impl VariantItem {
             variant_name,
             variant_type,
             is_optional_type,
+            aliases: Vec::new(),
             serde: None,
             doc_string: None,
         };
@@ -124,6 +126,9 @@ impl VariantItem {
                             &mut command_name_override,
                             Some(parse_required_value::<LitStr>(meta)?),
                         )
+                    } else if path.is_ident("alias") {
+                        result.aliases.push(parse_required_value::<LitStr>(meta)?);
+                        Ok(())
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(VariantSerdeItem::new(meta)?))
                     } else {
@@ -148,6 +153,16 @@ impl VariantItem {
         &self.command_name
     }
 
+    pub fn get_aliases(&self) -> &[LitStr] {
+        &self.aliases
+    }
+
+    pub fn get_all_command_names(&self) -> Vec<&LitStr> {
+        std::iter::once(&self.command_name)
+            .chain(self.aliases.iter())
+            .collect()
+    }
+
     pub fn get_serde_name(&self) -> LitStr {
         self.serde
             .as_ref()
@@ -169,15 +184,15 @@ impl VariantItem {
         conf_context_ident: &Ident,
     ) -> Result<TokenStream, Error> {
         let name = self.get_name();
-        let command_name = self.get_command_name();
+        let all_names = self.get_all_command_names();
 
         if let Some(ty) = self.variant_type.as_ref() {
             Ok(quote! {
-                #command_name => Ok(Self::#name(<#ty as Conf>::from_conf_context(#conf_context_ident)?))
+                #(#all_names)|* => Ok(Self::#name(<#ty as Conf>::from_conf_context(#conf_context_ident)?))
             })
         } else {
             Ok(quote! {
-                #command_name => Ok(Self::#name)
+                #(#all_names)|* => Ok(Self::#name)
             })
         }
     }
@@ -220,6 +235,7 @@ impl VariantItem {
         parsed_env_ident: &Ident,
     ) -> Result<TokenStream, Error> {
         let command_name = &self.command_name;
+        let aliases = &self.aliases;
 
         if let Some(ty) = self.variant_type.as_ref() {
             let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
@@ -228,6 +244,7 @@ impl VariantItem {
               #parsers_ident.push(
                 <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident)?
                   .rename(#command_name)
+                  #(.add_alias(#aliases))*
               );
             })
         } else {
@@ -235,6 +252,7 @@ impl VariantItem {
               #parsers_ident.push(
                 ::conf::Parser::new(::conf::ParserConfig::default(), &[], &[], #parsed_env_ident)?
                   .rename(#command_name)
+                  #(.add_alias(#aliases))*
               );
             })
         }

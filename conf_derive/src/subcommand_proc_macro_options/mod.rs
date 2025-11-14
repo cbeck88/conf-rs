@@ -86,15 +86,15 @@ impl GenSubcommandsEnum {
 
     /// Generate Subcommands::get_subcommand_names implementation
     fn get_subcommand_names_impl(&self) -> Result<TokenStream, syn::Error> {
-        let command_names: Vec<_> = self
+        let all_command_names: Vec<_> = self
             .variants
             .iter()
-            .map(|var| var.get_command_name())
+            .flat_map(|var| var.get_all_command_names())
             .collect();
 
         Ok(quote! {
           fn get_subcommand_names() -> &'static [&'static str] {
-            &[ #(#command_names,)* ]
+            &[ #(#all_command_names,)* ]
           }
         })
     }
