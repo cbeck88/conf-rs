@@ -153,10 +153,6 @@ impl VariantItem {
         &self.command_name
     }
 
-    pub fn get_aliases(&self) -> &[LitStr] {
-        &self.aliases
-    }
-
     pub fn get_all_command_names(&self) -> Vec<&LitStr> {
         std::iter::once(&self.command_name)
             .chain(self.aliases.iter())

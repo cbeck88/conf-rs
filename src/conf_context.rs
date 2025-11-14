@@ -17,7 +17,7 @@ where
     Default,
 }
 
-impl<'a> ConfValueSource<&'a str> {
+impl ConfValueSource<&str> {
     pub fn into_owned(self) -> ConfValueSource<String> {
         match self {
             Self::Args => ConfValueSource::Args,
@@ -32,7 +32,7 @@ impl<'a> ConfValueSource<&'a str> {
     }
 }
 
-impl<'a> From<ValueSource> for ConfValueSource<&'a str> {
+impl From<ValueSource> for ConfValueSource<&str> {
     fn from(src: ValueSource) -> Self {
         match &src {
             ValueSource::CommandLine => Self::Args,
