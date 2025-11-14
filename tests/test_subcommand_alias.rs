@@ -3,12 +3,14 @@ mod common;
 use conf::{Conf, Subcommands};
 
 #[derive(Conf, Debug)]
+#[allow(dead_code)]
 struct ConfigArgs {
     #[conf(long)]
     verbose: bool,
 }
 
 #[derive(Subcommands, Debug)]
+#[allow(dead_code)]
 enum Command {
     /// Run the server
     #[conf(name = "RUN")]
