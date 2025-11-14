@@ -70,6 +70,7 @@ pub struct RepeatItem {
     no_env_delimiter: bool,
     serde: Option<RepeatSerdeItem>,
     description: Option<String>,
+    is_positional: bool,
 }
 
 impl RepeatItem {
@@ -102,6 +103,7 @@ impl RepeatItem {
             no_env_delimiter: false,
             serde: None,
             description: None,
+            is_positional: false,
         };
 
         for attr in &field.attrs {
@@ -166,6 +168,9 @@ impl RepeatItem {
                         )
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(RepeatSerdeItem::new(meta)?))
+                    } else if path.is_ident("pos") {
+                        result.is_positional = true;
+                        Ok(())
                     } else {
                         Err(meta.error("unrecognized conf repeat option"))
                     }
@@ -191,6 +196,14 @@ impl RepeatItem {
             return Err(Error::new(
                 field.span(),
                 "no_env_delimiter has no effect if an env variable is not declared",
+            ));
+        }
+
+        // Validate positional argument constraints
+        if result.is_positional && result.long_switch.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "#[conf(pos)] cannot be used with #[conf(long)]",
             ));
         }
 
@@ -278,6 +291,7 @@ impl RepeatItem {
             .map(LitStrArray::quote_elements_into);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
+        let is_positional = self.is_positional;
 
         Ok(quote! {
             #program_options_ident.push(::conf::ProgramOption {
@@ -293,7 +307,7 @@ impl RepeatItem {
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
               secret: #secret,
-              is_positional: false,
+              is_positional: #is_positional,
             });
         })
     }

@@ -154,7 +154,7 @@ impl<'a> ConfContext<'a> {
                     self.args.id_to_option()
                 )
             });
-        if opt.short_form.is_some() || opt.long_form.is_some() || opt.is_positional {
+        if opt.has_args_source() {
             if let Some(val) = self.args.arg_matches.get_one::<String>(&id) {
                 let value_source = self
                     .args
@@ -217,9 +217,9 @@ impl<'a> ConfContext<'a> {
                 )
             });
 
-        // Only try to access arg_matches if this option has a short or long form.
-        // Options with only env (no short/long) are not registered with clap.
-        if opt.short_form.is_some() || opt.long_form.is_some() {
+        // Only try to access arg_matches if this option has a short or long form, or is positional.
+        // Options with only env (no short/long/positional) are not registered with clap.
+        if opt.has_args_source() {
             if let Some(val) = self.args.arg_matches.get_many::<String>(&id) {
                 let value_source = self
                     .args

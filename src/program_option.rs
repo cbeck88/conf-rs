@@ -185,6 +185,14 @@ impl ProgramOption {
         self.secret.unwrap_or(false)
     }
 
+    /// Check if this program option can have a value source from command-line arguments.
+    /// Returns true if the option has a short form, long form, or is a positional argument.
+    /// Returns false if the option can only be read from environment variables or defaults.
+    #[inline]
+    pub fn has_args_source(&self) -> bool {
+        self.short_form.is_some() || self.long_form.is_some() || self.is_positional
+    }
+
     // Desired output is like:
     //  -x, --xyz <XYZ>
     //          This is the description.

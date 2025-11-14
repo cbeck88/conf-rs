@@ -35,6 +35,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [use_value_parser](#parameter-serde-use-value-parser)
   * [Repeat](#repeat)
     * [long](#repeat-long)
+    * [pos](#repeat-pos)
     * [env](#repeat-env)
     * [aliases](#repeat-aliases)
     * [env_aliases](#repeat-env-aliases)
@@ -268,7 +269,8 @@ A parameter represents a single value that can be parsed from a string.
    **Examples**:
 
    Valid configuration:
-   ```rust
+   ```rust,compile
+   use conf::Conf;
    #[derive(Conf)]
    struct MyConfig {
        /// Input file (required positional)
@@ -287,8 +289,9 @@ A parameter represents a single value that can be parsed from a string.
 
    Command-line usage: `./my_prog input.txt output.txt` or `./my_prog input.txt output.txt debug.log`
 
-   Invalid configuration (will panic):
-   ```rust
+   Invalid configuration (will panic at runtime):
+   ```rust,should_panic
+   use conf::Conf;
    #[derive(Conf)]
    struct BadConfig {
        #[conf(pos)]
@@ -300,16 +303,37 @@ A parameter represents a single value that can be parsed from a string.
        #[conf(pos)]
        third: String,  // ERROR: required after optional!
    }
+
+   // This will panic when we try to parse
+   let _ = BadConfig::try_parse_from::<&str, &str, &str>(
+       vec!["prog", "a", "b"],
+       vec![],
+   );
    ```
 
    Positional with environment variable fallback:
    ```rust
+   use conf::Conf;
    #[derive(Conf)]
    struct MyConfig {
        /// Can be provided as first positional arg or via INPUT env var
        #[conf(pos, env)]
        input: String,
    }
+
+   // Test it works
+   let result = MyConfig::try_parse_from::<&str, &str, &str>(
+       vec!["prog", "input.txt"],
+       vec![],
+   ).unwrap();
+   assert_eq!(result.input, "input.txt");
+
+   // Also works with env
+   let result = MyConfig::try_parse_from::<&str, &str, &str>(
+       vec!["prog"],
+       vec![("INPUT", "from_env.txt")],
+   ).unwrap();
+   assert_eq!(result.input, "from_env.txt");
    ```
 
    Command-line usage: `./my_prog input.txt` or `INPUT=input.txt ./my_prog`
@@ -439,6 +463,90 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    example command-line: `./my_prog --peer peer1 --peer peer2`
 
    *Note*: This behavior of this attribute is the same as in `clap-derive`.
+
+*  <a name="repeat-pos"></a> `pos` (no arguments)
+
+   Marks this repeat field as a positional argument that accepts multiple values.
+
+   When combined with `repeat`, this allows you to accept multiple positional arguments without naming each one.
+   The field must have type `Vec<T>` where `T` implements `FromStr`, or `value_parser` must be supplied.
+
+   **Important constraints**:
+   - Cannot be combined with `long` or `short` (positional arguments have no switches)
+   - No other positional arguments (regular or repeat) can appear after a repeat positional argument
+   - This prevents parsing ambiguity when determining where one positional ends and another begins
+
+   **Examples**:
+
+   Simple repeat positional - accept zero or more file paths:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Files to process
+       #[conf(repeat, pos)]
+       files: Vec<String>,
+   }
+
+   let result = Config::try_parse_from::<&str, &str, &str>(
+       vec!["prog", "file1.txt", "file2.txt", "file3.txt"],
+       vec![],
+   ).unwrap();
+   assert_eq!(result.files, vec!["file1.txt", "file2.txt", "file3.txt"]);
+   ```
+
+   Combined with regular positional - first arg is command, rest are arguments:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Command to run
+       #[conf(pos)]
+       command: String,
+
+       /// Arguments to pass to the command
+       #[conf(repeat, pos, allow_hyphen_values)]
+       args: Vec<String>,
+   }
+
+   let result = Config::try_parse_from::<&str, &str, &str>(
+       vec!["prog", "ls", "-l", "-a", "/tmp"],
+       vec![],
+   ).unwrap();
+   assert_eq!(result.command, "ls");
+   assert_eq!(result.args, vec!["-l", "-a", "/tmp"]);
+   ```
+
+   With environment variable fallback:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Files to process (can be from args or env)
+       #[conf(repeat, pos, env)]
+       files: Vec<String>,
+   }
+
+   // From command line
+   let result = Config::try_parse_from::<&str, &str, &str>(
+       vec!["prog", "a.txt", "b.txt"],
+       vec![],
+   ).unwrap();
+   assert_eq!(result.files, vec!["a.txt", "b.txt"]);
+
+   // From environment variable (comma-delimited by default)
+   let result = Config::try_parse_from::<&str, &str, &str>(
+       vec!["prog"],
+       vec![("FILES", "x.txt,y.txt")],
+   ).unwrap();
+   assert_eq!(result.files, vec!["x.txt", "y.txt"]);
+   ```
+
+   Command-line usage examples:
+   - `./my_prog` - no files
+   - `./my_prog file1.txt` - one file
+   - `./my_prog file1.txt file2.txt file3.txt` - multiple files
+   - `FILES=a.txt,b.txt ./my_prog` - from environment variable
 
 *  <a name="repeat-env"></a> `env` (optional string argument)
 

@@ -113,8 +113,16 @@ impl<'a> Parser<'a> {
         let mut positional_index = 1usize;
         let mut positional_indices = HashMap::new();
         let mut last_optional_positional: Option<&str> = None;
+        let mut last_repeat_positional: Option<&str> = None;
         for opt in options.iter() {
             if opt.is_positional {
+                // Validate: no positional arguments can appear after a repeat positional
+                if let Some(last_repeat) = last_repeat_positional {
+                    panic!(
+                        "Positional argument '{}' cannot come after repeat positional argument '{}'",
+                        opt.id, last_repeat
+                    );
+                }
                 // Validate: optional positionals can only appear at the end
                 if let Some(last_optional) = last_optional_positional {
                     if opt.is_required {
@@ -126,6 +134,9 @@ impl<'a> Parser<'a> {
                 }
                 if !opt.is_required {
                     last_optional_positional = Some(&opt.id);
+                }
+                if opt.parse_type == ParseType::Repeat {
+                    last_repeat_positional = Some(&opt.id);
                 }
                 positional_indices.insert(&*opt.id, positional_index);
                 positional_index += 1;
@@ -244,16 +255,27 @@ impl<'a> Parser<'a> {
     ) -> Result<MaybeArg, Error> {
         // Handle positional arguments
         if option.is_positional {
-            debug_assert_eq!(option.parse_type, ParseType::Parameter);
+            debug_assert!(matches!(option.parse_type, ParseType::Parameter | ParseType::Repeat));
             debug_assert!(option.short_form.is_none());
             debug_assert!(option.long_form.is_none());
             debug_assert!(positional_index.is_some());
 
+            let action = match option.parse_type {
+                ParseType::Parameter => ArgAction::Set,
+                ParseType::Repeat => ArgAction::Append,
+                _ => unreachable!(),
+            };
+
             let mut arg = Arg::new(option.id.clone().into_owned())
                 .index(positional_index.unwrap())
                 .required(false) // All args are optional from clap's view, we check requirements later
-                .action(ArgAction::Set)
+                .action(action)
                 .allow_hyphen_values(option.allow_hyphen_values);
+
+            // For repeat positionals, allow multiple values
+            if option.parse_type == ParseType::Repeat {
+                arg = arg.num_args(1..);
+            }
 
             // Build help text (env is allowed for positional args!)
             let mut help_text = String::new();
