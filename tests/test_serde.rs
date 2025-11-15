@@ -1051,7 +1051,7 @@ fn test_serde_deserialize_with() {
         .unwrap();
     assert_eq!(result.doubled, 5); // Not doubled because value is from args, not serde
     assert_eq!(result.uppercase, "hello"); // Not uppercased because value is from args
-    assert_eq!(result.flag_from_int, true);
+    assert!(result.flag_from_int);
     assert!(result.reversed_items.is_empty());
 
     // Test that deserialize_with works from serde document
@@ -1070,7 +1070,7 @@ fn test_serde_deserialize_with() {
         .unwrap();
     assert_eq!(result.doubled, 6); // 3 * 2 (deserialize_with applied)
     assert_eq!(result.uppercase, "FROM_SERDE"); // Uppercased (deserialize_with applied)
-    assert_eq!(result.flag_from_int, false); // 0 -> false (deserialize_with applied)
+    assert!(!result.flag_from_int); // 0 -> false (deserialize_with applied)
     assert_eq!(result.reversed_items, vec![3, 2, 1]); // Reversed (deserialize_with applied)
 
     // Test that CLI values take precedence and don't use deserialize_with
@@ -1097,7 +1097,7 @@ fn test_serde_deserialize_with() {
     // CLI values should not be transformed by deserialize_with
     assert_eq!(result.doubled, 7); // Not doubled
     assert_eq!(result.uppercase, "world"); // Not uppercased
-    assert_eq!(result.flag_from_int, true); // --flag-from-int sets it to true
+    assert!(result.flag_from_int); // --flag-from-int sets it to true
     assert_eq!(result.reversed_items, vec![10]); // Not reversed
 }
 

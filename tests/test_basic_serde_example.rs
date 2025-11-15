@@ -351,15 +351,13 @@ fn test_serde_basic_example_args_env_and_file_with_missing_and_invalid() {
         .output()
         .unwrap();
 
-    let expected = &format!(
-        r#"
+    let expected = &r#"
 error: A required value was not provided
   env 'DB_URL', or '--db-url', must be provided
 error: Invalid value
   when parsing '--auth-url' value 'asdf:/': invalid format
   when parsing env 'AUTH_RETRIES' value 'xxx': invalid digit found in string
-"#
-    )[1..];
+"#.to_string()[1..];
 
     assert_eq!(
         output.status.code(),

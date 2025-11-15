@@ -142,7 +142,7 @@ fn test_flatten_optional_parsing() {
     assert_eq!(a.required, "1");
     assert_eq!(a.also, "2");
     assert_eq!(a.opt, None);
-    assert_eq!(a.flag, false);
+    assert!(!a.flag);
     assert_eq!(result.b, None);
 
     let result = TestFlattenOptional::try_parse_from::<&str, &str, &str>(
@@ -154,7 +154,7 @@ fn test_flatten_optional_parsing() {
     assert_eq!(a.required, "1");
     assert_eq!(a.also, "2");
     assert_eq!(a.opt, None);
-    assert_eq!(a.flag, true);
+    assert!(a.flag);
     assert_eq!(result.b, None);
 
     assert_error_contains_text!(
@@ -191,7 +191,7 @@ fn test_flatten_optional_parsing() {
     assert_eq!(a.required, "1");
     assert_eq!(a.also, "4");
     assert_eq!(a.opt.as_deref(), Some("3"));
-    assert_eq!(a.flag, true);
+    assert!(a.flag);
     assert_eq!(result.b, None);
 
     assert_error_contains_text!(
@@ -242,10 +242,10 @@ fn test_flatten_optional_parsing() {
     assert_eq!(a.required, "1");
     assert_eq!(a.also, "4");
     assert_eq!(a.opt.as_deref(), Some("3"));
-    assert_eq!(a.flag, true);
+    assert!(a.flag);
     let b = result.b.as_ref().unwrap();
     assert_eq!(b.required, "7");
     assert_eq!(b.also, "6");
     assert_eq!(b.opt.as_deref(), Some("5"));
-    assert_eq!(b.flag, true);
+    assert!(b.flag);
 }
