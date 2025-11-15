@@ -680,6 +680,11 @@ impl ParameterItem {
             let field_type = &self.field_type;
             let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
 
+            let do_panic = quote! {
+                panic!("in struct '{}' field '{}': default_value '{}' failed to parse: {}",
+                    stringify!(#struct_ident), stringify!(#field_name), #default_value_str, err)
+            };
+
             // Use the existing logic to get the value parser
             let value_parser_expr = self.get_value_parser_expr();
 
@@ -697,7 +702,7 @@ impl ParameterItem {
 
                             use ::std::ffi::OsStr;
                             let os_str = OsStr::new(#default_value_str);
-                            __value_parser__(os_str)
+                            if let Err(err) = __value_parser__(os_str) { #do_panic }
                         }
                     }
                 }
@@ -710,20 +715,13 @@ impl ParameterItem {
                                 #value_parser_expr(__arg__)
                             }
 
-                            __value_parser__(#default_value_str)
+                            if let Err(err) = __value_parser__(#default_value_str) { #do_panic }
                         }
                     }
                 }
             };
 
-            Ok(quote! {
-                {
-                    if let Err(err) = #parse_expr {
-                        panic!("in struct '{}' field '{}': default_value '{}' failed to parse: {}",
-                            stringify!(#struct_ident), stringify!(#field_name), #default_value_str, err);
-                    }
-                }
-            })
+            Ok(parse_expr)
         } else {
             Ok(quote! {})
         }
