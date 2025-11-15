@@ -38,6 +38,8 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [deserialize_with](#parameter-serde-deserialize-with)
       * [skip](#parameter-serde-skip)
       * [use_value_parser](#parameter-serde-use-value-parser)
+    * [test](#parameter-test)
+      * [skip_default_value](#parameter-test-skip-default-value)
   * [Repeat](#repeat)
     * [long](#repeat-long)
     * [pos](#repeat-pos)
@@ -580,6 +582,18 @@ A parameter represents a single value that can be parsed from a string.
 
      If used, then instead of asking `serde` to deserialize the field type, `serde` will deserialize a `String`,
      and then the `value_parser` will convert the string to the field type. The default value parser is `FromStr`.
+
+*  <a name="parameter-test"></a> `test` (supports nested options)
+
+   Configures test-related behavior for this parameter field.
+
+   * <a name="parameter-test-skip-default-value"></a> `skip_default_value` (no arguments)
+
+     example: `#[conf(test(skip_default_value))]`
+
+     Skip testing the `default_value` for this parameter during `#[conf(test)]` validation.
+     This might be useful when the `value_parser` has side-effects or reads files from the file-system
+     that might not be there during the test.
 
 #### Notes
 
