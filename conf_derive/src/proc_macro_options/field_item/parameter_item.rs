@@ -7,6 +7,14 @@ use syn::{
     spanned::Spanned, token,
 };
 
+/// Type of value parser - indicates whether it takes &str or &OsStr
+pub enum ValueParserExpr {
+    /// Parser takes &str (most common case)
+    Str(Expr),
+    /// Parser takes &OsStr (for PathBuf, OsString, or explicit value_parser_os)
+    OsStr(Expr),
+}
+
 /// #[conf(serde(...))] options listed on a parameter
 pub struct ParameterSerdeItem {
     pub rename: Option<LitStr>,
@@ -69,6 +77,7 @@ pub struct ParameterItem {
     env_aliases: Option<LitStrArray>,
     default_value: Option<LitStr>,
     value_parser: Option<Expr>,
+    value_parser_os: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
     doc_string: Option<String>,
     is_positional: bool,
@@ -98,6 +107,7 @@ impl ParameterItem {
             env_aliases: None,
             default_value: None,
             value_parser: None,
+            value_parser_os: None,
             serde: None,
             doc_string: None,
             is_positional: false,
@@ -152,6 +162,12 @@ impl ParameterItem {
                             &mut result.value_parser,
                             Some(parse_required_value::<Expr>(meta)?),
                         )
+                    } else if path.is_ident("value_parser_os") {
+                        set_once(
+                            &path,
+                            &mut result.value_parser_os,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if path.is_ident("allow_hyphen_values") {
                         result.allow_hyphen_values = true;
                         Ok(())
@@ -194,6 +210,14 @@ impl ParameterItem {
                     "#[conf(pos)] cannot be used with #[conf(long)]",
                 ));
             }
+        }
+
+        // Validate value_parser and value_parser_os aren't both specified
+        if result.value_parser.is_some() && result.value_parser_os.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "#[conf(value_parser)] and #[conf(value_parser_os)] cannot both be specified",
+            ));
         }
 
         if result.is_optional_type.is_none()
@@ -327,11 +351,34 @@ impl ParameterItem {
         Ok(quote! {})
     }
 
-    fn get_value_parser(&self) -> Expr {
+    fn get_value_parser_expr(&self) -> ValueParserExpr {
+        // If we have an explicit OsStr parser, use it
+        if let Some(parser) = &self.value_parser_os {
+            return ValueParserExpr::OsStr(parser.clone());
+        }
+
+        // Auto-detect PathBuf and OsString and provide default parsers
+        use crate::util::{type_is_osstring, type_is_pathbuf};
+        let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
+
+        if type_is_pathbuf(inner_type) {
+            return ValueParserExpr::OsStr(
+                parse_quote! { |s: &::std::ffi::OsStr| -> Result<::std::path::PathBuf, ::std::convert::Infallible> { Ok(s.into()) } },
+            );
+        }
+
+        if type_is_osstring(inner_type) {
+            return ValueParserExpr::OsStr(
+                parse_quote! { |s: &::std::ffi::OsStr| -> Result<::std::ffi::OsString, ::std::convert::Infallible> { Ok(s.into()) } },
+            );
+        }
+
         // Value parser is FromStr::from_str if not specified
-        self.value_parser
+        let parser = self
+            .value_parser
             .clone()
-            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str })
+            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str });
+        ValueParserExpr::Str(parser)
     }
 
     fn gen_initializer_helper(
@@ -342,8 +389,6 @@ impl ParameterItem {
     ) -> Result<(TokenStream, bool), syn::Error> {
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
-
-        let value_parser = self.get_value_parser();
 
         // Code gen is slightly different if the field type is Option<T>
         // Inner_type is T in that case, or just field_type otherwise.
@@ -373,37 +418,78 @@ impl ParameterItem {
         // anything in the surrounding scope.
         // But we are reading conf_context_ident from our caller's scope, outside of the
         // user-provided expression
-        let initializer = quote! {
-          {
-            fn __value_parser__(
-              __arg__: &str
-            ) -> Result<#inner_type, impl ::core::fmt::Display> {
-              #value_parser(__arg__)
-            }
 
-            use ::conf::{ConfValueSource, ProgramOption, InnerError};
+        let initializer = match self.get_value_parser_expr() {
+            ValueParserExpr::OsStr(value_parser_expr) => {
+                // Use OsStr-based value parser
+                quote! {
+                  {
+                    fn __value_parser__(
+                      __arg__: &::std::ffi::OsStr
+                    ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                      #value_parser_expr(__arg__)
+                    }
 
-            let (maybe_val, opt): (Option<_>, &ProgramOption)
-              = #conf_context_ident.get_string_opt(#id)?;
-            let (value_source, val_str): (ConfValueSource<&str>, &str)
-              = if let Some(val) = maybe_val {
-                val
-              } else {
-                #if_no_conf_context_val
-              };
-            #before_value_parser
-            match __value_parser__(val_str) {
-              #value_parser_ok_arm
-              Err(err) => Err(
-                InnerError::invalid_value(
-                  value_source,
-                  val_str,
-                  opt,
-                  err
-                )
-              ),
+                    use ::conf::{ConfValueSource, ProgramOption, InnerError};
+
+                    let (maybe_val, opt): (Option<_>, &ProgramOption)
+                      = #conf_context_ident.get_osstring_opt(#id)?;
+                    let (value_source, val_os): (ConfValueSource<&str>, &::std::ffi::OsStr)
+                      = if let Some(val) = maybe_val {
+                        val
+                      } else {
+                        #if_no_conf_context_val
+                      };
+                    #before_value_parser
+                    match __value_parser__(val_os) {
+                      #value_parser_ok_arm
+                      Err(err) => Err(
+                        InnerError::invalid_value_os(
+                          value_source,
+                          val_os,
+                          opt,
+                          err
+                        )
+                      ),
+                    }
+                  }
+                }
             }
-          }
+            ValueParserExpr::Str(value_parser_expr) => {
+                // Use str-based value parser - ConfContext handles UTF-8 conversion
+                quote! {
+                  {
+                    fn __value_parser__(
+                      __arg__: &str
+                    ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                      #value_parser_expr(__arg__)
+                    }
+
+                    use ::conf::{ConfValueSource, ProgramOption, InnerError};
+
+                    let (maybe_val, opt): (Option<_>, &ProgramOption)
+                      = #conf_context_ident.get_string_opt(#id)?;
+                    let (value_source, val_str): (ConfValueSource<&str>, &str)
+                      = if let Some(val) = maybe_val {
+                        val
+                      } else {
+                        #if_no_conf_context_val
+                      };
+                    #before_value_parser
+                    match __value_parser__(val_str) {
+                      #value_parser_ok_arm
+                      Err(err) => Err(
+                        InnerError::invalid_value(
+                          value_source,
+                          val_str,
+                          opt,
+                          err
+                        )
+                      ),
+                    }
+                  }
+                }
+            }
         };
         Ok((initializer, false))
     }
@@ -437,27 +523,50 @@ impl ParameterItem {
 
         if use_value_parser {
             // When use_value_parser is true, then #doc_val has type String.
-            // To pick this value for the field, we have to set value_source and val_str
+            // To pick this value for the field, we have to set value_source and val_os/val_str
             // to indicate that we are selecting the document value.
-            let if_no_conf_context_val = quote! {
-              (ConfValueSource::Document(#doc_name), #doc_val.as_str())
-            };
+            match self.get_value_parser_expr() {
+                ValueParserExpr::OsStr(_) => {
+                    // For OsStr-based parsers
+                    let if_no_conf_context_val = quote! {
+                      (ConfValueSource::Document(#doc_name), ::std::ffi::OsStr::new(#doc_val.as_str()))
+                    };
 
-            // When the value source is a default, but we have a doc val,
-            // we should prefer the doc val.
-            let before_value_parser = quote! {
-              let (value_source, val_str) = if value_source.is_default() {
-                #if_no_conf_context_val
-              } else {
-                (value_source, val_str)
-              };
-            };
+                    let before_value_parser = quote! {
+                      let (value_source, val_os) = if value_source.is_default() {
+                        #if_no_conf_context_val
+                      } else {
+                        (value_source, val_os)
+                      };
+                    };
 
-            self.gen_initializer_helper(
-                conf_context_ident,
-                Some(if_no_conf_context_val),
-                Some(before_value_parser),
-            )
+                    self.gen_initializer_helper(
+                        conf_context_ident,
+                        Some(if_no_conf_context_val),
+                        Some(before_value_parser),
+                    )
+                }
+                ValueParserExpr::Str(_) => {
+                    // For str-based parsers
+                    let if_no_conf_context_val = quote! {
+                      (ConfValueSource::Document(#doc_name), #doc_val.as_str())
+                    };
+
+                    let before_value_parser = quote! {
+                      let (value_source, val_str) = if value_source.is_default() {
+                        #if_no_conf_context_val
+                      } else {
+                        (value_source, val_str)
+                      };
+                    };
+
+                    self.gen_initializer_helper(
+                        conf_context_ident,
+                        Some(if_no_conf_context_val),
+                        Some(before_value_parser),
+                    )
+                }
+            }
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
             // To pick this value for the field, we just return it.

@@ -138,6 +138,22 @@ impl InnerError {
         )
     }
 
+    /// Helper which makes InvalidParameterValue from an OsStr value
+    pub fn invalid_value_os(
+        conf_value_source: ConfValueSource<&str>,
+        value_os: &std::ffi::OsStr,
+        program_option: &ProgramOption,
+        err: impl fmt::Display,
+    ) -> Self {
+        let program_option = Box::new(program_option.clone());
+        Self::InvalidParameterValue(
+            conf_value_source.into_owned(),
+            value_os.to_string_lossy().into_owned(),
+            program_option,
+            err.to_string(),
+        )
+    }
+
     /// Helper which makes MissingRequiredParameter
     pub(crate) fn missing_required_parameter(
         opt: &ProgramOption,

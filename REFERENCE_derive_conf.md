@@ -27,6 +27,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env_aliases](#parameter-env-aliases)
     * [default_value](#parameter-default-value)
     * [value_parser](#parameter-value-parser)
+    * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
     * [secret](#parameter-secret)
     * [serde](#parameter-serde)
@@ -40,6 +41,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [aliases](#repeat-aliases)
     * [env_aliases](#repeat-env-aliases)
     * [value_parser](#repeat-value-parser)
+    * [value_parser_os](#repeat-value-parser-os)
     * [env_delimiter](#repeat-env-delimiter)
     * [no_env_delimiter](#repeat-no-env-delimiter)
     * [allow_hyphen_values](#repeat-allow-hyphen-values)
@@ -381,6 +383,55 @@ A parameter represents a single value that can be parsed from a string.
 
    *Note*: This is very similar to `clap-derive`, but there are technical differences [^compat-note-2].
 
+*  <a name="parameter-value-parser-os"></a> `value_parser_os` (expr argument)
+
+   example: `#[arg(value_parser_os = my_osstr_function)]`
+
+   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`. This allows parsing values that may contain non-UTF-8 data, which is important for types like `PathBuf` and `OsString` on Unix systems where filenames and environment variables can contain arbitrary byte sequences.
+
+   The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
+
+   **Auto-detection**: `conf` automatically uses an appropriate OsStr-based parser for `PathBuf` and `OsString` types (when using the simple identifier, not the fully qualified path). This means you typically don't need to specify `value_parser_os` explicitly for these types.
+
+   **Escape hatch**: If you want to use a String-based parser for `PathBuf` or `OsString` (e.g., for custom validation), use the fully qualified type name like `std::path::PathBuf` instead of just `PathBuf` to bypass auto-detection.
+
+   **UTF-8 validation**: When `value_parser_os` is not used (either explicitly or via auto-detection), values from command-line arguments and environment variables are validated to be UTF-8 before being passed to the `value_parser`. With `value_parser_os`, no UTF-8 validation occurs, and the parser receives the raw bytes.
+
+   **Examples**:
+
+   Auto-detected for PathBuf:
+   ```rust
+   # use conf::Conf;
+   use std::path::PathBuf;
+
+   #[derive(Conf)]
+   struct Config {
+       /// Input file path (automatically uses OsStr parser)
+       #[conf(long, env)]
+       input: PathBuf,
+   }
+   ```
+
+   Custom OsStr parser:
+   ```rust
+   # use conf::Conf;
+   use std::ffi::OsStr;
+
+   fn uppercase_osstr(s: &OsStr) -> Result<String, &'static str> {
+       s.to_str()
+           .map(|s| s.to_uppercase())
+           .ok_or("Invalid UTF-8")
+   }
+
+   #[derive(Conf)]
+   struct Config {
+       #[conf(long, value_parser_os = uppercase_osstr)]
+       text: String,
+   }
+   ```
+
+   *Note*: This attribute is mutually exclusive with `value_parser`. Only one can be specified for a given field.
+
 *  <a name="parameter-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
 
    example: `#[arg(allow_hyphen_values)]`
@@ -578,6 +629,48 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    This can be overrided by setting `value_parser`. Any function expression can be used as long as it produces a `T` and any generic parameters are either specified or inferred.
 
    *Note*: This behavior is the same as in `clap-derive`.
+
+*  <a name="repeat-value-parser-os"></a> `value_parser_os` (expr argument)
+
+   example: `#[arg(repeat, value_parser_os = my_osstr_function)]`
+
+   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`. This allows parsing values that may contain non-UTF-8 data.
+
+   The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
+
+   **Auto-detection**: Like with parameters, `conf` automatically uses an appropriate OsStr-based parser for `Vec<PathBuf>` and `Vec<OsString>` types (when using the simple identifier, not the fully qualified path).
+
+   **Environment variable handling**: When using `value_parser_os` with `env_delimiter`, the environment variable value must be valid UTF-8 because splitting on a delimiter requires interpreting the bytes as a string. If the environment variable contains non-UTF-8 data and a delimiter is specified, parsing will fail. To handle non-UTF-8 environment variables with repeat parameters, use `no_env_delimiter`.
+
+   **Examples**:
+
+   Auto-detected for Vec<PathBuf>:
+   ```rust
+   # use conf::Conf;
+   use std::path::PathBuf;
+
+   #[derive(Conf)]
+   struct Config {
+       /// Input files (automatically uses OsStr parser)
+       #[conf(repeat, long, env)]
+       inputs: Vec<PathBuf>,
+   }
+   ```
+
+   With non-UTF-8 env var (requires no_env_delimiter):
+   ```rust
+   # use conf::Conf;
+   use std::path::PathBuf;
+
+   #[derive(Conf)]
+   struct Config {
+       /// Single input file from env, can be non-UTF-8
+       #[conf(repeat, long, env, no_env_delimiter)]
+       input: Vec<PathBuf>,
+   }
+   ```
+
+   *Note*: This attribute is mutually exclusive with `value_parser`. Only one can be specified for a given field.
 
 *  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
 

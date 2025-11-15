@@ -1,6 +1,7 @@
 use crate::{InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption, str_to_bool};
 use clap::parser::ValueSource;
 use core::fmt::Debug;
+use std::ffi::{OsStr, OsString};
 
 // Data about the source of a value returned by ConfContext functions
 // This is mainly used to render help if something fails in the value parser later
@@ -83,17 +84,23 @@ impl<'a> ConfContext<'a> {
         }
     }
 
+    fn get_env_os(&self, env_name: &'a str) -> Option<&'a OsStr> {
+        self.env
+            .get(env_name)
+            .map(|os_string| os_string.as_os_str())
+    }
+
     fn get_env(
         &self,
         env_name: &'a str,
         opt: &'a ProgramOption,
     ) -> Result<Option<&'a str>, InnerError> {
-        if let Some(val) = self.env.get(env_name) {
+        if let Some(val) = self.get_env_os(env_name) {
             return Ok(Some(val.to_str().ok_or_else(|| {
                 if opt.is_secret() {
                     InnerError::invalid_utf8_env(env_name, opt, None)
                 } else {
-                    InnerError::invalid_utf8_env(env_name, opt, Some(val))
+                    InnerError::invalid_utf8_env(env_name, opt, self.env.get(env_name))
                 }
             })?));
         }
@@ -129,16 +136,17 @@ impl<'a> ConfContext<'a> {
         Ok((ConfValueSource::Default, false))
     }
 
-    /// Get a string program option if it was set, using any of its aliases or env value
+    /// Get a program option if it was set, using any of its aliases or env value.
+    /// Returns the value as OsStr to preserve non-UTF-8 data from command-line arguments.
     /// Returns an error if it was set multiple times via args. If args and env are set, args
     /// shadows env.
     #[allow(clippy::type_complexity)]
-    pub fn get_string_opt(
+    pub fn get_osstring_opt(
         &self,
         id: &str,
     ) -> Result<
         (
-            Option<(ConfValueSource<&'a str>, &'a str)>,
+            Option<(ConfValueSource<&'a str>, &'a OsStr)>,
             &'a ProgramOption,
         ),
         InnerError,
@@ -155,7 +163,7 @@ impl<'a> ConfContext<'a> {
                 )
             });
         if opt.has_args_source() {
-            if let Some(val) = self.args.arg_matches.get_one::<String>(&id) {
+            if let Some(val_os) = self.args.arg_matches.get_one::<OsString>(&id) {
                 let value_source = self
                     .args
                     .arg_matches
@@ -165,7 +173,7 @@ impl<'a> ConfContext<'a> {
                 // don't give default values to clap so this should be the only possibility
                 assert_eq!(value_source, ValueSource::CommandLine);
 
-                let val_and_source = Some((value_source.into(), val.as_str()));
+                let val_and_source = Some((value_source.into(), val_os.as_os_str()));
                 // Args take precedence over env, so return now if we got args.
                 // If we got default_value we want to fall through to env
                 return Ok((val_and_source, opt));
@@ -173,13 +181,13 @@ impl<'a> ConfContext<'a> {
         }
 
         if let Some(env_form) = opt.env_form.as_deref() {
-            if let Some(val) = self.get_env(env_form, opt)? {
+            if let Some(val) = self.get_env_os(env_form) {
                 return Ok((Some((ConfValueSource::<&str>::Env(env_form), val)), opt));
             }
         }
 
         for env_alias in opt.env_aliases.iter() {
-            if let Some(val) = self.get_env(env_alias, opt)? {
+            if let Some(val) = self.get_env_os(env_alias) {
                 let value_source = ConfValueSource::<&str>::Env(env_alias);
                 let val_and_source = Some((value_source, val));
 
@@ -189,7 +197,7 @@ impl<'a> ConfContext<'a> {
 
         if let Some(default_val) = opt.default_value.as_deref() {
             let value_source = ConfValueSource::Default;
-            let val_and_source = Some((value_source, default_val));
+            let val_and_source = Some((value_source, OsStr::new(default_val)));
 
             return Ok((val_and_source, opt));
         }
@@ -197,14 +205,44 @@ impl<'a> ConfContext<'a> {
         Ok((None, opt))
     }
 
+    /// Get a string program option if it was set, using any of its aliases or env value.
+    /// Returns the value as &str. If the value from command-line arguments contains invalid UTF-8,
+    /// returns an error.
+    /// Returns an error if it was set multiple times via args. If args and env are set, args
+    /// shadows env.
+    #[allow(clippy::type_complexity)]
+    pub fn get_string_opt(
+        &self,
+        id: &str,
+    ) -> Result<
+        (
+            Option<(ConfValueSource<&'a str>, &'a str)>,
+            &'a ProgramOption,
+        ),
+        InnerError,
+    > {
+        let (maybe_val, opt) = self.get_osstring_opt(id)?;
+
+        if let Some((value_source, val_os)) = maybe_val {
+            // Convert OsStr to str, handling UTF-8 errors
+            let val_str = val_os.to_str().ok_or_else(|| {
+                InnerError::invalid_value_os(value_source.clone(), val_os, opt, "Invalid UTF-8")
+            })?;
+            Ok((Some((value_source, val_str)), opt))
+        } else {
+            Ok((None, opt))
+        }
+    }
+
     /// Get a repeat program option if it was set, using any of its aliases.
+    /// Returns values as OsStr to preserve non-UTF-8 data from command-line arguments.
     /// If env is set, env is parsed via the delimiter (char).
     /// If args and env are set, args shadows env.
-    pub fn get_repeat_opt(
+    pub fn get_repeat_osstring_opt(
         &self,
         id: &str,
         env_delimiter: Option<char>,
-    ) -> Result<(ConfValueSource<&'a str>, Vec<&'a str>, &'a ProgramOption), InnerError> {
+    ) -> Result<(ConfValueSource<&'a str>, Vec<&'a OsStr>, &'a ProgramOption), InnerError> {
         let id = self.id_prefix.clone() + id;
         let opt = self
             .args
@@ -220,7 +258,7 @@ impl<'a> ConfContext<'a> {
         // Only try to access arg_matches if this option has a short or long form, or is positional.
         // Options with only env (no short/long/positional) are not registered with clap.
         if opt.has_args_source() {
-            if let Some(val) = self.args.arg_matches.get_many::<String>(&id) {
+            if let Some(val_os) = self.args.arg_matches.get_many::<OsString>(&id) {
                 let value_source = self
                     .args
                     .arg_matches
@@ -230,18 +268,28 @@ impl<'a> ConfContext<'a> {
                 // give default values to clap so this should be the only possibility
                 assert_eq!(value_source, ValueSource::CommandLine);
 
-                let results: Vec<&'a str> = val.map(String::as_str).collect();
+                // Return as OsStr, conversion to str happens in generated code if needed
+                let results: Vec<&'a OsStr> = val_os.map(|os| os.as_os_str()).collect();
 
                 return Ok((value_source.into(), results, opt));
             }
         }
 
         if let Some(env_form) = opt.env_form.as_deref() {
-            if let Some(val) = self.get_env(env_form, opt)? {
+            if let Some(val) = self.get_env_os(env_form) {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
 
                 return Ok(if let Some(delim) = env_delimiter {
-                    (value_source, val.split(delim).collect(), opt)
+                    // For delimited env vars, we need UTF-8 to split properly
+                    // Convert to str, split, then convert back to OsStr
+                    let val_str = val.to_str().ok_or_else(|| {
+                        InnerError::invalid_utf8_env(env_form, opt, self.env.get(env_form))
+                    })?;
+                    (
+                        value_source,
+                        val_str.split(delim).map(OsStr::new).collect(),
+                        opt,
+                    )
                 } else {
                     (value_source, vec![val], opt)
                 });
@@ -249,11 +297,20 @@ impl<'a> ConfContext<'a> {
         }
 
         for env_alias in opt.env_aliases.iter() {
-            if let Some(val) = self.get_env(env_alias, opt)? {
+            if let Some(val) = self.get_env_os(env_alias) {
                 let value_source = ConfValueSource::<&str>::Env(env_alias);
 
                 return Ok(if let Some(delim) = env_delimiter {
-                    (value_source, val.split(delim).collect(), opt)
+                    // For delimited env vars, we need UTF-8 to split properly
+                    // Convert to str, split, then convert back to OsStr
+                    let val_str = val.to_str().ok_or_else(|| {
+                        InnerError::invalid_utf8_env(env_alias, opt, self.env.get(env_alias))
+                    })?;
+                    (
+                        value_source,
+                        val_str.split(delim).map(OsStr::new).collect(),
+                        opt,
+                    )
                 } else {
                     (value_source, vec![val], opt)
                 });
@@ -261,6 +318,31 @@ impl<'a> ConfContext<'a> {
         }
 
         Ok((ValueSource::DefaultValue.into(), vec![], opt))
+    }
+
+    /// Get a repeat program option if it was set, using any of its aliases.
+    /// Returns values as &str. If any value from command-line arguments contains invalid UTF-8,
+    /// returns an error.
+    /// If env is set, env is parsed via the delimiter (char).
+    /// If args and env are set, args shadows env.
+    pub fn get_repeat_opt(
+        &self,
+        id: &str,
+        env_delimiter: Option<char>,
+    ) -> Result<(ConfValueSource<&'a str>, Vec<&'a str>, &'a ProgramOption), InnerError> {
+        let (value_source, os_strs, opt) = self.get_repeat_osstring_opt(id, env_delimiter)?;
+
+        // Convert each OsStr to str, handling UTF-8 errors
+        let strs: Result<Vec<&'a str>, InnerError> = os_strs
+            .into_iter()
+            .map(|os| {
+                os.to_str().ok_or_else(|| {
+                    InnerError::invalid_value_os(value_source.clone(), os, opt, "Invalid UTF-8")
+                })
+            })
+            .collect();
+
+        Ok((value_source, strs?, opt))
     }
 
     /// Check if a given option appears in cli args or env (not defaulted)

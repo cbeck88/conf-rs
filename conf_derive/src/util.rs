@@ -92,6 +92,32 @@ pub fn type_is_signed_number(ty: &Type) -> bool {
     }
 }
 
+/// Helper for determining if a type is PathBuf
+/// Only matches the simple identifier `PathBuf`, not `std::path::PathBuf`
+/// This allows users to bypass auto-detection by using the fully qualified path
+pub fn type_is_pathbuf(ty: &Type) -> bool {
+    match ty {
+        Type::Path(typepath) if typepath.qself.is_none() => {
+            let path = &typepath.path;
+            path.is_ident("PathBuf")
+        }
+        _ => false,
+    }
+}
+
+/// Helper for determining if a type is OsString
+/// Only matches the simple identifier `OsString`, not `std::ffi::OsString`
+/// This allows users to bypass auto-detection by using the fully qualified path
+pub fn type_is_osstring(ty: &Type) -> bool {
+    match ty {
+        Type::Path(typepath) if typepath.qself.is_none() => {
+            let path = &typepath.path;
+            path.is_ident("OsString")
+        }
+        _ => false,
+    }
+}
+
 /// Helper for reading a required value, which comes after a key, during `.parse_nested_meta`
 pub fn parse_required_value<T: Parse>(meta: ParseNestedMeta<'_>) -> Result<T, Error> {
     let t: T = meta.value()?.parse()?;

@@ -433,7 +433,7 @@ impl RepeatItem {
 
         if use_value_parser {
             // When use_value_parser is enabled, the behavior is, if conf_context produced a default
-            // value, we should overwrite it with the document value. `val_strs` is a `Vec<&str>`,
+            // value, we should overwrite it with the document value. `strs` is a `Vec<&str>`,
             // and #doc_val is a `Vec<String>`.
             let before_value_parser = quote! {
               let (value_source, strs) = if value_source.is_default() {

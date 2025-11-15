@@ -1,5 +1,5 @@
 use crate::{Error, ParseType, ParsedEnv, ProgramOption};
-use clap::{Arg, ArgAction, ArgMatches, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command, builder::ValueParser};
 use std::{collections::HashMap, ffi::OsString};
 
 /// Result of parsing arguments
@@ -273,7 +273,8 @@ impl<'a> Parser<'a> {
                 .index(positional_index.unwrap())
                 .required(false) // All args are optional from clap's view, we check requirements later
                 .action(action)
-                .allow_hyphen_values(option.allow_hyphen_values);
+                .allow_hyphen_values(option.allow_hyphen_values)
+                .value_parser(ValueParser::os_string());
 
             // For repeat positionals, allow multiple values
             if option.parse_type == ParseType::Repeat {
@@ -405,11 +406,13 @@ impl<'a> Parser<'a> {
                 arg = arg
                     .action(ArgAction::Set)
                     .allow_hyphen_values(option.allow_hyphen_values)
+                    .value_parser(ValueParser::os_string())
             }
             ParseType::Repeat => {
                 arg = arg
                     .action(ArgAction::Append)
                     .allow_hyphen_values(option.allow_hyphen_values)
+                    .value_parser(ValueParser::os_string())
             }
         };
 
