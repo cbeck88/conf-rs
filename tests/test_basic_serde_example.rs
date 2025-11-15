@@ -357,7 +357,8 @@ error: A required value was not provided
 error: Invalid value
   when parsing '--auth-url' value 'asdf:/': invalid format
   when parsing env 'AUTH_RETRIES' value 'xxx': invalid digit found in string
-"#.to_string()[1..];
+"#
+    .to_string()[1..];
 
     assert_eq!(
         output.status.code(),
