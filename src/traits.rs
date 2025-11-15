@@ -69,6 +69,19 @@ pub trait Conf: Sized {
         Default::default()
     }
 
+    /// Run clap's debug assertions on the parser configuration for this struct.
+    /// This is primarily used by the `#[conf(test)]` attribute to generate tests.
+    #[doc(hidden)]
+    fn parser_debug_asserts() {
+        let parser_config = Self::get_parser_config().expect("Failed to get parser config");
+        let program_options = Self::get_program_options().expect("Failed to get program options");
+        let parsed_env = ParsedEnv::default();
+        let subcommands = Self::get_subcommands(&parsed_env).expect("Failed to get subcommands");
+        let parser = Parser::new(parser_config, program_options, subcommands, &parsed_env)
+            .expect("Failed to create parser");
+        parser.into_command().debug_assert();
+    }
+
     // Construct a conf::Parser object appropriate for this Conf.
     // This requires the parsed_env because that is used in help text.
     // This Parser may be used in Conf::try_parse_from, or may be used to implement

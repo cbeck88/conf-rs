@@ -763,34 +763,7 @@ impl GenConfStruct {
             #maybe_should_panic
             #[allow(non_snake_case)]
             fn #test_fn_name() {
-                use ::conf::Conf;
-
-                // Get parser config
-                let parser_config = #ident::get_parser_config()
-                    .expect("Failed to get parser config");
-
-                // Get program options
-                let program_options = #ident::get_program_options()
-                    .expect("Failed to get program options");
-
-                // Create parsed env (empty for this test)
-                let parsed_env = ::conf::ParsedEnv::default();
-
-                // Get subcommands
-                let subcommands = #ident::get_subcommands(&parsed_env)
-                    .expect("Failed to get subcommands");
-
-                // Create parser
-                let parser = ::conf::Parser::new(
-                    parser_config,
-                    program_options,
-                    subcommands,
-                    &parsed_env,
-                )
-                .expect("Failed to create parser");
-
-                // Run clap's debug assertions
-                parser.into_command().debug_assert();
+                <#ident as ::conf::Conf>::parser_debug_asserts();
             }
         }))
     }
