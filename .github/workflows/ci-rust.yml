@@ -76,8 +76,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Rustup install nightly & update
-      run: rustup toolchain add nightly && rustup component add --toolchain nightly rustfmt && rustup update
+    - name: Rustup update
+      run: rustup update
     - name: Show cargo version
       run: cargo --version
     - name: rust build caching
@@ -87,7 +87,7 @@ jobs:
         workspaces: . -> target
         save-if: ${{ github.ref == 'refs/heads/develop' }}
     - name: Format
-      run: cargo +nightly fmt -- --check
+      run: cargo fmt -- --check
     - name: Clippy
       run: cargo clippy --all --all-features -- -D warnings
 
