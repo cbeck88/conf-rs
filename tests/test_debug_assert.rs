@@ -2,6 +2,7 @@ use conf::Conf;
 
 #[derive(Conf)]
 #[conf(test)]
+#[allow(dead_code)]
 pub struct SimpleConfig {
     #[arg(short, long)]
     name: String,
@@ -13,8 +14,10 @@ pub struct SimpleConfig {
     verbose: bool,
 }
 
+#[cfg(feature = "serde")]
 #[derive(Conf)]
 #[conf(serde, test)]
+#[allow(dead_code)]
 pub struct ConfigWithSerde {
     #[arg(long)]
     host: String,
@@ -28,6 +31,7 @@ pub struct ConfigWithSerde {
 
 #[derive(Conf)]
 #[conf(test(should_panic))]
+#[allow(dead_code)]
 pub struct ConfigWithShouldPanic {
     /// First positional (optional)
     #[conf(pos)]

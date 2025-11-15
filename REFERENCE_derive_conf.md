@@ -231,6 +231,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      **Example**:
      ```rust
      # use conf::Conf;
+     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
@@ -253,6 +254,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      **Example**:
      ```rust
      # use conf::Conf;
+     #[cfg(feature = "serde")]
      fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -262,6 +264,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
          Ok(value != 0)
      }
 
+     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
@@ -550,6 +553,7 @@ A parameter represents a single value that can be parsed from a string.
      **Example**:
      ```rust
      # use conf::Conf;
+     #[cfg(feature = "serde")]
      fn deserialize_doubled<'de, D>(deserializer: D) -> Result<i32, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -559,6 +563,7 @@ A parameter represents a single value that can be parsed from a string.
          Ok(value * 2)
      }
 
+     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
@@ -856,6 +861,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      **Example**:
      ```rust
      # use conf::Conf;
+     #[cfg(feature = "serde")]
      fn deserialize_vec_reversed<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -866,6 +872,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
          Ok(value)
      }
 
+     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
