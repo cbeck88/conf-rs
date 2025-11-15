@@ -18,6 +18,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [serde](#flag-serde)
       * [rename](#flag-serde-rename)
       * [alias](#flag-serde-alias)
+      * [deserialize_with](#flag-serde-deserialize-with)
       * [skip](#flag-serde-skip)
   * [Parameter](#parameter)
     * [short](#parameter-short)
@@ -34,6 +35,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [serde](#parameter-serde)
       * [rename](#parameter-serde-rename)
       * [alias](#parameter-serde-alias)
+      * [deserialize_with](#parameter-serde-deserialize-with)
       * [skip](#parameter-serde-skip)
       * [use_value_parser](#parameter-serde-use-value-parser)
   * [Repeat](#repeat)
@@ -51,6 +53,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [serde](#repeat-serde)
       * [rename](#repeat-serde-rename)
       * [alias](#repeat-serde-alias)
+      * [deserialize_with](#repeat-serde-deserialize-with)
       * [skip](#repeat-serde-skip)
       * [use_value_parser](#repeat-serde-use-value-parser)
   * [Flatten](#flatten)
@@ -233,6 +236,38 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      }
      ```
      This allows the field to be read from serde documents using any of: `"new_name"`, `"old_name"`, or `"legacy_name"`.
+
+   * <a name="flag-serde-deserialize-with"></a> `deserialize_with` (path argument)
+
+     example: `#[conf(serde(deserialize_with = "path::to::deserialize_fn"))]`
+
+     Similar to `#[serde(deserialize_with)]`, uses a custom deserialization function when reading from serde documents.
+     The function must have the signature `fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>`.
+
+     This attribute only affects deserialization from serde documents (JSON, TOML, etc.). Values from CLI arguments
+     and environment variables are parsed normally and do not use the custom deserializer.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+     where
+         D: serde::Deserializer<'de>,
+     {
+         use serde::Deserialize;
+         let value = i32::deserialize(deserializer)?;
+         Ok(value != 0)
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         #[conf(long, serde(deserialize_with = "deserialize_bool_from_int"))]
+         pub enabled: bool,
+     }
+     ```
+
+     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
 
    * <a name="flag-serde-skip"></a> `skip` (no arguments)
 
@@ -499,6 +534,38 @@ A parameter represents a single value that can be parsed from a string.
 
      Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
+   * <a name="parameter-serde-deserialize-with"></a> `deserialize_with` (path argument)
+
+     example: `#[conf(serde(deserialize_with = "path::to::deserialize_fn"))]`
+
+     Similar to `#[serde(deserialize_with)]`, uses a custom deserialization function when reading from serde documents.
+     The function must have the signature `fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>`.
+
+     This attribute only affects deserialization from serde documents (JSON, TOML, etc.). Values from CLI arguments
+     and environment variables are parsed normally and do not use the custom deserializer.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     fn deserialize_doubled<'de, D>(deserializer: D) -> Result<i32, D::Error>
+     where
+         D: serde::Deserializer<'de>,
+     {
+         use serde::Deserialize;
+         let value = i32::deserialize(deserializer)?;
+         Ok(value * 2)
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         #[arg(long, serde(deserialize_with = "deserialize_doubled"))]
+         pub count: i32,
+     }
+     ```
+
+     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
+
    * <a name="parameter-serde-skip"></a> `skip` (no arguments)
 
      example: `#[conf(serde(skip))]`
@@ -760,6 +827,39 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
 
      Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
+
+   * <a name="repeat-serde-deserialize-with"></a> `deserialize_with` (path argument)
+
+     example: `#[conf(serde(deserialize_with = "path::to::deserialize_fn"))]`
+
+     Similar to `#[serde(deserialize_with)]`, uses a custom deserialization function when reading from serde documents.
+     The function must have the signature `fn<'de, D>(D) -> Result<Vec<T>, D::Error> where D: Deserializer<'de>`.
+
+     This attribute only affects deserialization from serde documents (JSON, TOML, etc.). Values from CLI arguments
+     and environment variables are parsed normally and do not use the custom deserializer.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     fn deserialize_vec_reversed<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
+     where
+         D: serde::Deserializer<'de>,
+     {
+         use serde::Deserialize;
+         let mut value = Vec::<i32>::deserialize(deserializer)?;
+         value.reverse();
+         Ok(value)
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         #[conf(repeat, long, serde(deserialize_with = "deserialize_vec_reversed"))]
+         pub items: Vec<i32>,
+     }
+     ```
+
+     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
 
    * <a name="repeat-serde-skip"></a> `skip` (no arguments)
 

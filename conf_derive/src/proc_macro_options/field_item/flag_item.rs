@@ -3,7 +3,7 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Field, Ident, LitChar, LitStr, Type, meta::ParseNestedMeta, parse_quote,
+    Error, Field, Ident, LitChar, LitStr, Path, Type, meta::ParseNestedMeta, parse_quote,
     spanned::Spanned, token,
 };
 
@@ -12,6 +12,7 @@ pub struct FlagSerdeItem {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
     pub skip: bool,
+    pub deserialize_with: Option<Path>,
     span: Span,
 }
 
@@ -21,6 +22,7 @@ impl FlagSerdeItem {
             rename: None,
             aliases: Vec::new(),
             skip: false,
+            deserialize_with: None,
             span: meta.input.span(),
         };
 
@@ -39,6 +41,12 @@ impl FlagSerdeItem {
                 } else if path.is_ident("skip") {
                     result.skip = true;
                     Ok(())
+                } else if path.is_ident("deserialize_with") {
+                    set_once(
+                        &path,
+                        &mut result.deserialize_with,
+                        Some(parse_path_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
@@ -193,6 +201,12 @@ impl FlagItem {
 
     pub fn get_serde_skip(&self) -> bool {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
+    }
+
+    pub fn get_serde_deserialize_with(&self) -> Option<Path> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.deserialize_with.clone())
     }
 
     pub fn gen_push_program_options(

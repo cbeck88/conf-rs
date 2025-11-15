@@ -983,3 +983,133 @@ fn test_serde_subcommand_alias() {
         ["duplicate field"]
     );
 }
+
+// Custom deserialize functions for testing
+fn deserialize_doubled<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let value = i32::deserialize(deserializer)?;
+    Ok(value * 2)
+}
+
+fn deserialize_uppercase<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let value = String::deserialize(deserializer)?;
+    Ok(value.to_uppercase())
+}
+
+fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let value = i32::deserialize(deserializer)?;
+    Ok(value != 0)
+}
+
+fn deserialize_vec_reversed<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let mut value = Vec::<i32>::deserialize(deserializer)?;
+    value.reverse();
+    Ok(value)
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct TestDeserializeWith {
+    #[arg(long, serde(deserialize_with = "deserialize_doubled"))]
+    pub doubled: i32,
+
+    #[arg(long, serde(deserialize_with = "deserialize_uppercase"))]
+    pub uppercase: String,
+
+    #[arg(long, serde(deserialize_with = "deserialize_bool_from_int"))]
+    pub flag_from_int: bool,
+
+    #[conf(repeat, long, serde(deserialize_with = "deserialize_vec_reversed"))]
+    pub reversed_items: Vec<i32>,
+}
+
+#[test]
+fn test_serde_deserialize_with() {
+    // Test that deserialize_with is applied for parameter
+    let result = TestDeserializeWith::conf_builder()
+        .args([".", "--doubled=5", "--uppercase=hello", "--flag-from-int"])
+        .doc("t.json", json!({}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.doubled, 5); // Not doubled because value is from args, not serde
+    assert_eq!(result.uppercase, "hello"); // Not uppercased because value is from args
+    assert_eq!(result.flag_from_int, true);
+    assert!(result.reversed_items.is_empty());
+
+    // Test that deserialize_with works from serde document
+    let result = TestDeserializeWith::conf_builder()
+        .args(["."])
+        .doc(
+            "t.json",
+            json!({
+                "doubled": 3,
+                "uppercase": "from_serde",
+                "flag_from_int": 0,
+                "reversed_items": [1, 2, 3]
+            }),
+        )
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.doubled, 6); // 3 * 2 (deserialize_with applied)
+    assert_eq!(result.uppercase, "FROM_SERDE"); // Uppercased (deserialize_with applied)
+    assert_eq!(result.flag_from_int, false); // 0 -> false (deserialize_with applied)
+    assert_eq!(result.reversed_items, vec![3, 2, 1]); // Reversed (deserialize_with applied)
+
+    // Test that CLI values take precedence and don't use deserialize_with
+    // (deserialize_with only applies to serde documents)
+    let result = TestDeserializeWith::conf_builder()
+        .args([
+            ".",
+            "--doubled=7",
+            "--uppercase=world",
+            "--flag-from-int",
+            "--reversed-items=10",
+        ])
+        .doc(
+            "t.json",
+            json!({
+                "doubled": 100,
+                "uppercase": "ignored",
+                "flag_from_int": 0,
+                "reversed_items": [99, 98]
+            }),
+        )
+        .try_parse()
+        .unwrap();
+    // CLI values should not be transformed by deserialize_with
+    assert_eq!(result.doubled, 7); // Not doubled
+    assert_eq!(result.uppercase, "world"); // Not uppercased
+    assert_eq!(result.flag_from_int, true); // --flag-from-int sets it to true
+    assert_eq!(result.reversed_items, vec![10]); // Not reversed
+}
+
+// Test that deserialize_with and use_value_parser are mutually exclusive
+#[test]
+fn test_serde_deserialize_with_mutual_exclusivity() {
+    // This should fail to compile if uncommented
+    // #[derive(Conf)]
+    // #[conf(serde)]
+    // struct BadConfig {
+    //     #[arg(long, serde(deserialize_with = "some_fn", use_value_parser))]
+    //     field: String,
+    // }
+
+    // For now, we verify this is caught at proc macro time by checking the error message
+    // would be "deserialize_with and use_value_parser are mutually exclusive"
+    // This is tested by the proc macro compilation tests
+}

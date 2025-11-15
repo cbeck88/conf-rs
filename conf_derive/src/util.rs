@@ -124,6 +124,12 @@ pub fn parse_required_value<T: Parse>(meta: ParseNestedMeta<'_>) -> Result<T, Er
     Ok(t)
 }
 
+/// Helper for reading a path from a string literal, similar to serde's deserialize_with
+pub fn parse_path_from_str(meta: ParseNestedMeta<'_>) -> Result<syn::Path, Error> {
+    let lit_str: syn::LitStr = parse_required_value(meta)?;
+    lit_str.parse()
+}
+
 /// Helper for reading an optional value, which may come after a key, during `.parse_nested_meta`
 pub fn parse_optional_value<T: Parse>(meta: ParseNestedMeta<'_>) -> Result<Option<T>, Error> {
     if meta.input.is_empty() || meta.input.peek(Token![,]) {

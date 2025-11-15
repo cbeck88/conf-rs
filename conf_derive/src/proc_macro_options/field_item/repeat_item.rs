@@ -3,8 +3,8 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Expr, Field, Ident, LitBool, LitChar, LitStr, Type, meta::ParseNestedMeta, parse_quote,
-    spanned::Spanned, token,
+    Error, Expr, Field, Ident, LitBool, LitChar, LitStr, Path, Type, meta::ParseNestedMeta,
+    parse_quote, spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Repeat kind
@@ -13,6 +13,7 @@ pub struct RepeatSerdeItem {
     pub aliases: Vec<LitStr>,
     pub skip: bool,
     pub use_value_parser: bool,
+    pub deserialize_with: Option<Path>,
     span: Span,
 }
 
@@ -23,6 +24,7 @@ impl RepeatSerdeItem {
             aliases: Vec::new(),
             skip: false,
             use_value_parser: false,
+            deserialize_with: None,
             span: meta.input.span(),
         };
 
@@ -44,10 +46,24 @@ impl RepeatSerdeItem {
                 } else if path.is_ident("use_value_parser") {
                     result.use_value_parser = true;
                     Ok(())
+                } else if path.is_ident("deserialize_with") {
+                    set_once(
+                        &path,
+                        &mut result.deserialize_with,
+                        Some(parse_path_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
             })?;
+        }
+
+        // Validate that deserialize_with and use_value_parser are mutually exclusive
+        if result.deserialize_with.is_some() && result.use_value_parser {
+            return Err(Error::new(
+                result.span,
+                "deserialize_with and use_value_parser are mutually exclusive",
+            ));
         }
 
         Ok(result)
@@ -281,6 +297,12 @@ impl RepeatItem {
 
     pub fn get_serde_skip(&self) -> bool {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
+    }
+
+    pub fn get_serde_deserialize_with(&self) -> Option<Path> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.deserialize_with.clone())
     }
 
     /// Generate a routine that pushes a ::conf::ProgramOption corresponding to

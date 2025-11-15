@@ -3,7 +3,7 @@ use crate::util::type_is_bool;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Field, Ident, LitStr, Meta, Token, Type, punctuated::Punctuated};
+use syn::{Error, Field, Ident, LitStr, Meta, Path, Token, Type, punctuated::Punctuated};
 
 mod flag_item;
 mod flatten_item;
@@ -363,6 +363,7 @@ impl FieldItem {
         let serde_name_str = self.get_serde_name();
         let serde_aliases = self.get_serde_aliases();
         let serde_type = self.get_serde_type();
+        let deserialize_with = self.get_serde_deserialize_with();
 
         let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
         let doc_name_ident = Ident::new("__doc_name__", Span::call_site());
@@ -381,6 +382,29 @@ impl FieldItem {
             quote! { #serde_name_str | #(#serde_aliases)|* }
         };
 
+        // Generate the deserialization call - either using deserialize_with or the default Deserialize impl
+        let deserialize_call = if let Some(deserialize_with_path) = deserialize_with {
+            quote! {
+              {
+                struct __DeserializeWith;
+                impl<'de> ::serde::de::DeserializeSeed<'de> for __DeserializeWith {
+                  type Value = #serde_type;
+                  fn deserialize<__D>(self, __deserializer: __D) -> ::std::result::Result<Self::Value, __D::Error>
+                  where
+                    __D: ::serde::de::Deserializer<'de>
+                  {
+                    #deserialize_with_path(__deserializer)
+                  }
+                }
+                #map_access.next_value_seed(__DeserializeWith)
+              }
+            }
+        } else {
+            quote! {
+              #map_access.next_value::<#serde_type>()
+            }
+        };
+
         let match_arm = quote! {
           #match_pattern => {
             if #field_name.is_some() {
@@ -392,7 +416,7 @@ impl FieldItem {
                 )
               );
             } else {
-              #field_name = Some(match #map_access.next_value::<#serde_type>() {
+              #field_name = Some(match #deserialize_call {
                 Ok(#doc_val_ident) => {
                   let #conf_context_ident: &::conf::ConfContext = &#ctxt.conf_context;
                   let #doc_name_ident: &str = #ctxt.document_name;
@@ -436,6 +460,17 @@ impl FieldItem {
             Self::Flag(item) => item.get_serde_aliases(),
             Self::Parameter(item) => item.get_serde_aliases(),
             Self::Repeat(item) => item.get_serde_aliases(),
+            Self::Flatten(_item) => unimplemented!(),
+            Self::Subcommands(_item) => unimplemented!(),
+        }
+    }
+
+    /// Get the serde deserialize_with expression (only when "is_single_option" is true)
+    fn get_serde_deserialize_with(&self) -> Option<Path> {
+        match self {
+            Self::Flag(item) => item.get_serde_deserialize_with(),
+            Self::Parameter(item) => item.get_serde_deserialize_with(),
+            Self::Repeat(item) => item.get_serde_deserialize_with(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
         }
