@@ -885,3 +885,101 @@ fn test_serde_flatten_alias() {
         ["duplicate field"]
     );
 }
+
+#[derive(Subcommands, Debug)]
+#[conf(serde)]
+pub enum CommandsWithAlias {
+    #[conf(serde(rename = "new_cmd", alias = "old_cmd", alias = "legacy_cmd"))]
+    NewCommand(A2),
+    #[conf(serde(rename = "other_new", alias = "other_old"))]
+    OtherCommand(B),
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct TestSubcommandAlias {
+    #[arg(short)]
+    flag: bool,
+    #[conf(subcommands)]
+    commands: CommandsWithAlias,
+}
+
+#[test]
+fn test_serde_subcommand_alias() {
+    // Test that the main (renamed) name works
+    let result = TestSubcommandAlias::conf_builder()
+        .args([".", "new-command", "--wiggle=5"])
+        .doc("t.json", json!({"new_cmd": {"wobble": "a"}}))
+        .try_parse()
+        .unwrap();
+    assert!(!result.flag);
+    let CommandsWithAlias::NewCommand(cmd) = result.commands else {
+        panic!("unexpected enum value")
+    };
+    assert_eq!(cmd.wiggle, 5);
+    assert_eq!(cmd.wobble, "a");
+
+    // Test that first alias works
+    let result = TestSubcommandAlias::conf_builder()
+        .args([".", "new-command", "--wiggle=10"])
+        .doc("t.json", json!({"old_cmd": {"wobble": "b"}}))
+        .try_parse()
+        .unwrap();
+    assert!(!result.flag);
+    let CommandsWithAlias::NewCommand(cmd) = result.commands else {
+        panic!("unexpected enum value")
+    };
+    assert_eq!(cmd.wiggle, 10);
+    assert_eq!(cmd.wobble, "b");
+
+    // Test that second alias works
+    let result = TestSubcommandAlias::conf_builder()
+        .args([".", "new-command", "--wiggle=15"])
+        .doc("t.json", json!({"legacy_cmd": {"wobble": "c"}}))
+        .try_parse()
+        .unwrap();
+    assert!(!result.flag);
+    let CommandsWithAlias::NewCommand(cmd) = result.commands else {
+        panic!("unexpected enum value")
+    };
+    assert_eq!(cmd.wiggle, 15);
+    assert_eq!(cmd.wobble, "c");
+
+    // Test that alias works for the other command
+    let result = TestSubcommandAlias::conf_builder()
+        .args([".", "other-command"])
+        .doc("t.json", json!({"other_old": {"f": true, "a": {"wiggle": 20, "wobble": "d"}}}))
+        .try_parse()
+        .unwrap();
+    assert!(!result.flag);
+    let CommandsWithAlias::OtherCommand(cmd) = result.commands else {
+        panic!("unexpected enum value")
+    };
+    assert!(cmd.f);
+    assert_eq!(cmd.a.wiggle, 20);
+    assert_eq!(cmd.a.wobble, "d");
+
+    // Test that using both main name and alias causes duplicate field error
+    assert_error_contains_text!(
+        TestSubcommandAlias::conf_builder()
+            .args([".", "new-command"])
+            .doc(
+                "t.json",
+                json!({"new_cmd": {"wobble": "x"}, "old_cmd": {"wobble": "y"}})
+            )
+            .try_parse(),
+        ["duplicate field"]
+    );
+
+    // Test that using two aliases causes duplicate field error
+    assert_error_contains_text!(
+        TestSubcommandAlias::conf_builder()
+            .args([".", "new-command"])
+            .doc(
+                "t.json",
+                json!({"old_cmd": {"wobble": "x"}, "legacy_cmd": {"wobble": "y"}})
+            )
+            .try_parse(),
+        ["duplicate field"]
+    );
+}

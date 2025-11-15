@@ -159,12 +159,27 @@ impl GenSubcommandsEnum {
             .variants
             .iter()
             .filter(|var| !var.get_serde_skip())
-            .map(|var| {
+            .flat_map(|var| {
                 let command_name = var.get_command_name();
                 let serde_name = var.get_serde_name();
-                quote! {
+                let serde_aliases = var.get_serde_aliases();
+
+                // Create a tuple for the primary serde name
+                let primary_tuple = quote! {
                     (#command_name, #serde_name)
-                }
+                };
+
+                // Create tuples for all aliases
+                let alias_tuples: Vec<TokenStream> = serde_aliases
+                    .iter()
+                    .map(|alias| {
+                        quote! {
+                            (#command_name, #alias)
+                        }
+                    })
+                    .collect();
+
+                std::iter::once(primary_tuple).chain(alias_tuples)
             })
             .collect();
         Ok(quote! {

@@ -14,6 +14,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [name](#variant-name)
     * [serde](#variant-serde)
       * [rename](#variant-serde-rename)
+      * [alias](#variant-serde-alias)
       * [skip](#variant-serde-skip)
 
 ## Where can conf attributes be used?
@@ -102,6 +103,31 @@ Each enum variant must have zero or one unnamed fields, which if present is a `s
      Similar to `#[serde(rename)]`, changes the name used in serialization.
 
      If this attribute is not present, the serialization name is the lower snake-case of the variant name.
+
+   * <a name="variant-serde-alias"></a> `alias` (string argument, repeating)
+
+     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+
+     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents.
+     This is useful for maintaining backwards compatibility when renaming subcommands in configuration files.
+
+     **Example**:
+     ```rust
+     # use conf::Subcommands;
+     #[derive(Subcommands)]
+     #[conf(serde)]
+     pub enum Command {
+         #[conf(serde(rename = "new_command", alias = "old_command", alias = "legacy_command"))]
+         NewCommand(NewCommandConfig),
+     }
+
+     # #[derive(conf::Conf)]
+     # #[conf(serde)]
+     # pub struct NewCommandConfig {}
+     ```
+
+     In this example, the subcommand can be specified in serde documents as `new_command` (the primary name),
+     `old_command`, or `legacy_command` (aliases), and all will deserialize to the `NewCommand` variant.
 
    * <a name="variant-serde-skip"></a> `skip` (no arguments)
 
