@@ -826,3 +826,62 @@ fn test_serde_alias() {
         ["unknown field `unknown_field`"]
     );
 }
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct Inner {
+    #[arg(long)]
+    pub value: i32,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct TestFlattenAlias {
+    #[conf(flatten, serde(rename = "new_inner", alias = "old_inner"))]
+    pub inner: Inner,
+
+    #[arg(long)]
+    pub flag: bool,
+}
+
+#[test]
+fn test_serde_flatten_alias() {
+    // Test that the main (renamed) name works
+    let result = TestFlattenAlias::conf_builder()
+        .args([".", "--value=10", "--flag"])
+        .doc("t.json", json!({}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.inner.value, 10);
+    assert!(result.flag);
+
+    // Test that renamed field works from serde doc
+    let result = TestFlattenAlias::conf_builder()
+        .args([".", "--flag"])
+        .doc("t.json", json!({"new_inner": {"value": 20}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.inner.value, 20);
+    assert!(result.flag);
+
+    // Test that alias works
+    let result = TestFlattenAlias::conf_builder()
+        .args([".", "--flag"])
+        .doc("t.json", json!({"old_inner": {"value": 30}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.inner.value, 30);
+    assert!(result.flag);
+
+    // Test that using both main name and alias causes duplicate field error
+    assert_error_contains_text!(
+        TestFlattenAlias::conf_builder()
+            .args([".", "--flag"])
+            .doc(
+                "t.json",
+                json!({"new_inner": {"value": 10}, "old_inner": {"value": 20}})
+            )
+            .try_parse(),
+        ["duplicate field"]
+    );
+}

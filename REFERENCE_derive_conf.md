@@ -61,6 +61,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [skip_short](#flatten-skip-short)
     * [serde](#flatten-serde)
       * [rename](#flatten-serde-rename)
+      * [alias](#flatten-serde-alias)
       * [skip](#flatten-serde-skip)
   * [Subcommands](#subcommands)
     * [serde](#subcommands-serde)
@@ -868,6 +869,12 @@ and you can customize this if another choice of delimiter is more appropriate.
      example: `#[conf(serde(rename = "foo"))]`
 
      Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="flatten-serde-alias"></a> `alias` (string argument, repeating)
+
+     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+
+     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
    * <a name="flatten-serde-skip"></a> `skip` (no arguments)
 

@@ -9,6 +9,7 @@ use syn::{Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, spanned::Spa
 /// #[conf(serde(...))] options listed on a field of Flatten kind
 pub struct FlattenSerdeItem {
     pub rename: Option<LitStr>,
+    pub aliases: Vec<LitStr>,
     pub skip: bool,
     span: Span,
 }
@@ -17,6 +18,7 @@ impl FlattenSerdeItem {
     pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
         let mut result = Self {
             rename: None,
+            aliases: Vec::new(),
             skip: false,
             span: meta.input.span(),
         };
@@ -30,6 +32,9 @@ impl FlattenSerdeItem {
                         &mut result.rename,
                         Some(parse_required_value::<LitStr>(meta)?),
                     )
+                } else if path.is_ident("alias") {
+                    result.aliases.push(parse_required_value::<LitStr>(meta)?);
+                    Ok(())
                 } else if path.is_ident("skip") {
                     result.skip = true;
                     Ok(())
@@ -181,6 +186,13 @@ impl FlattenItem {
             .as_ref()
             .and_then(|serde| serde.rename.clone())
             .unwrap_or_else(|| LitStr::new(&self.field_name.to_string(), self.field_name.span()))
+    }
+
+    fn get_serde_aliases(&self) -> Vec<LitStr> {
+        self.serde
+            .as_ref()
+            .map(|serde| serde.aliases.clone())
+            .unwrap_or_default()
     }
 
     pub fn get_serde_skip(&self) -> bool {
@@ -406,6 +418,7 @@ impl FlattenItem {
         let field_name_str = field_name.to_string();
         let field_type = &self.field_type;
         let serde_name_str = self.get_serde_name();
+        let serde_aliases = self.get_serde_aliases();
         let id_prefix = self.get_id_prefix();
 
         // It's necessary to do special handling for optional flattened structs here,
@@ -435,8 +448,16 @@ impl FlattenItem {
         // that our DeserializeSeed implementation never ran, since it never does that.
         // But it's possible that the MapAccess will fail before even getting to that point,
         // and then it could return a singular D::Error. So we should not unwrap such errors.
+
+        // Build match pattern: "name" | "alias1" | "alias2" => { ... }
+        let match_pattern = if serde_aliases.is_empty() {
+            quote! { #serde_name_str }
+        } else {
+            quote! { #serde_name_str | #(#serde_aliases)|* }
+        };
+
         let match_arm = quote! {
-          #serde_name_str => {
+          #match_pattern => {
             if #field_name.is_some() {
               #errors_ident.push(
                 InnerError::serde(
@@ -471,7 +492,11 @@ impl FlattenItem {
             }
           },
         };
-        Ok((match_arm, vec![serde_name_str]))
+
+        // Return all names for error messages
+        let mut all_names = vec![serde_name_str];
+        all_names.extend(serde_aliases);
+        Ok((match_arm, all_names))
     }
 }
 
