@@ -50,6 +50,7 @@ impl GenSubcommandsEnum {
             self.get_parsers_impl()?,
             self.get_subcommand_names_impl()?,
             self.from_conf_context_impl()?,
+            self.debug_asserts_impl()?,
         ];
 
         Ok(quote! {
@@ -124,6 +125,21 @@ impl GenSubcommandsEnum {
               }
             }
           }
+        })
+    }
+
+    /// Generate Subcommands::debug_asserts implementation
+    fn debug_asserts_impl(&self) -> Result<TokenStream, syn::Error> {
+        let assertions: Vec<TokenStream> = self
+            .variants
+            .iter()
+            .map(|variant| variant.gen_debug_asserts())
+            .collect::<Result<Vec<_>, syn::Error>>()?;
+
+        Ok(quote! {
+            fn debug_asserts() {
+                #(#assertions)*
+            }
         })
     }
 

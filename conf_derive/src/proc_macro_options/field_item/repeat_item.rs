@@ -490,4 +490,10 @@ impl RepeatItem {
             self.gen_initializer_helper(conf_context_ident, Some(before_value_parser))
         }
     }
+
+    /// Generate debug assertions for this repeat
+    /// Repeats don't support default_value, so nothing to check
+    pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
+        Ok(quote! {})
+    }
 }

@@ -55,6 +55,7 @@ impl GenConfStruct {
             self.get_subcommands_impl()?,
             self.from_conf_context_impl()?,
             self.get_name_impl()?,
+            self.debug_asserts_impl()?,
         ];
 
         Ok(quote! {
@@ -730,6 +731,22 @@ impl GenConfStruct {
         })
     }
 
+    /// Generate Conf::debug_asserts implementation
+    fn debug_asserts_impl(&self) -> Result<TokenStream, Error> {
+        let struct_ident = self.struct_item.get_ident();
+        let assertions: Vec<TokenStream> = self
+            .fields
+            .iter()
+            .map(|field| field.gen_debug_asserts(struct_ident))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        Ok(quote! {
+            fn debug_asserts() {
+                #(#assertions)*
+            }
+        })
+    }
+
     /// Generate a test function (if requested via #[conf(test)] attribute)
     pub fn maybe_gen_test_fn(&self, generics: &Generics) -> Result<Option<TokenStream>, Error> {
         // If test is not requested, don't generate anything
@@ -764,6 +781,7 @@ impl GenConfStruct {
             #[allow(non_snake_case)]
             fn #test_fn_name() {
                 <#ident as ::conf::Conf>::parser_debug_asserts();
+                <#ident as ::conf::Conf>::debug_asserts();
             }
         }))
     }

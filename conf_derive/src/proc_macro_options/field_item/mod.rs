@@ -497,4 +497,15 @@ impl FieldItem {
             Self::Subcommands(item) => item.get_serde_skip(),
         }
     }
+
+    /// Generate debug assertions for this field
+    pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
+        match self {
+            Self::Flag(item) => item.gen_debug_asserts(struct_ident),
+            Self::Parameter(item) => item.gen_debug_asserts(struct_ident),
+            Self::Repeat(item) => item.gen_debug_asserts(struct_ident),
+            Self::Flatten(item) => item.gen_debug_asserts(struct_ident),
+            Self::Subcommands(item) => item.gen_debug_asserts(struct_ident),
+        }
+    }
 }

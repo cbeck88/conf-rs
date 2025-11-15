@@ -78,6 +78,41 @@ impl ParameterSerdeItem {
     }
 }
 
+/// #[conf(test(...))] options listed on a parameter
+pub struct ParameterTestItem {
+    pub skip_default_value: bool,
+    span: Span,
+}
+
+impl ParameterTestItem {
+    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+        let mut result = Self {
+            skip_default_value: false,
+            span: meta.input.span(),
+        };
+
+        if meta.input.peek(token::Paren) {
+            meta.parse_nested_meta(|meta| {
+                let path = meta.path.clone();
+                if path.is_ident("skip_default_value") {
+                    result.skip_default_value = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized conf(test) option"))
+                }
+            })?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl GetSpan for ParameterTestItem {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
 impl GetSpan for ParameterSerdeItem {
     fn get_span(&self) -> Span {
         self.span
@@ -100,6 +135,7 @@ pub struct ParameterItem {
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
+    test: Option<ParameterTestItem>,
     doc_string: Option<String>,
     is_positional: bool,
 }
@@ -130,6 +166,7 @@ impl ParameterItem {
             value_parser: None,
             value_parser_os: None,
             serde: None,
+            test: None,
             doc_string: None,
             is_positional: false,
         };
@@ -207,6 +244,8 @@ impl ParameterItem {
                             &mut result.serde,
                             Some(ParameterSerdeItem::new(meta)?),
                         )
+                    } else if path.is_ident("test") {
+                        set_once(&path, &mut result.test, Some(ParameterTestItem::new(meta)?))
                     } else if path.is_ident("pos") {
                         result.is_positional = true;
                         Ok(())
@@ -621,6 +660,72 @@ impl ParameterItem {
                 Some(if_no_conf_context_val),
                 Some(before_value_parser),
             )
+        }
+    }
+
+    /// Generate debug assertions for this parameter
+    /// If there's a default_value and a value_parser/value_parser_os, test that the default parses
+    pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
+        // Check if skip_default_value is set. This might be useful when the value_parser has
+        // side-effects or reads files from the file-system that might not be there during the test.
+        if let Some(test_item) = &self.test {
+            if test_item.skip_default_value {
+                return Ok(quote! {});
+            }
+        }
+
+        if let Some(default_value) = &self.default_value {
+            let default_value_str = &default_value.value();
+            let field_name = &self.field_name;
+            let field_type = &self.field_type;
+            let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
+
+            // Use the existing logic to get the value parser
+            let value_parser_expr = self.get_value_parser_expr();
+
+            // Generate the appropriate parse expression based on parser type
+            // Use the same pattern as gen_initializer_helper: define a local __value_parser__ function
+            let parse_expr = match value_parser_expr {
+                ValueParserExpr::OsStr(value_parser_expr) => {
+                    quote! {
+                        {
+                            fn __value_parser__(
+                                __arg__: &::std::ffi::OsStr
+                            ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                                #value_parser_expr(__arg__)
+                            }
+
+                            use ::std::ffi::OsStr;
+                            let os_str = OsStr::new(#default_value_str);
+                            __value_parser__(os_str)
+                        }
+                    }
+                }
+                ValueParserExpr::Str(value_parser_expr) => {
+                    quote! {
+                        {
+                            fn __value_parser__(
+                                __arg__: &str
+                            ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                                #value_parser_expr(__arg__)
+                            }
+
+                            __value_parser__(#default_value_str)
+                        }
+                    }
+                }
+            };
+
+            Ok(quote! {
+                {
+                    if let Err(err) = #parse_expr {
+                        panic!("in struct '{}' field '{}': default_value '{}' failed to parse: {}",
+                            stringify!(#struct_ident), stringify!(#field_name), #default_value_str, err);
+                    }
+                }
+            })
+        } else {
+            Ok(quote! {})
         }
     }
 }

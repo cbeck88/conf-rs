@@ -286,4 +286,10 @@ impl FlagItem {
             false,
         ))
     }
+
+    /// Generate debug assertions for this flag
+    /// Flags don't need debug assertions
+    pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
+        Ok(quote! {})
+    }
 }

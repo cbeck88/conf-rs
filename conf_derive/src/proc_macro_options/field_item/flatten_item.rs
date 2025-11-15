@@ -498,6 +498,20 @@ impl FlattenItem {
         all_names.extend(serde_aliases);
         Ok((match_arm, all_names))
     }
+
+    /// Generate debug assertions for this flatten field
+    /// Recursively call debug_asserts on the flattened type
+    pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
+        let inner_type = if let Some(opt_type) = &self.is_optional_type {
+            opt_type.clone()
+        } else {
+            self.field_type.clone()
+        };
+
+        Ok(quote! {
+            <#inner_type as ::conf::Conf>::debug_asserts();
+        })
+    }
 }
 
 #[cfg(test)]

@@ -82,6 +82,11 @@ pub trait Conf: Sized {
         parser.into_command().debug_assert();
     }
 
+    /// Run debug assertions on this struct's fields recursively.
+    /// This validates default_value parsing and recurses into flattened fields and subcommands.
+    #[doc(hidden)]
+    fn debug_asserts();
+
     // Construct a conf::Parser object appropriate for this Conf.
     // This requires the parsed_env because that is used in help text.
     // This Parser may be used in Conf::try_parse_from, or may be used to implement
@@ -194,4 +199,8 @@ pub trait Subcommands: Sized {
         command_name: String,
         conf_context: ConfContext<'_>,
     ) -> Result<Self, Vec<InnerError>>;
+
+    /// Run debug assertions on all subcommand variants recursively.
+    #[doc(hidden)]
+    fn debug_asserts();
 }

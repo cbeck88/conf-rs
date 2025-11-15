@@ -265,4 +265,24 @@ impl VariantItem {
             })
         }
     }
+
+    /// Generate debug assertions for this variant
+    /// Call both parser_debug_asserts and debug_asserts on the inner Conf type (if any)
+    pub fn gen_debug_asserts(&self) -> Result<TokenStream, Error> {
+        if let Some(inner_type) = &self.variant_type {
+            let conf_type = if let Some(opt_type) = &self.is_optional_type {
+                opt_type.clone()
+            } else {
+                inner_type.clone()
+            };
+
+            Ok(quote! {
+                <#conf_type as ::conf::Conf>::parser_debug_asserts();
+                <#conf_type as ::conf::Conf>::debug_asserts();
+            })
+        } else {
+            // Unit variants don't have an inner Conf type, so nothing to check
+            Ok(quote! {})
+        }
+    }
 }

@@ -238,4 +238,18 @@ impl SubcommandsItem {
         // proc_macro invocation for the enum.
         Ok((match_arm, vec![]))
     }
+
+    /// Generate debug assertions for this subcommands field
+    /// Call debug_asserts on the subcommands enum
+    pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
+        let enum_type = if let Some(opt_type) = &self.is_optional_type {
+            opt_type.clone()
+        } else {
+            self.field_type.clone()
+        };
+
+        Ok(quote! {
+            <#enum_type as ::conf::Subcommands>::debug_asserts();
+        })
+    }
 }
