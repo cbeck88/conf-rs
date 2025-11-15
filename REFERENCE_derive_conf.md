@@ -112,7 +112,7 @@ When they do, this reference will specify what types of arguments are valid. If 
 are described as "optional", and we will explain what the behavior is if they are omitted. If the arguments are not
 marked optional, then they are required.
 
-Attributes which take an argument like this, with the `=` sign, can only be set once. It's an error if they occur a second time on the same item.
+Attributes which take an argument like this, with the `=` sign, typically can only be set once. It's an error if they occur a second time on the same item. (In some cases they are allowed to repeat.)
 
 Some attributes "take a parenthetical", which means they are used like
 
@@ -231,13 +231,15 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      **Example**:
      ```rust
      # use conf::Conf;
-     #[cfg(feature = "serde")]
+     # #[cfg(feature = "serde")]
+     # {
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
          #[conf(long, serde(rename = "new_name", alias = "old_name", alias = "legacy_name"))]
          pub field: String,
      }
+     # }
      ```
      This allows the field to be read from serde documents using any of: `"new_name"`, `"old_name"`, or `"legacy_name"`.
 
@@ -254,7 +256,8 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      **Example**:
      ```rust
      # use conf::Conf;
-     #[cfg(feature = "serde")]
+     # #[cfg(feature = "serde")]
+     # {
      fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -264,13 +267,13 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
          Ok(value != 0)
      }
 
-     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
          #[conf(long, serde(deserialize_with = "deserialize_bool_from_int"))]
          pub enabled: bool,
      }
+     # }
      ```
 
      This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
@@ -322,18 +325,14 @@ A parameter represents a single value that can be parsed from a string.
    **Positional argument filling**:
    - Positional arguments are filled left-to-right based on their declaration order in the struct
    - You cannot skip a positional argument to provide a later one
-   - If you have multiple optional positionals and provide fewer arguments, they fill from left to right
 
    **Optional positionals**:
    - A positional parameter can be optional by using `Option<T>` as the field type
    - All optional positional arguments must come after all required positional arguments
-   - The parser will panic at construction time if a required positional follows an optional positional
 
    **Compatibility**:
-   - `pos` is mutually exclusive with `short` and `long` (you cannot have a positional argument with flag names)
-   - `pos` is compatible with `env` (the value can be provided via environment variable or positional argument)
-   - `pos` is supported in regular `flatten` and in subcommands
-   - `pos` is NOT supported in `flatten` with `Option<T>` (flatten optional) - this will produce an error
+   - `pos` is mutually exclusive with `short` and `long`
+   - `pos` is not supported in `flatten` with `Option<T>` (flatten optional) - this will produce an error
 
    **Examples**:
 
@@ -350,7 +349,7 @@ A parameter represents a single value that can be parsed from a string.
        #[conf(pos)]
        output: String,
 
-       /// Optional log file (optional positional - OK because it's at the end)
+       /// Optional log file (optional positional)
        #[conf(pos)]
        log_file: Option<String>,
    }
@@ -379,33 +378,6 @@ A parameter represents a single value that can be parsed from a string.
        vec![],
    );
    ```
-
-   Positional with environment variable fallback:
-   ```rust
-   use conf::Conf;
-   #[derive(Conf)]
-   struct MyConfig {
-       /// Can be provided as first positional arg or via INPUT env var
-       #[conf(pos, env)]
-       input: String,
-   }
-
-   // Test it works
-   let result = MyConfig::try_parse_from::<&str, &str, &str>(
-       vec!["prog", "input.txt"],
-       vec![],
-   ).unwrap();
-   assert_eq!(result.input, "input.txt");
-
-   // Also works with env
-   let result = MyConfig::try_parse_from::<&str, &str, &str>(
-       vec!["prog"],
-       vec![("INPUT", "from_env.txt")],
-   ).unwrap();
-   assert_eq!(result.input, "from_env.txt");
-   ```
-
-   Command-line usage: `./my_prog input.txt` or `INPUT=input.txt ./my_prog`
 
 *  <a name="parameter-env"></a> `env` (optional string argument)
 
@@ -454,15 +426,11 @@ A parameter represents a single value that can be parsed from a string.
 
    example: `#[arg(value_parser_os = my_osstr_function)]`
 
-   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`. This allows parsing values that may contain non-UTF-8 data, which is important for types like `PathBuf` and `OsString` on Unix systems where filenames and environment variables can contain arbitrary byte sequences.
+   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`. This allows parsing values that may contain non-UTF-8 data in args or env, especially paths on Windows.
 
    The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
 
    **Auto-detection**: `conf` automatically uses an appropriate OsStr-based parser for `PathBuf` and `OsString` types (when using the simple identifier, not the fully qualified path). This means you typically don't need to specify `value_parser_os` explicitly for these types.
-
-   **Escape hatch**: If you want to use a String-based parser for `PathBuf` or `OsString` (e.g., for custom validation), use the fully qualified type name like `std::path::PathBuf` instead of just `PathBuf` to bypass auto-detection.
-
-   **UTF-8 validation**: When `value_parser_os` is not used (either explicitly or via auto-detection), values from command-line arguments and environment variables are validated to be UTF-8 before being passed to the `value_parser`. With `value_parser_os`, no UTF-8 validation occurs, and the parser receives the raw bytes.
 
    **Examples**:
 
@@ -482,22 +450,22 @@ A parameter represents a single value that can be parsed from a string.
    Custom OsStr parser:
    ```rust
    # use conf::Conf;
-   use std::ffi::OsStr;
+   # use std::ffi::{OsStr, OsString};
+   # use std::fmt::Display;
+   # use std::path::{PathBuf, Path};
 
-   fn uppercase_osstr(s: &OsStr) -> Result<String, &'static str> {
-       s.to_str()
-           .map(|s| s.to_uppercase())
-           .ok_or("Invalid UTF-8")
+   fn strip_home_path(s: &OsStr) -> Result<PathBuf, impl Display> {
+        Path::new(s).strip_prefix("/home/").map(Path::to_path_buf)
    }
 
    #[derive(Conf)]
    struct Config {
-       #[conf(long, value_parser_os = uppercase_osstr)]
-       text: String,
+       #[conf(long, value_parser_os = strip_home_path)]
+       text: PathBuf,
    }
    ```
 
-   *Note*: This attribute is mutually exclusive with `value_parser`. Only one can be specified for a given field.
+   *Note*: `value_parser_os` and `value_parser` are mutually exclusive.
 
 *  <a name="parameter-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
 
@@ -553,7 +521,8 @@ A parameter represents a single value that can be parsed from a string.
      **Example**:
      ```rust
      # use conf::Conf;
-     #[cfg(feature = "serde")]
+     # #[cfg(feature = "serde")]
+     # {
      fn deserialize_doubled<'de, D>(deserializer: D) -> Result<i32, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -563,13 +532,13 @@ A parameter represents a single value that can be parsed from a string.
          Ok(value * 2)
      }
 
-     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
          #[arg(long, serde(deserialize_with = "deserialize_doubled"))]
          pub count: i32,
      }
+     # }
      ```
 
      This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
@@ -861,7 +830,8 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      **Example**:
      ```rust
      # use conf::Conf;
-     #[cfg(feature = "serde")]
+     # #[cfg(feature = "serde")]
+     # {
      fn deserialize_vec_reversed<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
      where
          D: serde::Deserializer<'de>,
@@ -872,13 +842,13 @@ is read and split on a delimiter character which defaults to `','`, to produce a
          Ok(value)
      }
 
-     #[cfg(feature = "serde")]
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
          #[conf(repeat, long, serde(deserialize_with = "deserialize_vec_reversed"))]
          pub items: Vec<i32>,
      }
+     # }
      ```
 
      This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.

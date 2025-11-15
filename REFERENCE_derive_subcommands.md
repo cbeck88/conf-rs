@@ -115,7 +115,8 @@ Each enum variant must have zero or one unnamed fields, which if present is a `s
      ```rust
      # use conf::Subcommands;
      # use conf::Conf;
-     #[cfg(feature = "serde")]
+     # #[cfg(feature = "serde")]
+     # {
      #[derive(Subcommands)]
      #[conf(serde)]
      pub enum Command {
@@ -123,10 +124,10 @@ Each enum variant must have zero or one unnamed fields, which if present is a `s
          NewCommand(NewCommandConfig),
      }
 
-     # #[cfg(feature = "serde")]
      # #[derive(conf::Conf)]
      # #[conf(serde)]
      # pub struct NewCommandConfig {}
+     # }
      ```
 
      In this example, the subcommand can be specified in serde documents as `new_command` (the primary name),

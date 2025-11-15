@@ -500,7 +500,7 @@ impl ParameterItem {
                     fn __value_parser__(
                       __arg__: &::std::ffi::OsStr
                     ) -> Result<#inner_type, impl ::core::fmt::Display> {
-                      #value_parser_expr(__arg__)
+                      (#value_parser_expr)(__arg__)
                     }
 
                     use ::conf::{ConfValueSource, ProgramOption, InnerError};
@@ -535,7 +535,7 @@ impl ParameterItem {
                     fn __value_parser__(
                       __arg__: &str
                     ) -> Result<#inner_type, impl ::core::fmt::Display> {
-                      #value_parser_expr(__arg__)
+                      (#value_parser_expr)(__arg__)
                     }
 
                     use ::conf::{ConfValueSource, ProgramOption, InnerError};
@@ -697,7 +697,7 @@ impl ParameterItem {
                             fn __value_parser__(
                                 __arg__: &::std::ffi::OsStr
                             ) -> Result<#inner_type, impl ::core::fmt::Display> {
-                                #value_parser_expr(__arg__)
+                                (#value_parser_expr)(__arg__)
                             }
 
                             use ::std::ffi::OsStr;
@@ -712,7 +712,7 @@ impl ParameterItem {
                             fn __value_parser__(
                                 __arg__: &str
                             ) -> Result<#inner_type, impl ::core::fmt::Display> {
-                                #value_parser_expr(__arg__)
+                                (#value_parser_expr)(__arg__)
                             }
 
                             if let Err(err) = __value_parser__(#default_value_str) { #do_panic }

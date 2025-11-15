@@ -401,7 +401,7 @@ impl RepeatItem {
             fn __value_parser__(
               __arg__: &str
             ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
-              #value_parser(__arg__)
+              (#value_parser)(__arg__)
             }
 
             use ::conf::{ConfValueSource, ProgramOption, InnerError};
