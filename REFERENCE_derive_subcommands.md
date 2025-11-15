@@ -21,8 +21,20 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
 
 The `#[conf(...)]` attributes can appear on an `enum` or a `variant` of the `enum`.
 
-```rust ignore
+```rust
 use conf::Subcommands;
+# use conf::Conf;
+# #[cfg(feature = "serde")]
+# {
+# #[derive(Conf)]
+# #[conf(serde)]
+# pub struct RunConfig {}
+# #[derive(Conf)]
+# #[conf(serde)]
+# pub struct MigrateConfig {}
+# #[derive(Conf)]
+# #[conf(serde)]
+# pub struct ValidateConfig {}
 
 #[derive(Subcommands)]
 #[conf(serde)] // This is an enum-level attribute
@@ -38,6 +50,7 @@ pub enum MySubcommands {
     #[conf(name = "stat")]
     Stat,
 }
+# }
 ```
 
 Each enum variant must have zero or one unnamed fields, which if present is a `struct` type which implements [`Conf`] [^compat-note-1].
