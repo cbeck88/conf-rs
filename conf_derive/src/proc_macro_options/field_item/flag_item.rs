@@ -10,6 +10,7 @@ use syn::{
 /// #[conf(serde(...))] options listed on a field of Flag kind
 pub struct FlagSerdeItem {
     pub rename: Option<LitStr>,
+    pub aliases: Vec<LitStr>,
     pub skip: bool,
     span: Span,
 }
@@ -18,6 +19,7 @@ impl FlagSerdeItem {
     pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
         let mut result = Self {
             rename: None,
+            aliases: Vec::new(),
             skip: false,
             span: meta.input.span(),
         };
@@ -31,6 +33,9 @@ impl FlagSerdeItem {
                         &mut result.rename,
                         Some(parse_required_value::<LitStr>(meta)?),
                     )
+                } else if path.is_ident("alias") {
+                    result.aliases.push(parse_required_value::<LitStr>(meta)?);
+                    Ok(())
                 } else if path.is_ident("skip") {
                     result.skip = true;
                     Ok(())
@@ -173,6 +178,13 @@ impl FlagItem {
             .as_ref()
             .and_then(|serde| serde.rename.clone())
             .unwrap_or_else(|| LitStr::new(&self.field_name.to_string(), self.field_name.span()))
+    }
+
+    pub fn get_serde_aliases(&self) -> Vec<LitStr> {
+        self.serde
+            .as_ref()
+            .map(|serde| serde.aliases.clone())
+            .unwrap_or_default()
     }
 
     pub fn get_serde_type(&self) -> Type {

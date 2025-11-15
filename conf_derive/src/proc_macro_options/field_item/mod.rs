@@ -361,6 +361,7 @@ impl FieldItem {
         let field_name_str = field_name.to_string();
 
         let serde_name_str = self.get_serde_name();
+        let serde_aliases = self.get_serde_aliases();
         let serde_type = self.get_serde_type();
 
         let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
@@ -373,8 +374,15 @@ impl FieldItem {
             errors_ident,
         )?;
 
+        // Build match pattern: "name" | "alias1" | "alias2" => { ... }
+        let match_pattern = if serde_aliases.is_empty() {
+            quote! { #serde_name_str }
+        } else {
+            quote! { #serde_name_str | #(#serde_aliases)|* }
+        };
+
         let match_arm = quote! {
-          #serde_name_str => {
+          #match_pattern => {
             if #field_name.is_some() {
               #errors_ident.push(
                 InnerError::serde(
@@ -404,7 +412,11 @@ impl FieldItem {
             }
           },
         };
-        Ok((match_arm, vec![serde_name_str]))
+
+        // Return all names for error messages
+        let mut all_names = vec![serde_name_str];
+        all_names.extend(serde_aliases);
+        Ok((match_arm, all_names))
     }
 
     /// Get the serde name (only when "is_single_option" is true)
@@ -413,6 +425,17 @@ impl FieldItem {
             Self::Flag(item) => item.get_serde_name(),
             Self::Parameter(item) => item.get_serde_name(),
             Self::Repeat(item) => item.get_serde_name(),
+            Self::Flatten(_item) => unimplemented!(),
+            Self::Subcommands(_item) => unimplemented!(),
+        }
+    }
+
+    /// Get the serde aliases (only when "is_single_option" is true)
+    fn get_serde_aliases(&self) -> Vec<LitStr> {
+        match self {
+            Self::Flag(item) => item.get_serde_aliases(),
+            Self::Parameter(item) => item.get_serde_aliases(),
+            Self::Repeat(item) => item.get_serde_aliases(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
         }

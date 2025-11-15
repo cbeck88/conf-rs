@@ -711,3 +711,118 @@ fn test_subcommands_serde() {
     assert_eq!(b.a.wobble, "y");
     assert_eq!(b.a.bobble, None);
 }
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct TestAlias {
+    #[arg(
+        long,
+        serde(rename = "new_name", alias = "old_name", alias = "older_name")
+    )]
+    pub field1: String,
+
+    #[arg(long, serde(alias = "legacy_flag"))]
+    pub flag: bool,
+
+    #[arg(repeat, long, serde(alias = "old_list"))]
+    pub items: Vec<i32>,
+}
+
+#[test]
+fn test_serde_alias() {
+    // Test that the main name works
+    let result = TestAlias::conf_builder()
+        .args([".", "--field1=from_cli", "--flag"])
+        .doc("t.json", json!({"items": [1, 2, 3]}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "from_cli");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![1, 2, 3]);
+
+    // Test that renamed field works from serde doc
+    let result = TestAlias::conf_builder()
+        .args([".", "--flag"])
+        .doc("t.json", json!({"new_name": "from_new", "items": [4, 5]}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "from_new");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![4, 5]);
+
+    // Test that first alias works
+    let result = TestAlias::conf_builder()
+        .args([".", "--flag"])
+        .doc("t.json", json!({"old_name": "from_old", "items": [6]}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "from_old");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![6]);
+
+    // Test that second alias works
+    let result = TestAlias::conf_builder()
+        .args([".", "--flag"])
+        .doc(
+            "t.json",
+            json!({"older_name": "from_older", "items": [7, 8]}),
+        )
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "from_older");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![7, 8]);
+
+    // Test that flag alias works
+    let result = TestAlias::conf_builder()
+        .args([".", "--field1=test"])
+        .doc("t.json", json!({"legacy_flag": true, "items": [9]}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "test");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![9]);
+
+    // Test that repeat alias works
+    let result = TestAlias::conf_builder()
+        .args([".", "--field1=test", "--flag"])
+        .doc("t.json", json!({"old_list": [10, 11, 12]}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.field1, "test");
+    assert!(result.flag);
+    assert_eq!(result.items, vec![10, 11, 12]);
+
+    // Test that using both main name and alias causes duplicate field error
+    assert_error_contains_text!(
+        TestAlias::conf_builder()
+            .args([".", "--flag"])
+            .doc(
+                "t.json",
+                json!({"new_name": "val1", "old_name": "val2", "items": [1]})
+            )
+            .try_parse(),
+        ["duplicate field"]
+    );
+
+    // Test that using two aliases causes duplicate field error
+    assert_error_contains_text!(
+        TestAlias::conf_builder()
+            .args([".", "--flag"])
+            .doc(
+                "t.json",
+                json!({"old_name": "val1", "older_name": "val2", "items": [1]})
+            )
+            .try_parse(),
+        ["duplicate field"]
+    );
+
+    // Test that unknown field error lists all valid names (main + aliases)
+    assert_error_contains_text!(
+        TestAlias::conf_builder()
+            .args([".", "--field1=test", "--flag"])
+            .doc("t.json", json!({"unknown_field": "val", "items": [1]}))
+            .try_parse(),
+        ["unknown field `unknown_field`"]
+    );
+}

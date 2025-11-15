@@ -17,6 +17,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env_aliases](#flag-env-aliases)
     * [serde](#flag-serde)
       * [rename](#flag-serde-rename)
+      * [alias](#flag-serde-alias)
       * [skip](#flag-serde-skip)
   * [Parameter](#parameter)
     * [short](#parameter-short)
@@ -32,6 +33,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [secret](#parameter-secret)
     * [serde](#parameter-serde)
       * [rename](#parameter-serde-rename)
+      * [alias](#parameter-serde-alias)
       * [skip](#parameter-serde-skip)
       * [use_value_parser](#parameter-serde-use-value-parser)
   * [Repeat](#repeat)
@@ -48,6 +50,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [secret](#repeat-secret)
     * [serde](#repeat-serde)
       * [rename](#repeat-serde-rename)
+      * [alias](#repeat-serde-alias)
       * [skip](#repeat-serde-skip)
       * [use_value_parser](#repeat-serde-use-value-parser)
   * [Flatten](#flatten)
@@ -207,6 +210,28 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      example: `#[conf(serde(rename = "foo"))]`
 
      Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="flag-serde-alias"></a> `alias` (string argument, repeating)
+
+     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+
+     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. This is useful for maintaining backwards compatibility when renaming fields - the main name (from `rename` or the field name) continues to work, and the aliases provide fallback names.
+
+     The `alias` attribute can be specified multiple times to add multiple alternative names. All aliases are treated equally - using any alias in the serde document will populate the field.
+
+     If multiple names (including the main name and any aliases) appear in the same serde document, a duplicate field error is raised.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         #[conf(long, serde(rename = "new_name", alias = "old_name", alias = "legacy_name"))]
+         pub field: String,
+     }
+     ```
+     This allows the field to be read from serde documents using any of: `"new_name"`, `"old_name"`, or `"legacy_name"`.
 
    * <a name="flag-serde-skip"></a> `skip` (no arguments)
 
@@ -467,6 +492,12 @@ A parameter represents a single value that can be parsed from a string.
 
      Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
 
+   * <a name="parameter-serde-alias"></a> `alias` (string argument, repeating)
+
+     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+
+     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
+
    * <a name="parameter-serde-skip"></a> `skip` (no arguments)
 
      example: `#[conf(serde(skip))]`
@@ -722,6 +753,12 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      example: `#[conf(serde(rename = "foos"))]`
 
      Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+
+   * <a name="repeat-serde-alias"></a> `alias` (string argument, repeating)
+
+     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+
+     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
    * <a name="repeat-serde-skip"></a> `skip` (no arguments)
 
