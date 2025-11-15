@@ -85,7 +85,7 @@ where
         } = self;
         let (parsed_env, args) = inner.into_tuple();
 
-        let parser = <S as Conf>::get_parser(&parsed_env)?;
+        let mut parser = <S as Conf>::get_parser(&parsed_env)?;
         let arg_matches = parser.parse(args)?;
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
         let conf_context = ConfContext::new(parsed_args, &parsed_env);

@@ -114,6 +114,7 @@ Each enum variant must have zero or one unnamed fields, which if present is a `s
      **Example**:
      ```rust
      # use conf::Subcommands;
+     # use conf::Conf;
      #[derive(Subcommands)]
      #[conf(serde)]
      pub enum Command {

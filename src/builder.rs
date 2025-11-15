@@ -72,7 +72,7 @@ where
     pub fn try_parse(self) -> Result<S, Error> {
         let (parsed_env, args) = self.into_tuple();
 
-        let parser = S::get_parser(&parsed_env)?;
+        let mut parser = S::get_parser(&parsed_env)?;
         let arg_matches = parser.parse(args)?;
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
         let conf_context = ConfContext::new(parsed_args, &parsed_env);

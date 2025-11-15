@@ -208,13 +208,21 @@ impl<'a> Parser<'a> {
         &self.command
     }
 
+    /// Consume this parser and return the command
+    pub fn into_command(self) -> Command {
+        self.command
+    }
+
     /// Parse from raw os args (or something that looks like std::env::args_os but could be test
     /// data)
-    pub(crate) fn parse<T>(&self, args_os: impl IntoIterator<Item = T>) -> Result<ArgMatches, Error>
+    pub(crate) fn parse<T>(
+        &mut self,
+        args_os: impl IntoIterator<Item = T>,
+    ) -> Result<ArgMatches, Error>
     where
         T: Into<OsString> + Clone,
     {
-        Ok(self.command.clone().try_get_matches_from(args_os)?)
+        Ok(self.command.try_get_matches_from_mut(args_os)?)
     }
 
     // Turn a ProgramOption into an arg. Or, if it should not be set via CLI at all, just generate
@@ -223,8 +231,8 @@ impl<'a> Parser<'a> {
     // Notes:
     //   Our goal here is to get clap to parse the CLI args, and generate satisfactory help text,
     //   but we don't actually want it to handle env, because it's missing a lot of functionality
-    // around that.   So some things that clap has nominal support for, we're not going to build
-    // into the command here.
+    //   around that. So some things that clap has nominal support for, we're not going to build
+    //   into the command here.
     //
     //   Instead, our strategy is:
     //   1. No env is specified to clap. All env handling is going to happen in `ConfContext`
@@ -242,7 +250,7 @@ impl<'a> Parser<'a> {
     // If an arg doesn't have a short or long flag, then clap will consider it a positional
     // argument. But if it has an env source, it might be a secret or something and it would not
     // be correct to treat it as a positional CLI argument. In this crate we want positional
-    // arguments to be opt-in, and we don't support them yet.
+    // arguments to be explicit opt-in.
     //
     // For similar reasons, we can't let clap perform default values for env-only arguments, since
     // it won't run for those arguments. It's simpler to just let not clap perform default

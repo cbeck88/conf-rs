@@ -40,6 +40,41 @@ impl GetSpan for StructSerdeItem {
     }
 }
 
+/// #[conf(test(...))] options listed on a struct which has `#[derive(Conf)]`
+pub struct StructTestItem {
+    pub should_panic: bool,
+    span: Span,
+}
+
+impl StructTestItem {
+    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+        let mut result = Self {
+            should_panic: false,
+            span: meta.input.span(),
+        };
+
+        if meta.input.peek(token::Paren) {
+            meta.parse_nested_meta(|meta| {
+                let path = meta.path.clone();
+                if path.is_ident("should_panic") {
+                    result.should_panic = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized conf(test) option"))
+                }
+            })?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl GetSpan for StructTestItem {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
 /// #[conf(...)] options listed on a struct which has `#[derive(Conf)]`
 ///
 /// Also assists with code generation related to these, such as for validations
@@ -50,6 +85,7 @@ pub struct StructItem {
     pub no_help_flag: bool,
     pub env_prefix: Option<LitStr>,
     pub serde: Option<StructSerdeItem>,
+    pub test: Option<StructTestItem>,
     pub one_of_fields: Vec<(Ordering, List<Ident>)>,
     pub validation_predicates: Vec<Expr>,
     pub doc_string: Option<String>,
@@ -65,6 +101,7 @@ impl StructItem {
             no_help_flag: false,
             env_prefix: None,
             serde: None,
+            test: None,
             one_of_fields: Vec::default(),
             validation_predicates: Vec::default(),
             doc_string: None,
@@ -98,6 +135,8 @@ impl StructItem {
                         )
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(StructSerdeItem::new(meta)?))
+                    } else if path.is_ident("test") {
+                        set_once(&path, &mut result.test, Some(StructTestItem::new(meta)?))
                     } else if path.is_ident("validation_predicate") {
                         result
                             .validation_predicates

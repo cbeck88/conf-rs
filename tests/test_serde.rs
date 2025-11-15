@@ -948,7 +948,10 @@ fn test_serde_subcommand_alias() {
     // Test that alias works for the other command
     let result = TestSubcommandAlias::conf_builder()
         .args([".", "other-command"])
-        .doc("t.json", json!({"other_old": {"f": true, "a": {"wiggle": 20, "wobble": "d"}}}))
+        .doc(
+            "t.json",
+            json!({"other_old": {"f": true, "a": {"wiggle": 20, "wobble": "d"}}}),
+        )
         .try_parse()
         .unwrap();
     assert!(!result.flag);

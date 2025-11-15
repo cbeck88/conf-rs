@@ -729,4 +729,69 @@ impl GenConfStruct {
             #gather_and_validate
         })
     }
+
+    /// Generate a test function (if requested via #[conf(test)] attribute)
+    pub fn maybe_gen_test_fn(&self, generics: &Generics) -> Result<Option<TokenStream>, Error> {
+        // If test is not requested, don't generate anything
+        let test_item = match &self.struct_item.test {
+            Some(test_item) => test_item,
+            None => return Ok(None),
+        };
+
+        let ident = self.struct_item.get_ident();
+        let test_fn_name = Ident::new(&format!("conf_debug_assert_{}", ident), ident.span());
+
+        // Check if we have generics - if so, we can't easily generate a test
+        // because we don't know what concrete types to use
+        if !generics.params.is_empty() {
+            return Err(Error::new(
+                ident.span(),
+                "#[conf(test)] cannot be used with generic types yet",
+            ));
+        }
+
+        // Optionally add #[should_panic] attribute
+        let maybe_should_panic = if test_item.should_panic {
+            quote! { #[should_panic] }
+        } else {
+            quote! {}
+        };
+
+        Ok(Some(quote! {
+            #[cfg(test)]
+            #[test]
+            #maybe_should_panic
+            #[allow(non_snake_case)]
+            fn #test_fn_name() {
+                use ::conf::Conf;
+
+                // Get parser config
+                let parser_config = #ident::get_parser_config()
+                    .expect("Failed to get parser config");
+
+                // Get program options
+                let program_options = #ident::get_program_options()
+                    .expect("Failed to get program options");
+
+                // Create parsed env (empty for this test)
+                let parsed_env = ::conf::ParsedEnv::default();
+
+                // Get subcommands
+                let subcommands = #ident::get_subcommands(&parsed_env)
+                    .expect("Failed to get subcommands");
+
+                // Create parser
+                let parser = ::conf::Parser::new(
+                    parser_config,
+                    program_options,
+                    subcommands,
+                    &parsed_env,
+                )
+                .expect("Failed to create parser");
+
+                // Run clap's debug assertions
+                parser.into_command().debug_assert();
+            }
+        }))
+    }
 }

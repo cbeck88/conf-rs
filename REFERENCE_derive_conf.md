@@ -80,6 +80,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
   * [at_most_one_of_fields](#struct-at-most-one-of-fields)
   * [at_least_one_of_fields](#struct-at-least-one-of-fields)
   * [validation_predicate](#struct-validation-predicate)
+  * [test](#struct-test)
 
 ## Where can conf attributes be used?
 
@@ -1119,6 +1120,27 @@ works on that struct. Attributes that are not "top-level only" will still have a
    The function should have signature `fn(&T) -> Result<(), impl Display>`.
 
    The `validation_prediate = ...` attribute is allowed to repeat multiple times, to set multiple validation prediates.
+
+*  <a name="struct-test"></a> `test` (no arguments)
+
+   example: `#[conf(test)]`
+
+   Automatically generates a test function that validates the struct's command-line interface configuration.
+   This test catches problems that can't be caught at build-time by the proc-macro, which may require global information.
+
+   The generated test function:
+   - Is named `conf_debug_assert_{struct_name}`
+   - Constructs a `Parser` from the struct's program options
+   - Runs `clap::Command::debug_assert()` to check for configuration errors
+
+   This is useful for catching configuration issues at test time, such as:
+   - Conflicting short or long flags
+   - Invalid combinations of attributes
+   - Positional argument ordering issues
+
+   **Note**: It is better to put this on the top-level struct that you will actually parse (e.g., the one you call `Conf::parse()` on), rather than on intermediate structs that are flattened into others. This ensures the entire command-line interface is validated together.
+
+   **Note**: This attribute cannot be used on structs with generic type parameters.
 
 
 [^1]: Actually, the *tokens* of the type are used, so e.g. it must be `bool` and not an alias for `bool`.
