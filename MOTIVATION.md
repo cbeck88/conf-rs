@@ -19,8 +19,6 @@ category of things that cannot be easily improved in a crate, let alone, many cr
 Above all, please understand that *the purpose of this document is not to criticize other crates*. The discussion is grounded in practical concerns, pros and cons from a technical point of view, and my own
 efforts to make engineering decisions as a user of crates in this space. The document can *help potential users* of `conf` *rapidly build a mental model* of how initial design decisions in `conf` were made and how `conf` might evolve in the near future. This can *help users decide* whether or not `conf` is the right tool for the job in their situation, or if another tool is more appropriate.
 
-In fact, I believe that many of these crates are very well-engineered overall, and just not the best choice for the use-cases that I have in mind. Maintainers and developers of these crates that are saying no to features right now that are important to users like me, are also doing the right thing, given where their projects are now, what niche they are aimed at, and how many users they have now who would be impacted by breaking changes. Please understand that I have only the greatest respect for everyone involved with any of the projects mentioned specifically.
-
 * [Motivating use case](#motivating-use-case)
 * [Investigations](#investigations)
   * [More alternatives](#more-alternatives)
@@ -180,9 +178,7 @@ Scrappy engineer that you are, you come up with another solution:
  `--friend-service-client-config=http://foo.service?max_retries=5&min_backoff=20`"
 
 This has some merit as a quick fix in this particular case, and will probably work well until you get to the point where this config gets large / complicated. For instance, you need to associate an RSA key
-and do mTLS. Even if you feel you can tolerate these URLs becoming very long, you may have further deployment constraints. Suppose you are deploying in kubernetes. This RSA key may be a secret, and the way
-kubernetes manages secrets is exclusively by setting environment variables. If your idea is to stuff the RSA key into the URL, and the RSA key is secret, then the whole URL is going to become a secret.
-But that may be very inconvenient. The `max_retries` and `min_backoff` are things you'd like to be able to review and change easily, and it may become a lot harder if they are a secret, and there's no reason that they should be a secret.
+and do mTLS. Even if you feel you can tolerate these URLs becoming very long, you may have further deployment constraints. This RSA key may be a secret, and your infrastructure may be designed to pass secrets in environment variables. If your idea is to stuff the RSA key into the URL, and the RSA key is secret, then the whole URL is going to become a secret. But that may be very inconvenient. The `max_retries` and `min_backoff` are things you'd like to be able to review and change easily, and it may become a lot harder if they are a secret, and they aren't sensitive.
 
 The other common workaround I've seen is, when you get to the point of needing multiple copies of `X` in your config structure, but `clap(flatten)` isn't going to let you do that,
 you represent it all as JSON instead. You collapse all the `X` parameters into one parameter, and set a `clap(value_parser)` that uses `serde_json` to parse it.
@@ -200,7 +196,7 @@ And you also shouldn't have to change the code of every service to resolve probl
 
 # Investigations
 
-Over time, what I've realized is that in the context of large web services, having a flatten-with-prefix feature that lets me compose config structures again and again with prefixing as needed, is probably more valuable to me than many of the other `clap-derive` features.
+Over time, I realized that for large web services, having a flatten-with-prefix feature that lets me compose config structures again and again with prefixing as needed, is probably more valuable to me than many of the other `clap-derive` features.
 
 In a complex rust program, where you have a stack of systems and subsystems that may each require configuration, and there is not generally "life before main", you usually need to find a way to plumb all the config from main to all these various systems. (Or, if you give up on that, then you are giving up on having complete `--help` documentation for your program, and possibly on failing fast when there is a configuration problem.)
 
@@ -246,7 +242,7 @@ A significant part of my thinking in choosing any of these crates was that I hav
 
 There were a few more alternative approaches that engineers have come up with once they hit limitations of `clap-derive` in a large project.
 
-This one caught my eye, from [clap issue 3513 discussion](https://github.com/clap-rs/clap/issues/3513#issuecomment-2105359985)
+From [clap issue 3513 discussion](https://github.com/clap-rs/clap/issues/3513#issuecomment-2105359985)
 
 * [clap_wrapper](https://github.com/wfraser/clap_wrapper)
 
@@ -668,7 +664,7 @@ fn main() {
 
 ```
 
-At a high level, implementing `serde::Deserialize` means
+Implementing `serde::Deserialize` means
 
 1. Taking a `Deserializer` as an argument, and calling a function on it (in this case, `deserialize_struct`)
 2. To do that, one has to construct an appropriate visitor and pass it to the deserializer. That's `__Visitor<'de>` above.
@@ -948,4 +944,4 @@ Right now, I don't think that *this* crate should contain any code that reads a 
 
 Personally, I do like using a crate like [`dotenvy`](https://crates.io/crates/dotenvy) to load `.env` files before parsing the config, as described in `README.md`.
 
-My belief is that by keeping the API surface area relatively small and staying focused on the target niche, we can make sure that it stays as easy as possible to add useful features, test them appropriately, and drive the project forwards. I do believe that building on `clap` is the best course in terms of conserving developer energy and serving the users the best.
+My belief is that by keeping the API surface area relatively small and staying focused on the target niche, we can make sure that it stays as easy as possible to add useful features, test them appropriately, and drive the project forwards. I do believe that building on `clap` is the best course in terms of getting to MVP, conserving developer energy and serving the users the best, but eventually we may decide to drop the dependency on `clap` and use `clap-lex` directly.
