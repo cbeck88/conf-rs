@@ -1,4 +1,4 @@
-use super::{StructItem, ValueParserExpr};
+use super::{ExprRequest, StructItem, ValueParserExpr};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -448,11 +448,39 @@ impl ParameterItem {
         ValueParserExpr::Str(parse_quote! { std::str::FromStr::from_str })
     }
 
+    /// Generate initializer code for this parameter field.
+    ///
+    /// # `if_no_conf_context_val` callback
+    ///
+    /// Callback invoked when conf_context doesn't find a value (when `maybe_val` is `None`).
+    /// Receives an `ExprRequest` to generate type-appropriate code.
+    /// For required fields without serde, this typically returns an error.
+    /// For optional fields without serde, this returns Ok(None).
+    /// When serde with use_value_parser is used, this returns the document value converted appropriately.
+    ///
+    /// # `before_value_parser` callback
+    ///
+    /// If provided, `before_value_parser` is a function that takes an `ExprRequest` and returns
+    /// a `TokenStream`. It will be invoked with the appropriate request type based on the value parser.
+    ///
+    /// The generated code creates these variables before calling `before_value_parser`:
+    /// - `value_source: ConfValueSource<&str>` - where the value came from
+    /// - `val_str: &str` (for `ExprRequest::Str`) or `val_os: &OsStr` (for `ExprRequest::OsStr`)
+    /// - `opt: &ProgramOption` - the option metadata
+    ///
+    /// The `before_value_parser` TokenStream can:
+    /// - Reference these variables
+    /// - Shadow them with new values (e.g., replacing with serde document value)
+    /// - Early return from the function if needed
+    ///
+    /// After `before_value_parser` executes, the code expects:
+    /// - `value_source` and `val_str`/`val_os` to be in scope (possibly shadowed)
+    /// - The variable to have the same type as initially created
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
-        if_no_conf_context_val: Option<TokenStream>,
-        before_value_parser: Option<TokenStream>,
+        if_no_conf_context_val: &dyn Fn(ExprRequest) -> TokenStream,
+        before_value_parser: Option<&dyn Fn(ExprRequest) -> TokenStream>,
     ) -> Result<(TokenStream, bool), syn::Error> {
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
@@ -461,17 +489,6 @@ impl ParameterItem {
         // Inner_type is T in that case, or just field_type otherwise.
         // Value parser will produce inner_type.
         let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
-
-        // If the conf context doesn't find a value, its an error if this field is required,
-        // and Ok(None) if this field is optional.
-        // This gets overrided when serde provides a value.
-        let if_no_conf_context_val = if_no_conf_context_val.unwrap_or_else(|| {
-            if self.is_optional_type.is_some() {
-                quote! { return Ok(None); }
-            } else {
-                quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
-            }
-        });
 
         // Value parser produces #inner_type, so we have to massage a success result to #field_type
         let value_parser_ok_arm = if self.is_optional_type.is_some() {
@@ -488,6 +505,8 @@ impl ParameterItem {
 
         let initializer = match self.get_value_parser_expr() {
             ValueParserExpr::OsStr(value_parser_expr) => {
+                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::OsStr));
+                let if_no_conf_context_val = (if_no_conf_context_val)(ExprRequest::OsStr);
                 // Use OsStr-based value parser
                 quote! {
                   {
@@ -523,6 +542,8 @@ impl ParameterItem {
                 }
             }
             ValueParserExpr::Str(value_parser_expr) => {
+                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::Str));
+                let if_no_conf_context_val = (if_no_conf_context_val)(ExprRequest::Str);
                 // Use str-based value parser - ConfContext handles UTF-8 conversion
                 quote! {
                   {
@@ -565,7 +586,15 @@ impl ParameterItem {
         &self,
         conf_context_ident: &Ident,
     ) -> Result<(TokenStream, bool), syn::Error> {
-        self.gen_initializer_helper(conf_context_ident, None, None)
+        // Default behavior when no conf context value is found
+        let if_no_conf_context_val = |_req: ExprRequest| {
+            if self.is_optional_type.is_some() {
+                quote! { return Ok(None); }
+            } else {
+                quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
+            }
+        };
+        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val, None)
     }
 
     // Gen initializer with a provided document value.
@@ -592,67 +621,59 @@ impl ParameterItem {
             // When use_value_parser is true, then #doc_val has type String.
             // To pick this value for the field, we have to set value_source and val_os/val_str
             // to indicate that we are selecting the document value.
-            match self.get_value_parser_expr() {
-                ValueParserExpr::OsStr(_) => {
-                    // For OsStr-based parsers
-                    let if_no_conf_context_val = quote! {
-                      (ConfValueSource::Document(#doc_name), ::std::ffi::OsStr::new(#doc_val.as_str()))
-                    };
-
-                    let before_value_parser = quote! {
-                      let (value_source, val_os) = if value_source.is_default() {
-                        #if_no_conf_context_val
-                      } else {
-                        (value_source, val_os)
-                      };
-                    };
-
-                    self.gen_initializer_helper(
-                        conf_context_ident,
-                        Some(if_no_conf_context_val),
-                        Some(before_value_parser),
-                    )
-                }
-                ValueParserExpr::Str(_) => {
-                    // For str-based parsers
-                    let if_no_conf_context_val = quote! {
+            let if_no_conf_context_val = |req: ExprRequest| -> TokenStream {
+                match req {
+                    ExprRequest::Str => quote! {
                       (ConfValueSource::Document(#doc_name), #doc_val.as_str())
-                    };
-
-                    let before_value_parser = quote! {
+                    },
+                    ExprRequest::OsStr => quote! {
+                      (ConfValueSource::Document(#doc_name), ::std::ffi::OsStr::new(#doc_val.as_str()))
+                    },
+                }
+            };
+            let before_value_parser = |req: ExprRequest| -> TokenStream {
+                match req {
+                    ExprRequest::Str => quote! {
                       let (value_source, val_str) = if value_source.is_default() {
-                        #if_no_conf_context_val
+                        (ConfValueSource::Document(#doc_name), #doc_val.as_str())
                       } else {
                         (value_source, val_str)
                       };
-                    };
-
-                    self.gen_initializer_helper(
-                        conf_context_ident,
-                        Some(if_no_conf_context_val),
-                        Some(before_value_parser),
-                    )
+                    },
+                    ExprRequest::OsStr => quote! {
+                      let (value_source, val_os) = if value_source.is_default() {
+                        (ConfValueSource::Document(#doc_name), ::std::ffi::OsStr::new(#doc_val.as_str()))
+                      } else {
+                        (value_source, val_os)
+                      };
+                    },
                 }
-            }
-        } else {
-            // When use_value_parser is false, then #doc_val has type #field_type.
-            // To pick this value for the field, we just return it.
-            let if_no_conf_context_val = quote! {
-              return Ok(#doc_val);
-            };
-
-            // After we have a conf context value, but before we run the value parser,
-            // check if the value that was obtained should be lower priority than the doc val.
-            // If so then early return in the same way.
-            let before_value_parser = quote! {
-              if value_source.is_default() {
-                #if_no_conf_context_val
-              }
             };
             self.gen_initializer_helper(
                 conf_context_ident,
-                Some(if_no_conf_context_val),
-                Some(before_value_parser),
+                &if_no_conf_context_val,
+                Some(&before_value_parser),
+            )
+        } else {
+            // When use_value_parser is false, then #doc_val has type #field_type.
+            // To pick this value for the field, we just return it.
+            let if_no_conf_context_val = |_| {
+                quote! {
+                  return Ok(#doc_val);
+                }
+            };
+
+            let before_value_parser = |_| {
+                quote! {
+                  if value_source.is_default() {
+                    return Ok(#doc_val);
+                  }
+                }
+            };
+            self.gen_initializer_helper(
+                conf_context_ident,
+                &if_no_conf_context_val,
+                Some(&before_value_parser),
             )
         }
     }

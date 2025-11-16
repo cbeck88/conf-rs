@@ -12,8 +12,8 @@ fn osstr_len(s: &std::ffi::OsStr) -> Result<usize, String> {
 #[derive(Conf, Debug, serde::Deserialize)]
 #[conf(serde)]
 pub struct Config {
-    #[conf(repeat, long, value_parser_os = osstr_len, serde(use_value_parser))]
-    pub lengths: Vec<usize>,
+    #[conf(long, env, value_parser_os = osstr_len, serde(use_value_parser))]
+    pub length: usize,
 }
 
 #[test]
@@ -22,23 +22,18 @@ fn test_non_utf8_args_with_use_value_parser() {
     use std::os::unix::ffi::OsStringExt;
 
     // Create non-UTF-8 OsString (invalid UTF-8 byte sequence)
-    let non_utf8_arg1 = OsString::from_vec(vec![b'h', b'e', b'l', b'l', b'o', 0xFF, 0xFE]);
-    let non_utf8_arg2 = OsString::from_vec(vec![b't', b'e', b's', b't', 0x80, 0x81, 0x82]);
+    let non_utf8_arg = OsString::from_vec(vec![b'h', b'e', b'l', b'l', b'o', 0xFF, 0xFE]);
 
     let result = Config::conf_builder()
         .args([
             OsString::from("test_app"),
-            OsString::from("--lengths"),
-            non_utf8_arg1.clone(),
-            OsString::from("--lengths"),
-            non_utf8_arg2.clone(),
+            OsString::from("--length"),
+            non_utf8_arg.clone(),
         ])
         .try_parse()
         .unwrap();
 
-    assert_eq!(result.lengths.len(), 2);
-    assert_eq!(result.lengths[0], non_utf8_arg1.len());
-    assert_eq!(result.lengths[1], non_utf8_arg2.len());
+    assert_eq!(result.length, non_utf8_arg.len());
 }
 
 #[test]
@@ -52,21 +47,20 @@ fn test_non_utf8_args_override_serde_with_use_value_parser() {
     let result = Config::conf_builder()
         .args([
             OsString::from("test_app"),
-            OsString::from("--lengths"),
+            OsString::from("--length"),
             non_utf8_arg.clone(),
         ])
         .doc(
             "test_doc",
             json!({
-                "lengths": ["hello", "world"]
+                "length": "hello"
             }),
         )
         .try_parse()
         .unwrap();
 
     // CLI should override serde, and value_parser_os should handle non-UTF-8
-    assert_eq!(result.lengths.len(), 1);
-    assert_eq!(result.lengths[0], non_utf8_arg.len());
+    assert_eq!(result.length, non_utf8_arg.len());
 }
 
 #[test]
@@ -77,23 +71,20 @@ fn test_serde_with_use_value_parser_provides_valid_utf8() {
         .doc(
             "test_doc",
             json!({
-                "lengths": ["hello", "world!", "test"]
+                "length": "hello"
             }),
         )
         .try_parse()
         .unwrap();
 
-    assert_eq!(result.lengths.len(), 3);
-    assert_eq!(result.lengths[0], "hello".len());
-    assert_eq!(result.lengths[1], "world!".len());
-    assert_eq!(result.lengths[2], "test".len());
+    assert_eq!(result.length, "hello".len());
 }
 
 #[derive(Conf, Debug, serde::Deserialize)]
 #[conf(serde)]
 pub struct ConfigWithoutUseValueParser {
-    #[conf(repeat, long, value_parser_os = osstr_len)]
-    pub lengths: Vec<usize>,
+    #[conf(long, value_parser_os = osstr_len)]
+    pub length: usize,
 }
 
 #[test]
@@ -107,32 +98,45 @@ fn test_non_utf8_args_without_use_value_parser() {
     let result = ConfigWithoutUseValueParser::conf_builder()
         .args([
             OsString::from("test_app"),
-            OsString::from("--lengths"),
+            OsString::from("--length"),
             non_utf8_arg.clone(),
         ])
         .try_parse()
         .unwrap();
 
-    assert_eq!(result.lengths.len(), 1);
-    assert_eq!(result.lengths[0], non_utf8_arg.len());
+    assert_eq!(result.length, non_utf8_arg.len());
 }
 
 #[test]
 fn test_serde_without_use_value_parser_ignores_value_parser_os() {
-    // Without use_value_parser, serde deserializes directly into Vec<usize>
+    // Without use_value_parser, serde deserializes directly into usize
     let result = ConfigWithoutUseValueParser::conf_builder()
         .args(["test_app"])
         .doc(
             "test_doc",
             json!({
-                "lengths": [100, 200, 300]
+                "length": 100
             }),
         )
         .try_parse()
         .unwrap();
 
-    assert_eq!(result.lengths.len(), 3);
-    assert_eq!(result.lengths[0], 100); // Direct from JSON
-    assert_eq!(result.lengths[1], 200); // Direct from JSON
-    assert_eq!(result.lengths[2], 300); // Direct from JSON
+    assert_eq!(result.length, 100); // Direct from JSON
+}
+
+#[test]
+#[cfg(unix)]
+fn test_non_utf8_env_with_use_value_parser() {
+    use std::os::unix::ffi::OsStringExt;
+
+    // Create non-UTF-8 OsString for env
+    let non_utf8_env = OsString::from_vec(vec![b't', b'e', b's', b't', 0x80, 0x81]);
+
+    let result = Config::conf_builder()
+        .args([OsString::from("test_app")])
+        .env([(OsString::from("LENGTH"), non_utf8_env.clone())])
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.length, non_utf8_env.len());
 }
