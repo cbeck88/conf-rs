@@ -178,7 +178,7 @@ impl GenConfStruct {
         // }
         //
         // from_conf_context(conf_context: conf::ConfContext) -> Result<Self, Vec<conf::InnerError>>
-        // {   let conf_context = #preprocess_conf_context;
+        // {
         //   let mut errors = Vec::<conf::InnerError>::new();
         //
         //   fn a(conf_context: &conf::ConfContext) -> Result<i32, conf::InnerError> {
@@ -696,7 +696,7 @@ impl GenConfStruct {
         errors_ident: &Ident,
     ) -> Result<TokenStream, Error> {
         // For each field, #field_name is currently a local variable of type Option<Option<T>>.
-        // If serde produced a value, then don't change anything.
+        // If serde+conf produced a value, then don't change anything.
         // Otherwise, use the initializer from the non-serde path.
         // We use `unwrap_or_else` here to accomplish this, and pass the initializer expr
         // inside a lambda function which prevents shadowing the let binding.

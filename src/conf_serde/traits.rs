@@ -1,5 +1,6 @@
+use super::NextValueProducer;
 use crate::{Conf, ConfContext, InnerError, Subcommands};
-use serde::de::{Deserialize, DeserializeSeed};
+use serde::de::{DeserializeSeed};
 
 /// Extension to Conf trait with serde-integration implementation details.
 ///
@@ -14,7 +15,7 @@ use serde::de::{Deserialize, DeserializeSeed};
 ///
 /// Note that this is NOT based on deriving `serde::Deserialize` on your structure, because
 /// we would not be able to properly implement layering or to collect errors comprehensively.
-/// Annotations that you put like `#[serde(rename)]` on your conf structure will have no effect.
+/// Attributes such as `#[serde(rename)]` on your conf structure will have no effect.
 /// Only `#[conf(serde(...))]` options will affect the behavior.
 ///
 /// **Hand-written implementations of this trait are not supported**.
@@ -77,45 +78,6 @@ pub trait SubcommandsSerde: Subcommands + Sized {
     ) -> Result<Self, Vec<InnerError>>
     where
         NVP: NextValueProducer<'de>;
-}
-
-/// A handle to a subset of the [`serde::de::MapAccess`] functionality.
-/// This handle allows one to call `next_value` or `next_value_seed` *once*, with
-/// whatever type is desired.
-///
-/// This is useful when the type should depend on the key,
-/// and how exactly is decided by code that is generated elsewhere.
-/// The `NextValueProducer` can be passed to that code without risk of corrupting
-/// the `MapAccess`, since the caller has a static guarantee about how and how
-/// many times the receiver can use the `MapAccess`.
-#[doc(hidden)]
-pub trait NextValueProducer<'de>: Sized {
-    type Error: serde::de::Error;
-
-    fn next_value_seed<S>(self, seed: S) -> Result<S::Value, Self::Error>
-    where
-        S: DeserializeSeed<'de>;
-
-    fn next_value<V>(self) -> Result<V, Self::Error>
-    where
-        V: Deserialize<'de>,
-    {
-        self.next_value_seed(core::marker::PhantomData)
-    }
-}
-
-impl<'de, MA> NextValueProducer<'de> for &mut MA
-where
-    MA: serde::de::MapAccess<'de>,
-{
-    type Error = MA::Error;
-
-    fn next_value_seed<S>(self, seed: S) -> Result<S::Value, Self::Error>
-    where
-        S: DeserializeSeed<'de>,
-    {
-        MA::next_value_seed(self, seed)
-    }
 }
 
 /// A regular [`ConfContext`], plus any additional context about the serde document we are parsing.

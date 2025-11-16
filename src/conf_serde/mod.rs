@@ -63,8 +63,11 @@
 mod builder;
 pub use builder::ConfSerdeBuilder;
 
+mod state_machine;
+pub use state_machine::{AsSeed, InitializationStateMachine, NextValueProducer};
+
 mod traits;
-pub use traits::{ConfSerde, ConfSerdeContext, NextValueProducer, SubcommandsSerde};
+pub use traits::{ConfSerde, ConfSerdeContext, SubcommandsSerde};
 
 /// Helper for deserializing serde MapAccess keys in a struct visitor.
 /// Similar to `String`, but uses "Deserializer::deserializer_identifier" to hint.
