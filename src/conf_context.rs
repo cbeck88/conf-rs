@@ -334,7 +334,7 @@ impl<'a> ConfContext<'a> {
                     .map(|os| {
                         os.to_str().ok_or_else(|| {
                             InnerError::invalid_value_os(
-                                value_source.clone().into(),
+                                value_source.into(),
                                 os.as_os_str(),
                                 opt,
                                 "Invalid UTF-8",
