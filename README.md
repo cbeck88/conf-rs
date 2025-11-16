@@ -699,7 +699,7 @@ This crate can get closer towards the full feature set offered by `clap-derive`,
 
 If you have very specific CLI argument parsing needs, or if you need pixel-perfect help text, you will be better off using `clap` directly instead of this crate, because you will have more control that way. `clap` is the most mature and feature-complete CLI argument parser out there, by a wide margin.
 
-In many web projects, you don't really have such needs. You aren't making very sophisticated use of `clap`, your project is small, and you don't particularly need any features of `conf` either, so you will be able to use `clap-derive` or `conf` equally well and not notice very much difference.
+In many applications, you don't really have such needs. You aren't making very sophisticated use of `clap`, your project is small, and you don't particularly need any features of `conf` either, so you will be able to use `clap-derive` or `conf` equally well and not notice very much difference.
 
 If you prefer, you can stick with `clap-derive`, and then only if you find that you need flatten-with-prefix or another feature, try to switch to `conf` at that point.
 
