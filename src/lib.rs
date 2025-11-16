@@ -17,6 +17,7 @@ mod parse_env;
 mod parser;
 mod program_option;
 mod str_to_bool;
+mod styles;
 mod traits;
 
 // These are not needed by users or by generated code
@@ -29,7 +30,12 @@ use str_to_bool::str_to_bool;
 pub use builder::ConfBuilder;
 pub use error::Error;
 pub use find_parameter::find_parameter;
+pub use styles::Styles;
 pub use traits::{Conf, Subcommands};
+
+// Re-export anstyle for users to create Style objects
+pub use anstyle;
+
 // Export conf_derive proc-macros unconditionally. Their docs are on the traits that they
 // produce implementations for.
 #[doc(hidden)]

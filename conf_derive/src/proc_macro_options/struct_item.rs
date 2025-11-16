@@ -89,6 +89,7 @@ pub struct StructItem {
     pub one_of_fields: Vec<(Ordering, List<Ident>)>,
     pub validation_predicates: Vec<Expr>,
     pub doc_string: Option<String>,
+    pub styles: Option<Expr>,
 }
 
 impl StructItem {
@@ -105,6 +106,7 @@ impl StructItem {
             one_of_fields: Vec::default(),
             validation_predicates: Vec::default(),
             doc_string: None,
+            styles: None,
         };
 
         for attr in attrs {
@@ -169,6 +171,12 @@ impl StructItem {
                         }
                         result.one_of_fields.push((Ordering::Greater, idents));
                         Ok(())
+                    } else if path.is_ident("styles") {
+                        set_once(
+                            &path,
+                            &mut result.styles,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else {
                         Err(meta.error("unrecognized conf option"))
                     }
@@ -199,11 +207,13 @@ impl StructItem {
             .map(|lit_str| lit_str.value())
             .or(self.doc_string.clone());
         let about = quote_opt(&about_text);
+        let styles = quote_opt(&self.styles);
         Ok(quote! {
             conf::ParserConfig {
                 about: #about,
                 name: #name,
                 no_help_flag: #no_help_flag,
+                styles: #styles,
             }
         })
     }

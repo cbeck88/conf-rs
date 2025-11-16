@@ -44,6 +44,7 @@ bench = false
 conf_derive = { path = "./conf_derive", version = "0.1.5" }
 clap = { version = "4.5.8", features = ["string"] }
 clap_lex = { version = "0.7" }
+anstyle = "1"
 serde = { version = "1", optional = true }
 
 [features]

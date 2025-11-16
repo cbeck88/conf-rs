@@ -58,7 +58,7 @@ impl<'a> ParsedArgs<'a> {
 }
 
 /// Top-level parser config
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ParserConfig {
     /// An optional top-level specified about string
     pub about: Option<&'static str>,
@@ -66,6 +66,19 @@ pub struct ParserConfig {
     pub name: &'static str,
     /// True if help flags should not be automatically generated
     pub no_help_flag: bool,
+    /// Optional terminal styling for help text
+    pub styles: Option<crate::Styles>,
+}
+
+impl Default for ParserConfig {
+    fn default() -> Self {
+        Self {
+            about: None,
+            name: "",
+            no_help_flag: false,
+            styles: None,
+        }
+    }
 }
 
 /// A parser which tries to parse args, matching them to a list of ProgramOptions.
@@ -104,6 +117,9 @@ impl<'a> Parser<'a> {
         // Apply settings from parser_config
         if let Some(about) = parser_config.about.as_ref() {
             command = command.about(&**about);
+        }
+        if let Some(ref styles) = parser_config.styles {
+            command = command.styles(styles.clone().into_clap_styles());
         }
 
         let mut args = Vec::<Arg>::new();
