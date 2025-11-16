@@ -205,6 +205,74 @@ fn test_osstring_non_utf8_env() {
     assert_eq!(config.os_str, invalid_utf8);
 }
 
+// Test that explicit value_parser overrides auto-detection for PathBuf
+#[derive(Conf, Debug)]
+struct TestPathBufExplicitValueParser {
+    #[conf(long, value_parser = |s: &str| -> Result<PathBuf, String> {
+        // Custom parser that uppercases the path
+        Ok(PathBuf::from(s.to_uppercase()))
+    })]
+    path: PathBuf,
+}
+
+#[test]
+fn test_pathbuf_explicit_value_parser_overrides_auto_detection() {
+    let result = TestPathBufExplicitValueParser::try_parse_from::<&str, &str, &str>(
+        vec![".", "--path=/foo/bar"],
+        vec![],
+    )
+    .unwrap();
+
+    // The explicit value_parser uppercases, so auto-detection is not used
+    assert_eq!(result.path, PathBuf::from("/FOO/BAR"));
+}
+
+// Test that explicit value_parser_os overrides auto-detection for PathBuf
+#[derive(Conf, Debug)]
+struct TestPathBufExplicitValueParserOs {
+    #[conf(long, value_parser_os = |s: &std::ffi::OsStr| -> Result<PathBuf, String> {
+        // Custom parser that adds a prefix
+        let mut path = PathBuf::from("/custom");
+        path.push(s);
+        Ok(path)
+    })]
+    path: PathBuf,
+}
+
+#[test]
+fn test_pathbuf_explicit_value_parser_os_overrides_auto_detection() {
+    let result = TestPathBufExplicitValueParserOs::try_parse_from::<&str, &str, &str>(
+        vec![".", "--path=foo"],
+        vec![],
+    )
+    .unwrap();
+
+    // The explicit value_parser_os adds /custom/, so auto-detection is not used
+    assert_eq!(result.path, PathBuf::from("/custom/foo"));
+}
+
+// Test that explicit value_parser overrides auto-detection for OsString
+#[derive(Conf, Debug)]
+struct TestOsStringExplicitValueParser {
+    #[conf(long, value_parser = |s: &str| -> Result<OsString, String> {
+        // Custom parser that reverses the string
+        Ok(OsString::from(s.chars().rev().collect::<String>()))
+    })]
+    os_str: OsString,
+}
+
+#[test]
+fn test_osstring_explicit_value_parser_overrides_auto_detection() {
+    let result = TestOsStringExplicitValueParser::try_parse_from::<&str, &str, &str>(
+        vec![".", "--os-str=hello"],
+        vec![],
+    )
+    .unwrap();
+
+    // The explicit value_parser reverses, so auto-detection is not used
+    assert_eq!(result.os_str, OsString::from("olleh"));
+}
+
 // Test UTF-8 error precedence: we should only validate the value we actually use
 #[derive(Conf, Debug)]
 struct TestUtf8Precedence {

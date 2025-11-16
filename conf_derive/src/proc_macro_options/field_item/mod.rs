@@ -3,7 +3,7 @@ use crate::util::type_is_bool;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Field, Ident, LitStr, Meta, Path, Token, Type, punctuated::Punctuated};
+use syn::{Error, Expr, Field, Ident, LitStr, Meta, Path, Token, Type, punctuated::Punctuated};
 
 mod flag_item;
 mod flatten_item;
@@ -16,6 +16,22 @@ use flatten_item::FlattenItem;
 use parameter_item::ParameterItem;
 use repeat_item::RepeatItem;
 use subcommands_item::SubcommandsItem;
+
+/// Type of value parser - indicates whether it takes &str or &OsStr
+pub enum ValueParserExpr {
+    /// Parser takes &str (most common case)
+    Str(Expr),
+    /// Parser takes &OsStr (for PathBuf, OsString, or explicit value_parser_os)
+    OsStr(Expr),
+}
+
+/// Indicates the type of data that an expr needs to produce in some setting.
+pub enum ExprRequest {
+    /// We need an expr manipulating str
+    Str,
+    /// We need an expr manipulating OsStr
+    OsStr,
+}
 
 /// #[conf(...)] options listed in a field of a struct which has `#[derive(Conf)]`
 #[allow(clippy::large_enum_variant)]

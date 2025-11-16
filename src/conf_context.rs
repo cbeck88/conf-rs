@@ -236,12 +236,12 @@ impl<'a> ConfContext<'a> {
 
     /// Get a repeat program option if it was set, using any of its aliases.
     /// Returns values as OsStr to preserve non-UTF-8 data from command-line arguments.
-    /// If env is set, env is parsed via the delimiter (char).
+    /// No delimiter parsing is performed for env values - they are returned as a single value.
     /// If args and env are set, args shadows env.
+    /// NOTE: This should only be used when value_parser_os is specified. Otherwise use get_repeat_opt.
     pub fn get_repeat_osstring_opt(
         &self,
         id: &str,
-        env_delimiter: Option<char>,
     ) -> Result<(ConfValueSource<&'a str>, Vec<&'a OsStr>, &'a ProgramOption), InnerError> {
         let id = self.id_prefix.clone() + id;
         let opt = self
@@ -268,7 +268,7 @@ impl<'a> ConfContext<'a> {
                 // give default values to clap so this should be the only possibility
                 assert_eq!(value_source, ValueSource::CommandLine);
 
-                // Return as OsStr, conversion to str happens in generated code if needed
+                // Return as OsStr, no conversion to str
                 let results: Vec<&'a OsStr> = val_os.map(|os| os.as_os_str()).collect();
 
                 return Ok((value_source.into(), results, opt));
@@ -278,42 +278,16 @@ impl<'a> ConfContext<'a> {
         if let Some(env_form) = opt.env_form.as_deref() {
             if let Some(val) = self.get_env_os(env_form) {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
-
-                return Ok(if let Some(delim) = env_delimiter {
-                    // For delimited env vars, we need UTF-8 to split properly
-                    // Convert to str, split, then convert back to OsStr
-                    let val_str = val.to_str().ok_or_else(|| {
-                        InnerError::invalid_utf8_env(env_form, opt, self.env.get(env_form))
-                    })?;
-                    (
-                        value_source,
-                        val_str.split(delim).map(OsStr::new).collect(),
-                        opt,
-                    )
-                } else {
-                    (value_source, vec![val], opt)
-                });
+                // No delimiter - return as single OsStr value
+                return Ok((value_source, vec![val], opt));
             }
         }
 
         for env_alias in opt.env_aliases.iter() {
             if let Some(val) = self.get_env_os(env_alias) {
                 let value_source = ConfValueSource::<&str>::Env(env_alias);
-
-                return Ok(if let Some(delim) = env_delimiter {
-                    // For delimited env vars, we need UTF-8 to split properly
-                    // Convert to str, split, then convert back to OsStr
-                    let val_str = val.to_str().ok_or_else(|| {
-                        InnerError::invalid_utf8_env(env_alias, opt, self.env.get(env_alias))
-                    })?;
-                    (
-                        value_source,
-                        val_str.split(delim).map(OsStr::new).collect(),
-                        opt,
-                    )
-                } else {
-                    (value_source, vec![val], opt)
-                });
+                // No delimiter - return as single OsStr value
+                return Ok((value_source, vec![val], opt));
             }
         }
 
@@ -330,19 +304,88 @@ impl<'a> ConfContext<'a> {
         id: &str,
         env_delimiter: Option<char>,
     ) -> Result<(ConfValueSource<&'a str>, Vec<&'a str>, &'a ProgramOption), InnerError> {
-        let (value_source, os_strs, opt) = self.get_repeat_osstring_opt(id, env_delimiter)?;
+        let id = self.id_prefix.clone() + id;
+        let opt = self
+            .args
+            .id_to_option()
+            .get(id.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Option not found by id ({id}), this is an internal_error: {:?}",
+                    self.args.id_to_option()
+                )
+            });
 
-        // Convert each OsStr to str, handling UTF-8 errors
-        let strs: Result<Vec<&'a str>, InnerError> = os_strs
-            .into_iter()
-            .map(|os| {
-                os.to_str().ok_or_else(|| {
-                    InnerError::invalid_value_os(value_source.clone(), os, opt, "Invalid UTF-8")
-                })
-            })
-            .collect();
+        // Only try to access arg_matches if this option has a short or long form, or is positional.
+        // Options with only env (no short/long/positional) are not registered with clap.
+        if opt.has_args_source() {
+            if let Some(val_os) = self.args.arg_matches.get_many::<OsString>(&id) {
+                let value_source = self
+                    .args
+                    .arg_matches
+                    .value_source(&id)
+                    .expect("Id not found, this is an internal error");
+                // Note: We don't support user-defined default value on this one right now, and we don't
+                // give default values to clap so this should be the only possibility
+                assert_eq!(value_source, ValueSource::CommandLine);
 
-        Ok((value_source, strs?, opt))
+                // Convert each OsStr to str, handling UTF-8 errors
+                let strs: Result<Vec<&'a str>, InnerError> = val_os
+                    .map(|os| {
+                        os.to_str().ok_or_else(|| {
+                            InnerError::invalid_value_os(
+                                value_source.clone().into(),
+                                os.as_os_str(),
+                                opt,
+                                "Invalid UTF-8",
+                            )
+                        })
+                    })
+                    .collect();
+
+                return Ok((value_source.into(), strs?, opt));
+            }
+        }
+
+        if let Some(env_form) = opt.env_form.as_deref() {
+            if let Some(val) = self.get_env_os(env_form) {
+                let value_source = ConfValueSource::<&str>::Env(env_form);
+
+                // Convert to str for delimiter splitting
+                let val_str = val.to_str().ok_or_else(|| {
+                    InnerError::invalid_utf8_env(env_form, opt, self.env.get(env_form))
+                })?;
+
+                return Ok(if let Some(delim) = env_delimiter {
+                    // Split by delimiter
+                    (value_source, val_str.split(delim).collect(), opt)
+                } else {
+                    // Return as single value
+                    (value_source, vec![val_str], opt)
+                });
+            }
+        }
+
+        for env_alias in opt.env_aliases.iter() {
+            if let Some(val) = self.get_env_os(env_alias) {
+                let value_source = ConfValueSource::<&str>::Env(env_alias);
+
+                // Convert to str for delimiter splitting
+                let val_str = val.to_str().ok_or_else(|| {
+                    InnerError::invalid_utf8_env(env_alias, opt, self.env.get(env_alias))
+                })?;
+
+                return Ok(if let Some(delim) = env_delimiter {
+                    // Split by delimiter
+                    (value_source, val_str.split(delim).collect(), opt)
+                } else {
+                    // Return as single value
+                    (value_source, vec![val_str], opt)
+                });
+            }
+        }
+
+        Ok((ValueSource::DefaultValue.into(), vec![], opt))
     }
 
     /// Check if a given option appears in cli args or env (not defaulted)

@@ -1,4 +1,4 @@
-use super::StructItem;
+use super::{StructItem, ValueParserExpr};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -6,14 +6,6 @@ use syn::{
     Error, Expr, Field, Ident, LitBool, LitChar, LitStr, Path, Type, meta::ParseNestedMeta,
     parse_quote, spanned::Spanned, token,
 };
-
-/// Type of value parser - indicates whether it takes &str or &OsStr
-pub enum ValueParserExpr {
-    /// Parser takes &str (most common case)
-    Str(Expr),
-    /// Parser takes &OsStr (for PathBuf, OsString, or explicit value_parser_os)
-    OsStr(Expr),
-}
 
 /// #[conf(serde(...))] options listed on a parameter
 pub struct ParameterSerdeItem {
@@ -430,7 +422,13 @@ impl ParameterItem {
             return ValueParserExpr::OsStr(parser.clone());
         }
 
+        // If we have an explicit value parser, use it
+        if let Some(parser) = &self.value_parser {
+            return ValueParserExpr::Str(parser.clone());
+        }
+
         // Auto-detect PathBuf and OsString and provide default parsers
+        // This only happens when no explicit parser is specified
         use crate::util::{type_is_osstring, type_is_pathbuf};
         let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
 
@@ -446,12 +444,8 @@ impl ParameterItem {
             );
         }
 
-        // Value parser is FromStr::from_str if not specified
-        let parser = self
-            .value_parser
-            .clone()
-            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str });
-        ValueParserExpr::Str(parser)
+        // Default is FromStr::from_str which takes &str
+        ValueParserExpr::Str(parse_quote! { std::str::FromStr::from_str })
     }
 
     fn gen_initializer_helper(

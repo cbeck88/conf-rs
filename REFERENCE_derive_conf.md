@@ -430,7 +430,7 @@ A parameter represents a single value that can be parsed from a string.
 
    The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
 
-   **Auto-detection**: `conf` automatically uses an appropriate OsStr-based parser for `PathBuf` and `OsString` types (when using the simple identifier, not the fully qualified path). This means you typically don't need to specify `value_parser_os` explicitly for these types.
+   **Auto-detection**: `conf` defaults to using an appropriate OsStr-based parser for `PathBuf` and `OsString` types. This means you typically don't need to specify `value_parser_os` explicitly for these types in order to accept non-UTF data.
 
    **Examples**:
 
@@ -726,9 +726,9 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
 
-   **Auto-detection**: Like with parameters, `conf` automatically uses an appropriate OsStr-based parser for `Vec<PathBuf>` and `Vec<OsString>` types (when using the simple identifier, not the fully qualified path).
+   **Auto-detection**: Like with parameters, `conf` defaults to an appropriate OsStr-based parser for `Vec<PathBuf>` and `Vec<OsString>` types, when no `value_parser` or `value_parser_os` is specified.
 
-   **Environment variable handling**: When using `value_parser_os` with `env_delimiter`, the environment variable value must be valid UTF-8 because splitting on a delimiter requires interpreting the bytes as a string. If the environment variable contains non-UTF-8 data and a delimiter is specified, parsing will fail. To handle non-UTF-8 environment variables with repeat parameters, use `no_env_delimiter`.
+   **Environment variable handling**: When using `value_parser_os`, `env_delimiter` can't be used because we can't split a string without knowing its encoding. The `env_delimiter` is disabled in this case and its an error to try to set it.
 
    **Examples**:
 
@@ -739,26 +739,13 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    #[derive(Conf)]
    struct Config {
-       /// Input files (automatically uses OsStr parser)
+       /// Input files (supports UTF-16 filenames on windows)
        #[conf(repeat, long, env)]
        inputs: Vec<PathBuf>,
    }
    ```
 
-   With non-UTF-8 env var (requires no_env_delimiter):
-   ```rust
-   # use conf::Conf;
-   use std::path::PathBuf;
-
-   #[derive(Conf)]
-   struct Config {
-       /// Single input file from env, can be non-UTF-8
-       #[conf(repeat, long, env, no_env_delimiter)]
-       input: Vec<PathBuf>,
-   }
-   ```
-
-   *Note*: This attribute is mutually exclusive with `value_parser`. Only one can be specified for a given field.
+   *Note*: This attribute is mutually exclusive with `value_parser`.
 
 *  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
 

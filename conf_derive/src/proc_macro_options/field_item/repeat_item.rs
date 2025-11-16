@@ -1,4 +1,4 @@
-use super::StructItem;
+use super::{ExprRequest, StructItem, ValueParserExpr};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -87,6 +87,7 @@ pub struct RepeatItem {
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
     value_parser: Option<Expr>,
+    value_parser_os: Option<Expr>,
     env_delimiter: Option<LitChar>,
     no_env_delimiter: bool,
     serde: Option<RepeatSerdeItem>,
@@ -120,6 +121,7 @@ impl RepeatItem {
             env_name: None,
             env_aliases: None,
             value_parser: None,
+            value_parser_os: None,
             env_delimiter: None,
             no_env_delimiter: false,
             serde: None,
@@ -166,6 +168,12 @@ impl RepeatItem {
                             &mut result.value_parser,
                             Some(parse_required_value::<Expr>(meta)?),
                         )
+                    } else if path.is_ident("value_parser_os") {
+                        set_once(
+                            &path,
+                            &mut result.value_parser_os,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if path.is_ident("env_delimiter") {
                         set_once(
                             &path,
@@ -197,6 +205,22 @@ impl RepeatItem {
                     }
                 })?;
             }
+        }
+
+        // Validate value_parser and value_parser_os are mutually exclusive
+        if result.value_parser.is_some() && result.value_parser_os.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "Cannot specify both value_parser and value_parser_os",
+            ));
+        }
+
+        // Validate value_parser_os and env_delimiter are incompatible
+        if result.value_parser_os.is_some() && result.env_delimiter.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "value_parser_os is incompatible with env_delimiter (use no_env_delimiter instead)",
+            ));
         }
 
         if result.no_env_delimiter && result.env_delimiter.is_some() {
@@ -355,34 +379,83 @@ impl RepeatItem {
     }
 
     fn get_delimiter(&self) -> TokenStream {
-        quote_opt(&if self.no_env_delimiter {
-            None
-        } else {
-            Some(
-                self.env_delimiter
-                    .clone()
-                    .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
-            )
-        })
+        quote_opt(
+            &if self.no_env_delimiter || self.value_parser_os.is_some() {
+                // No delimiter when no_env_delimiter is set OR when using value_parser_os
+                // (value_parser_os implies no splitting since we can't split non-UTF-8 data)
+                None
+            } else {
+                Some(
+                    self.env_delimiter
+                        .clone()
+                        .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
+                )
+            },
+        )
     }
 
-    fn get_value_parser(&self) -> Expr {
-        // Value parser is FromStr::from_str if not specified
-        self.value_parser
-            .clone()
-            .unwrap_or_else(|| parse_quote! { std::str::FromStr::from_str })
+    fn get_value_parser_expr(&self) -> ValueParserExpr {
+        // If we have an explicit OsStr parser, use it
+        if let Some(ref value_parser_os) = self.value_parser_os {
+            return ValueParserExpr::OsStr(value_parser_os.clone());
+        }
+
+        // If we have an explicit value parser, use it
+        if let Some(ref value_parser) = self.value_parser {
+            return ValueParserExpr::Str(value_parser.clone());
+        }
+
+        // Auto-detect Vec<PathBuf> and Vec<OsString> and provide default parsers
+        // This only happens when no explicit parser is specified
+        // Note: field_type is Vec<T>, so we need to extract T first
+        if let Ok(Some(inner_type)) = type_is_vec(&self.field_type) {
+            if type_is_pathbuf(&inner_type) {
+                return ValueParserExpr::OsStr(
+                    parse_quote! { |s: &::std::ffi::OsStr| -> Result<::std::path::PathBuf, ::std::convert::Infallible> { Ok(s.into()) } },
+                );
+            }
+
+            if type_is_osstring(&inner_type) {
+                return ValueParserExpr::OsStr(
+                    parse_quote! { |s: &::std::ffi::OsStr| -> Result<::std::ffi::OsString, ::std::convert::Infallible> { Ok(s.into()) } },
+                );
+            }
+        }
+
+        // Default is FromStr::from_str which takes &str
+        ValueParserExpr::Str(parse_quote! { std::str::FromStr::from_str })
     }
 
+    /// Generate initializer code for this repeat field.
+    ///
+    /// # `before_value_parser` contract
+    ///
+    /// If provided, `before_value_parser` is a function that takes an `ExprRequest` and returns
+    /// a `TokenStream`. It will be invoked with the appropriate request type based on the value parser.
+    ///
+    /// The generated code creates these variables before calling `before_value_parser`:
+    /// - `value_source: ConfValueSource<&str>` - where the values came from
+    /// - `strs: Vec<&str>` (for `ExprRequest::Str`) or `Vec<&OsStr>` (for `ExprRequest::OsStr`)
+    /// - `opt: &ProgramOption` - the option metadata
+    ///
+    /// The `before_value_parser` TokenStream can:
+    /// - Reference these variables
+    /// - Shadow them with new values (e.g., replacing with serde document values)
+    /// - Early return from the function if needed
+    ///
+    /// After `before_value_parser` executes, the code expects:
+    /// - `value_source` and `strs` to be in scope (possibly shadowed)
+    /// - `strs` to have the same type as initially created (`Vec<&str>` or `Vec<&OsStr>`)
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
-        before_value_parser: Option<TokenStream>,
+        before_value_parser: Option<&dyn Fn(ExprRequest) -> TokenStream>,
     ) -> Result<(TokenStream, bool), syn::Error> {
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
         let delimiter = self.get_delimiter();
-        let value_parser = self.get_value_parser();
+        let value_parser_expr = self.get_value_parser_expr();
 
         // Note: We can't use rust into_iter, collect, map_err because sometimes it messes with type
         // inference around the value parser
@@ -396,44 +469,96 @@ impl RepeatItem {
         // (easier type inference) than to support user-defined containers here, and try to
         // use `.collect` etc. directly into their container. The user's code can do
         // .iter().collect() after our code runs if they want.
-        let initializer = quote! {
-          {
-            fn __value_parser__(
-              __arg__: &str
-            ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
-              (#value_parser)(__arg__)
+
+        let initializer = match value_parser_expr {
+            ValueParserExpr::OsStr(value_parser_os) => {
+                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::OsStr));
+                // OsStr-based value parser
+                quote! {
+                  {
+                    fn __value_parser__(
+                      __arg__: &::std::ffi::OsStr
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                      (#value_parser_os)(__arg__)
+                    }
+
+                    use ::conf::{ConfValueSource, ProgramOption, InnerError};
+                    use ::std::vec::Vec;
+                    use ::std::ffi::OsStr;
+
+                    let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&OsStr>, &ProgramOption)
+                      = #conf_context_ident.get_repeat_osstring_opt(#id).map_err(|err| vec![err])?;
+
+                    #before_value_parser
+
+                    let mut result: #field_type = Default::default();
+                    let mut errors = Vec::<InnerError>::new();
+                    result.reserve(strs.len());
+                    for val_os_str in strs {
+                      // Note: val_os_str is already &OsStr, no conversion needed
+                      match __value_parser__(val_os_str) {
+                        Ok(val) => result.push(val),
+                        Err(err) => errors.push(
+                          InnerError::invalid_value_os(
+                            value_source.clone(),
+                            val_os_str,
+                            opt,
+                            err.to_string()
+                          )
+                        ),
+                      }
+                    }
+                    if errors.is_empty() {
+                      Ok(result)
+                    } else {
+                      Err(errors)
+                    }
+                  }
+                }
             }
+            ValueParserExpr::Str(value_parser) => {
+                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::Str));
+                // String-based value parser - use get_repeat_opt
+                quote! {
+                  {
+                    fn __value_parser__(
+                      __arg__: &str
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                      (#value_parser)(__arg__)
+                    }
 
-            use ::conf::{ConfValueSource, ProgramOption, InnerError};
-            use ::std::vec::Vec;
+                    use ::conf::{ConfValueSource, ProgramOption, InnerError};
+                    use ::std::vec::Vec;
 
-            let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&str>, &ProgramOption)
-              = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
+                    let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&str>, &ProgramOption)
+                      = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
 
-            #before_value_parser
+                    #before_value_parser
 
-            let mut result: #field_type = Default::default();
-            let mut errors = Vec::<InnerError>::new();
-            result.reserve(strs.len());
-            for val_str in strs {
-              match __value_parser__(val_str) {
-                Ok(val) => result.push(val),
-                Err(err) => errors.push(
-                  InnerError::invalid_value(
-                    value_source.clone(),
-                    val_str,
-                    opt,
-                    err.to_string()
-                  )
-                ),
-              }
+                    let mut result: #field_type = Default::default();
+                    let mut errors = Vec::<InnerError>::new();
+                    result.reserve(strs.len());
+                    for val_str in strs {
+                      match __value_parser__(val_str) {
+                        Ok(val) => result.push(val),
+                        Err(err) => errors.push(
+                          InnerError::invalid_value(
+                            value_source.clone(),
+                            val_str,
+                            opt,
+                            err.to_string()
+                          )
+                        ),
+                      }
+                    }
+                    if errors.is_empty() {
+                      Ok(result)
+                    } else {
+                      Err(errors)
+                    }
+                  }
+                }
             }
-            if errors.is_empty() {
-              Ok(result)
-            } else {
-              Err(errors)
-            }
-          }
         };
         Ok((initializer, true))
     }
@@ -469,25 +594,38 @@ impl RepeatItem {
             // When use_value_parser is enabled, the behavior is, if conf_context produced a default
             // value, we should overwrite it with the document value. `strs` is a `Vec<&str>`,
             // and #doc_val is a `Vec<String>`.
-            let before_value_parser = quote! {
-              let (value_source, strs) = if value_source.is_default() {
-                (ConfValueSource::Document(#doc_name), #doc_val.iter().map(String::as_str).collect())
-              } else {
-                (value_source, strs)
-              };
+            let before_value_parser = |req: ExprRequest| -> TokenStream {
+                match req {
+                    ExprRequest::Str => quote! {
+                      let (value_source, strs) = if value_source.is_default() {
+                        (ConfValueSource::Document(#doc_name), #doc_val.iter().map(String::as_str).collect())
+                      } else {
+                        (value_source, strs)
+                      };
+                    },
+                    ExprRequest::OsStr => quote! {
+                      let (value_source, strs) = if value_source.is_default() {
+                        (ConfValueSource::Document(#doc_name), #doc_val.iter().map(OsStr::new).collect())
+                      } else {
+                        (value_source, strs)
+                      };
+                    },
+                }
             };
 
-            self.gen_initializer_helper(conf_context_ident, Some(before_value_parser))
+            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
         } else {
             // When use_value_parser is not enabled, the behavior is, if conf context produced a
             // default value, we should instead simply return the doc value.
-            let before_value_parser = quote! {
-              if value_source.is_default() {
-                return Ok(#doc_val);
-              }
+            let before_value_parser = |_| {
+                quote! {
+                  if value_source.is_default() {
+                    return Ok(#doc_val);
+                  }
+                }
             };
 
-            self.gen_initializer_helper(conf_context_ident, Some(before_value_parser))
+            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
         }
     }
 

@@ -49,7 +49,7 @@ pub struct ProgramOption {
     pub env_form: Option<CowStr>,
     /// Any env aliases
     pub env_aliases: Vec<CowStr>,
-    /// The default-value, if any
+    /// The default-value, if any. This is used in help text and actually parsed when we use the default.
     pub default_value: Option<CowStr>,
     /// Whether this option is considered required to appear. Affects help generation & semantics
     /// around flatten optional.
