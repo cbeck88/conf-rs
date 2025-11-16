@@ -1,6 +1,6 @@
 # conf
 
-`conf` is a `derive`-based config parser aimed at the practically-minded web developer building large web projects.
+`conf` is a `derive`-based config parser, with support for hierarchical config, aimed at the practically-minded web developer building large web projects.
 
 [![Crates.io](https://img.shields.io/crates/v/conf?style=flat-square)](https://crates.io/crates/conf)
 [![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
@@ -12,9 +12,7 @@
 
 ## Overview
 
-[`conf`](https://docs.rs/conf/latest/conf/) uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text.
-
-`conf` has an intentionally similar proc-macro API to `clap-derive`, but it is not a fork. It is a new library with different goals. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`, which I have found to be less useful in a typical web project.
+[`conf`](https://docs.rs/conf/latest/conf/) is a rewrite of `clap-derive` with a similar proc macro API, but a different architecture and different goals. It uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text, but it is not a fork. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`.
 
 The features that you get for this bargain are:
 
@@ -30,15 +28,15 @@ The features that you get for this bargain are:
 * **You can declare fields which represent secrets.** This controls whether or not the entire value should be printed in error messages if it fails to parse.
 * **Support for an optional-flatten syntax**. This can be simpler and more idiomatic than using argument groups and such in `clap-derive`.
 * **Support for user-defined validation predicates**. This allows you to express constraints that can't be expressed in `clap`.
-* **Support for layered config**. This means that you can use data loaded from a file as an additional source for config values, alongside args and env.
+* **Support for layered config**. This means that you can use structured data loaded from a file as an additional source for config values, alongside args and env.
 
-As of version ??? `conf` supports using config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
+`conf` supports using config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
 The same commitment to "All the errors and not just one of them" holds. There are several advantages of this integrated approach:
 
 * Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/latest/clap/) for CLI argument parsing only, and then folding the
   results of that into a library like [`figment`](https://docs.rs/figment/latest/figment) or [`config`](https://docs.rs/config/latest/config), which can also manage `env`, files, and compositing it all together.
   * However, typically this creates a maintanence burden, because if a required field could be read via `clap` or could be read from `env` or a config file, it needs to be `Option<T>`
-    for `clap` and `T` in the final config structure, so you end up needing to maintain two parallel structures.
+    for `clap` and `T` in the final config structure, so you end up needing to maintain two or more parallel structures.
   * If these structures get out of sync, there isn't really any tooling to help you figure it out and the error messages may be confusing.
   * Dividing the information between two structures this way means that `clap` isn't aware of the other ways that a value can be read.
     But `clap` is responsible for generating the `--help` text, and so this causes the documentation of the config to be incomplete and makes it harder
@@ -191,7 +189,7 @@ any env, any defaults, any help text, in each `Config` that you have, you can wr
 you only have to add it to `DbConfig` once, and every service that uses `DbConfig` will get the new config parameter. Also, when you need to initialize your db connection, you can just pass it the entire `.db` field rather
 than pick out needed config arguments one-by-one.
 
-Where `conf` differs from `clap-derive` is that we expect that you will use `flatten` in your project quite a lot.
+`conf` differs from `clap-derive` in that we expect that you will use `flatten` in your project quite a lot.
 
 For example, you might need to do this:
 
@@ -333,6 +331,8 @@ pub struct Config {
 This can be a good pattern for things like reading a certificate or a cryptographic key from a file, which you want to check on startup.
 This way you will fail fast if the file is not found or is invalid, but also report all other config problems at the same time.
 
+(Note that we also support `value_parser_os`, which takes `&OsStr` and is a more portable and correct way to read file paths.)
+
 This kind of approach would always read the key from a file, but would allow you to specify the file path either in args or in env.
 This is not the same thing as hierarchical config files though, which we'll discuss next.
 
@@ -349,25 +349,23 @@ This is not the same thing as hierarchical config files though, which we'll disc
 >    5. System-wide configuration
 >    6. Default configuration shipped with the program.
 
-`conf` has strong built-in support for (1), (2), and (6) here. To get the others, there are basically two approaches.
+`conf` has strong built-in support for (1), (2), and (6) right out of the box. To get the others, there are basically two approaches.
 
 #### .env files
 
-The simplest approach to hierarchical config, IMO, is to use a crate like [`dotenvy`](https://crates.io/crates/dotenvy). This crate can search for an `.env` file, and then set `env` values if they are not already set in your program.
+A simple approach is to use a crate like [`dotenvy`](https://crates.io/crates/dotenvy). This crate can search for an `.env` file, and then set `env` values if they are not already set in your program.
 You can do this right before calling `Config::parse()`, and in this manner achieve hierarchical config, with `args > env > .env file > defaults`. You can load multiple `.env` files this way if you need to, searching user-provided paths, default paths, and so on.
 
-In web applications, I often use this approach for *development* rather than production, and I recommend this approach especially for smaller projects.
+In web applications, I often use this approach for *development* and I recommend this approach especially for smaller projects.
 
-If your application has a lot of required values, it may take an engineer a while to figure out how to just run it locally. But you may not want to provide default values in the program that would not be appropriate in production, for safety. Instead, you can provide a `.env` file which is checked in to the repo, with values which are appropriate for local testing / CI. Then an engineer can use `cargo run` and it will just work. When you go to build docker containers, you can leave out these `.env` files, and then be sure that in the deployed environment, kubernetes or similar is in total control, and any missing or misspelled values in the helm charts and whatnot will be loud and fail fast.
-
-These `.env` files work well if you are using [`diesel`](https://crates.io/crates/diesel), because the `diesel` cli tool also [uses `dotenvy` to search for a `.env` file](https://diesel.rs/guides/getting-started) and find the `DATABASE_URL` when manging database migrations locally.
-
-You can also pass `.env` files directly to `docker run` if you want to test docker containers locally.
+* Helps new developers get it up and running locally much faster.
+* The `.env` can be in the repo for development, but removed when you go to deployment so that config values that are only appropriate during development don't get shipped.
+* Works well if you are using [`diesel`](https://crates.io/crates/diesel), because the `diesel` cli tool also [uses `dotenvy` to search for a `.env` file](https://diesel.rs/guides/getting-started) and find the `DATABASE_URL` when manging database migrations locally.
+* You can also pass `.env` files directly to `docker run` if you want to test docker containers locally.
 
 This is a very traditional approach to configuring 12-factor apps.
-You get most of the benefits of having config files, but it's also typically easier to deploy the app if it doesn't require files to be mounted into a container, and the config is typically easier to change in a deployed environment if it is based on environment variables.
 
-The biggest drawback of this approach is that you are limited to things that can easily be expressed in a `.env` format.
+The biggest drawback is that you are limited to things that can easily be expressed in a `.env` format.
 If your config structure logically contains arrays of structs, it may not be very natural to express that in `.env`.
 
 Another drawback is that the `.env` format doesn't really have a spec, and there are many divergent parser implementations. Eventually you may run into incompatibilities between what `docker` does, what `bash` does,
@@ -377,15 +375,15 @@ and what the numerous `dotenv` libraries in different programming languages do. 
 
 Alternatively, you may prefer that your application can load layered config from a file in a more structured format.
 
-In the `conf` API, self-describing structured data like this is called a "document". (`conf` doesn't really care if it actually came from a file.)
+In the `conf` API, self-describing structured data like this is called a "document". (`conf` doesn't care if it actually came from a file.)
 
 To use a document as a source for layered config in `conf`, you can do the following:
 
 0. You must have the `serde` feature enabled in `conf`, which is on by default.
 
-   You must annotate your structs with `#[conf(serde)]`. This can create additional build-time requirements -- fields in your structs might need to implement `serde::Deserialize` depending on how they are annotated.
+   You must annotate your structs with `#[conf(serde)]`. Fields in your structs might need to implement [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) depending on how they are annotated (see [reference](./REFERENCE_derive_conf.md)).
 
-1. First, determine the file path and load the document content. For example,
+1. Determine the file path and load the document content. For example,
 
    ```rust
    let config_path = std::env::var("CONFIG").ok().or_else("config.yaml".to_owned());
@@ -393,10 +391,9 @@ To use a document as a source for layered config in `conf`, you can do the follo
    let doc_content: serde_yaml::Value = serde_yaml::from_reader(fs::File::open(&config_path).unwrap()).unwrap();
    ```
 
-   Note that `conf` doesn't force you to use any particular library or error handling discipline here.
-   You may prefer to skip the file if it is not specified, or not found, or invalid, and try to proceed without it.
+   `conf` doesn't force you to use any particular library or error handling discipline here.
 
-2. Next, use the builder API to parse an instance of your structure.
+2. Use the builder API to parse an instance of your structure.
 
    ```rust
    let config = MyConfig::conf_builder()
@@ -407,13 +404,16 @@ To use a document as a source for layered config in `conf`, you can do the follo
    The builder uses `std::env::vars_os` and `std::env::args_os` as env and args sources by default, but these can be overrided if desired.
    The `config_path` string parameter is used in error messages.
 
-Intuitively what happens is, `conf` attempts to initialize your struct, mapping the yaml data onto it, similar to `serde::Deserialize`.
-However, for any fields in your `Conf` struct, if there are multiple value sources, the priority is `args > env > serde > defaults`. So values
-from the `serde::Deserializer` can be shadowed, and also holes in the `serde` data can be filled from defaults and so on.
 
-Any `value_parser` is run only after the available value sources and their priorities have been resolved.
+Intuitively what happens is, `conf` attempts to initialize your struct, mapping the yaml data onto it, similar to [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html).
 
-`conf` will work best if you use a "self-describing" format, which has a type like `serde_yaml::Value` or `serde_json::Value`
+However, `conf` doesn't implement [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) on your structure -- instead it implements [`serde::DeserializeSeed`](https://docs.rs/serde/latest/serde/de/trait.DeserializeSeed.html), where the seed is an internal structure that contains the parsed args and env. When you call parse, it will gather args and env to create the seed, and invoke it, together with the doc content. This walks your struct in a manner very similar to `serde_derive`, but for each field in your `Conf` struct, if there are multiple value sources, the priority is `args > env > serde > defaults`. So values from the `serde::Deserializer` can be shadowed, and also holes in the `serde` data can be filled from defaults and so on.
+
+Any `value_parser` is run only if necessary after the available value sources and their priorities have been resolved, so errors from parsing shadowed values don't happen. The struct is only actually instantiated once, and integrity checks only run once.
+
+##### Caveats
+
+This will work best if your config files use a "self-describing" format, which has a type like `serde_yaml::Value` or `serde_json::Value`
 which can hold any valid yaml or json, and you deserialize into that first. In particular, it's not recommended to do the following, even if it would avoid some copies:
 
 ```rust
@@ -427,7 +427,7 @@ If the file is not valid yaml or json, then at some point in the middle of the w
 Then `conf` may report numerous errors as it tries to read data for different parts of your structure, giving up on failing branches and continuing to try on other branches.
 These errors may distract from the root cause. By deserializing into a `Value` type first, and failing fast if that doesn't work, you can avoid this scenario.
 
-See a [worked example](./examples/serde/basic.rs) which is under test if you like.
+See also [./examples/serde/basic.rs](./examples/serde/basic.rs).
 
 #### Multiple config files
 
@@ -495,8 +495,8 @@ We'll offer just three points of guidance around this tool.
 
 ### Argument groups and constraints
 
-`clap` has support for the concept of "argument groups" ([`ArgGroup`](https://docs.rs/figment/latest/figment/struct.Metadata.html)) and also "dependencies" among [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html)'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
-`clap` [provides](https://docs.rs/clap/latest/clap/struct.Arg.html#method.conflicts_with) [many](https://docs.rs/clap/latest/clap/struct.Arg.html#method.exclusive) [functions](https://docs.rs/clap/latest/clap/struct.Arg.html#method.overrides_with) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_if_eq) [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html) [and](https://docs.rs/clap/latest/clap/struct.Arg.html#method.requires_if) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_unless_present) [`ArgGroup`](https://docs.rs/figment/latest/figment/struct.Metadata.html) which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
+`clap` has support for the concept of "argument groups" ([`ArgGroup`](https://docs.rs/clap/latest/clap/struct.ArgGroup.html)) and also "dependencies" among [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html)'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
+`clap` [provides](https://docs.rs/clap/latest/clap/struct.Arg.html#method.conflicts_with) [many](https://docs.rs/clap/latest/clap/struct.Arg.html#method.exclusive) [functions](https://docs.rs/clap/latest/clap/struct.Arg.html#method.overrides_with) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_if_eq) [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html) [and](https://docs.rs/clap/latest/clap/struct.Arg.html#method.requires_if) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_unless_present) [`ArgGroup`](https://docs.rs/clap/latest/clap/struct.ArgGroup.html#method.conflicts_with) which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
 
 The main reason to use these features in `clap` is that it will generate nicely formatted errors if these constraints are violated, and then you don't have to worry about handling the situation in your application code.
 
@@ -544,6 +544,8 @@ and promotes code reuse. The same struct can be flattened in a required way in o
 Hopefully it's easy to remember what it means, just by looking at the type of the data, and thinking about what would have to happen for it to succeed.
 If we can't see any of the (prefixed) substructure's fields appearing, then we return `None`. If we see some of them appearing, it indicates that we're supposed to be producing a `Some`. Once we decide that we're supposed to produce `Some`, it's an error if we can't do so in the normal (non-optional) manner for `flatten`'ed structures.
 
+Also, this design makes it easy to use one struct as both the Conf struct and as a `serde` schema.
+
 #### one_of_fields
 
 `conf` provides a simple way to specify that some fields in a struct are mutually exclusive.
@@ -567,7 +569,7 @@ When used with all fields in a struct, it is similar to an `ArgGroup` with `mult
 
 This also works with the *flatten-optional* feature, so one or more optional flattened groups can be made exclusive with eachother or with simple arguments in this structure.
 
-However, it can only be used with fields on the struct that is marked with this attribute, and cannot be used with fields inside of flattened structs, or elsewhere in the structure.
+However, it can only be used with fields on the struct where the attribute appears, and cannot be used with fields inside of flattened structs, or elsewhere in the structure.
 
 `conf` provides a variation which requires *exactly* one of the fields to appear.
 
@@ -607,31 +609,39 @@ Any of these attributes can be used multiple times on the same struct to create 
 
 #### validation predicate
 
-`flatten-optional` and `one_of_fields` provide some easy-to-understand ways to create dependencies and exclusion constraints between different optional fields in a `conf` structure.
-They can directly translate many simple uses of `ArgGroup` and some of the constraints in the `clap-derive` API. But, there are many other constraint types supported by `clap`
-that don't translate directly into this, and we don't support declaring arg group membership directly on a field, which is something that clap does support.
-
-At the same time, there are other kinds of constraints you might have a legitimate use for that you can't express in `clap`'s API.
-For example, one of your arguments might be a `Url` object, and you might want to require that if the `Url` starts with `https` then some other options are required. As far as I know, there's no way to do this in `clap`.
-
-Instead of providing direct analogues for every function in `clap`'s constraint API,
-`conf` supports user-defined validation predicates on a per-struct basis.
+For more complex constraints, `conf` supports user-defined validation predicates.
 
 A validation predicate is a function that takes `&T` where `T` is the struct at hand, and returns `Result<(), impl Display>`.
 
-It behaves similarly to `value_parser`, in that any function expression can be accepted.
+Example:
+
+```rust
+#[derive(Conf)]
+#[conf(validation_predicate = Config::validate)]
+pub struct FooConfig {
+    #[conf(short, long)]
+    pub a: bool,
+    #[conf(short, long)]
+    pub b: Option<String>,
+    #[conf(long, env)]
+    pub c: Vec<String>,
+}
+
+impl FooConfig {
+    fn validate(&self) -> Result<(), impl Display> {
+        ...
+    }
+}
+
+```
+
+Any number of validation predicates can be specified.
 
 The idea here is, rather than adding increasing numbers of one-off constraint types to `conf`, or enabling you to write non-local constraints using proc-macro attributes, it
 will be more maintainable for you and for `conf` if you just express what you want in rust code, once your constraints get sophisticated enough.
 There's both less API for you to learn and remember, and less API surface area for `conf` to test and maintain. You will also be able to generate very precise error messages when complex constraints fail.
 
-Using these features together, you can express any kind of constraint you want to impose on your config structure, and hopefully make it feel idiomatic and natural.
-
------
-
-Given that the `validation_predicate` for a `T` runs after we have actually parsed a `T`, why have this feature at all? The users could just run such functions on their own after `Config::parse` succeeds.
-
-The benefit of using the `validation_predicate` is that if a predicate fails, `conf` is still able to report those errors and any other errors that occurred elsewhere in the tree.
+If a predicate fails, `conf` is still able to report those errors and any other errors that occurred elsewhere in the tree.
 
 For example, in this config struct:
 
@@ -653,19 +663,22 @@ It's possible that when parsing a `Config`, the `auth_service` fails to parse be
 
 ## Who should use this crate?
 
-The best reason to use this is crate is if you have a medium-to-large project, such as a web app consisting of multiple services, which has a lot of configuration needs. You have multiple services that have several common subsystems or components, and these components have subcomponents, some of which are shared, etc., all of which should read config from the environment in accordance with 12-factor style, and may need to read more such config on short notice. You may already be using `clap-derive` but have run into limitations as your project has grown.
+The crate is probably most attractive if:
 
-The purpose of the crate is to help you arrange all of that config in the simplest and most maintainable way possible, while still ensuring that all values that are needed are checked for on program startup (failing fast), reporting as many configuration errors as possible in the most helpful way possible when your deployment goes bad, and providing automated `--help` documentation of all of the config that is being read.
+* you have a medium-to-large project, and you run into limits of `clap-derive`, particularly around flatten-with-prefix
+* you want to do layered config, including with config files, but
+  * you don't want to define the same config parameters over and over again (for args, for env, and for serde)
+  * you want the auto-generated help to be useful
+  * you want very complete error reporting
+* you find clap's large API and documentation to be confusing, and you want to use something with less surface area and fewer right ways to do a particular thing
 
 If you think that this crate is a good fit for you, the suggested way to use it is:
 
 * Whenever you have a component that you think should use a value that is read on startup, you should create a config struct for that component.
   You should `derive(Conf)` on that struct, and pass that config struct to the component on initialization.
   The config struct should live in the same module as the component that it is configuring.
-* If your component is initialized by a larger component, then that component should have its own config struct and you should use `flatten` to assemble it. You should usually use the `prefix` and `help_prefix` options when flattening.
+* If your component is initialized by a larger component, then that component should have its own config struct and you should use `flatten` to assemble it.
 * Each binary target should have a config struct, and should `::parse()` it in `fn main()`.
-
-This way, whenever you discover in the future that you need to add more config values for one of your small components, all you have to do is add it to the associated config struct, and it will automatically appear in every service that needs it, as many times as needed with appropriate prefixing, without you having to plumb it through every step of the way. Additionally, it makes it easier to create correct config for any future services or tools. And it causes all of your services and tools to have a similar, predictable style, and to have all of their config documented in `--help`, even pretty obscure environment variables and such, which usually just don't get documented if you choose to read them directly from `std::env` instead.
 
 ### When should clap-derive be preferred to this crate?
 
@@ -677,12 +690,12 @@ This crate defines itself somewhat differently from [`clap-derive`](https://docs
 `conf` places emphasis on features differently.
 
 * `env` is actually the most important thing for a 12-factor web app.
-* `conf` has a different architecture, such that it's easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many of the new features that it brings to the table. The details are not part of the public API, so that they can be extended to support new features without a breaking change.
+* `conf` has a different architecture, such that it's easier to pass information at runtime between a `struct` and the `struct` that it is flattened into, in both directions. This enables many new features. The details are not part of the public API, the way that they are in `clap`, so that we can add more features in the future without a breaking change.
 * `conf` has very specific goals around error reporting. We want to return as many config errors as possible at once, because deployment might take a relatively long time.
 
 In order to meet its goals, `conf` does not use `clap` to handle `env` at all. `clap` is only used to parse CLI arguments as strings, and to render help text, which are the two things that it is best at.
 
-This crate can expose more features of the underlying `clap` builder and get closer towards the feature set offered by `clap-derive`, but will probably never expose all of them -- we can only expose features that we are sure will work well with the additional features that we have created, like flatten-with-prefix, and will work well with the manner in which we are using the underlying clap builder. The most interesting features are those that can be motivated by common web development needs.
+This crate can get closer towards the full feature set offered by `clap-derive`, but will probably never achieve feature parity -- in fact the use of `clap` is an implementation detail, and it's conceivable that we'll drop `clap` and just use `clap-lex` directly.
 
 If you have very specific CLI argument parsing needs, or if you need pixel-perfect help text, you will be better off using `clap` directly instead of this crate, because you will have more control that way. `clap` is the most mature and feature-complete CLI argument parser out there, by a wide margin.
 
