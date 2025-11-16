@@ -19,13 +19,7 @@ pub struct Config {
 fn test_value_parser_os_from_cli_args() {
     // When specified via CLI args, value_parser_os should count bytes
     let result = Config::conf_builder()
-        .args([
-            "test_app",
-            "--lengths",
-            "hello",
-            "--lengths",
-            "world!",
-        ])
+        .args(["test_app", "--lengths", "hello", "--lengths", "world!"])
         .try_parse()
         .unwrap();
 
