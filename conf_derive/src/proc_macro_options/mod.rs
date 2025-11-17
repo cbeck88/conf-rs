@@ -501,6 +501,34 @@ impl GenConfStruct {
         })
     }
 
+    /// Create an object implementing InitializationStateMachine whose value is this struct,
+    /// and whose context is ConfSerdeContext.
+    ///
+    /// The machine contains a field for each field of the struct, where each field value is
+    /// Option<#field_machine_type>. Field machine type is *usually* Option<T>.
+    /// However for more complex cases it might not be.
+    ///
+    /// It also contains a buffer of errors called `__errors__`.
+    /// The machine implements Default.
+    ///
+    /// In order to implement the state machine trait we need to do three things:
+    /// * Compute all the keys that we are interested, as a static list.
+    /// * Implement the "next" function which takes one key value pair and advances
+    ///   one state machine of one of our fields, or stores an unknown value error.
+    /// * Implement the "finalize" function, which must produce our target value
+    ///   or yield one or more errors.
+    ///
+    /// To implement keys, we ask our constituents what their keys are and aggregating them.
+    ///
+    /// To implement next, we match on the key and send it to one of the constituents.
+    /// Each constituent generates their own match arm for us.
+    ///
+    /// To implement finalize, we:
+    /// * Call finalize on any state machines, which moves those types from Option<#field_machine_type> to Option<Option<T>>.
+    /// * For anything that is still None, serde never produced a value. Therefore we have to try to populate it using the
+    ///   non-serde route. This is done using .unwrap_or_else, so the type becomes Option<T>. The "fallback initializers"
+    ///   perform this task.
+    /// * Finally we call gather_and_validate, simliar to the non-serde route.
     fn gen_machine(
         &self,
         machine_ident: &Ident,
