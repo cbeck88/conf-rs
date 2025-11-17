@@ -67,7 +67,6 @@ pub(crate) struct FlattenedOptionalDebugInfo<'a> {
 // This is okay because this is not a user facing object, and it's okay to panic for internal logic
 // errors like that.
 #[doc(hidden)]
-#[derive(Clone)] // TODO: Factor this out
 pub struct ConfContext<'a> {
     args: ParsedArgs<'a>,
     env: &'a ParsedEnv,

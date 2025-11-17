@@ -276,8 +276,7 @@ impl FieldItem {
     /// The code block reads from a conf context and pushes any errors to given errors buffer.
     ///
     /// Arguments:
-    /// * conf_context_ident is a variable of type ConfContext which is in scope, which we won't
-    ///   consume
+    /// * conf_context_ident is a variable of type &ConfContext which is in scope
     /// * errors_ident is a variable of type mut Vec<InnerError> which is in scope, which we can
     ///   push to.
     pub fn gen_initialize_from_conf_context_and_push_errors(
@@ -312,7 +311,7 @@ impl FieldItem {
             ) -> Result<#field_type, #error_type> {
               #initializer
             }
-            match #field_name(&#conf_context_ident) {
+            match #field_name(#conf_context_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);

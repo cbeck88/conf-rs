@@ -247,6 +247,9 @@ impl GenConfStruct {
             fn from_conf_context<'a>(#conf_context_ident: ::conf::ConfContext<'a>) -> Result<Self, Vec<::conf::InnerError>> {
                 let mut #errors_ident = Vec::<::conf::InnerError>::new();
 
+                // Rebind as reference so #conf_context_ident has consistent type &ConfContext
+                let #conf_context_ident = &#conf_context_ident;
+
                 #(#initializations)*
 
                 #gather_and_validate
@@ -298,11 +301,11 @@ impl GenConfStruct {
 
             let return_value = #return_value;
 
-            fn validation<'ctxctx>(#instance_ident: & #struct_ident, #conf_context_ident: ::conf::ConfContext<'ctxctx>) -> Result<(), Vec<::conf::InnerError>> {
+            fn validation<'ctxctx>(#instance_ident: & #struct_ident, #conf_context_ident: &::conf::ConfContext<'ctxctx>) -> Result<(), Vec<::conf::InnerError>> {
                 #validation_routine
             }
 
-            validation(&return_value, #conf_context_ident)?;
+            validation(&return_value, &#conf_context_ident)?;
 
             Ok(return_value)
         })
@@ -839,7 +842,7 @@ impl GenConfStruct {
 
                     // If anything hasn't been initialized by serde, try to initialize with
                     // the no-serde code path.
-                    let #conf_context_ident = #conf_serde_context_ident.conf_context.clone(); // FIXME
+                    let #conf_context_ident = &#conf_serde_context_ident.conf_context;
                     #(let #field_names = #field_names.unwrap_or_else(|| { #fallback_initializers });)*
 
                     // Now, every variable has either been initialized by the serde path or the non serde path,
