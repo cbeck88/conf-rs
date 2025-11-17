@@ -57,7 +57,10 @@ pub use conf_serde::{ConfSerde, ConfSerdeBuilder};
 // These are internals used by the derive macro.
 #[doc(hidden)]
 #[cfg(feature = "serde")]
-pub use conf_serde::{AsSeed, ConfSerdeContext, IdentString, InitializationStateMachine, NextValueProducer, SubcommandsSerde};
+pub use conf_serde::{
+    ConfSerdeContext, IdentString, InitializationStateMachine, NextValueProducer, SubcommandsSerde,
+    deserialize_seed_impl,
+};
 // Re-export serde crate for the proc macro
 #[doc(hidden)]
 #[cfg(feature = "serde")]

@@ -9,10 +9,10 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Token, Type, parse_quote};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, parse_quote};
 
 mod field_item;
-use field_item::FieldItem;
+use field_item::{FieldItem, SerdeKeys, SerdeStrategy};
 
 mod struct_item;
 use struct_item::StructItem;
@@ -324,42 +324,34 @@ impl GenConfStruct {
         // To generate a ConfSerde impl on S, we need to designate a Seed,
         // which will implement serde::DeserializeSeed.
         //
-        // The Seed type can't exist within conf crate. If it did, then the
-        // type is an conf, and the trait is in serde, so the impl would have to
-        // be in conf, due to the orphan rules.
-        // But the trait implementations need to be code-genned because they depend
-        // on the user-defined type, and are going to live in the user's crate.
-        // So, the Seed type needs to be a new-type of some kind, defined by this proc macro,
-        // in the user's crate.
+        // In modern versions of the crate, we create a new type M
+        // M, where M: InitializationStateMachine<Value = S> + From<ConfSerdeContext>.
         //
-        // In order to hide it, we define it in a "private module", and put the impl's there too:
+        // This object intuitively represents the state that is maintained in
+        // iterations of the loop over a `serde::de::MapAccess`:
+        // while Some(key) = ma.next_key()? {
+        //   match key {
+        //      field1 => { ... },
+        //      field2 => { ... },
+        //   }
+        // }
+        //
+        // M is the workhorse, but it isn't actually defined to be the seed.
+        //
+        // Instead the seed is a new-type wrapper around ConfSerdeContext,
+        // and it implements DeserializeSeed in terms of M.
+        //
+        // In order to hide this type M, we define it in a "private module", and put the impl's there too:
         // const _: () = { ... };
         //
-        // The Seed is just a newtype around ConfSerdeContext, which is what we would
-        // have used if not for orphan rules.
-        // (But actually, it needs phantom data pointing back to the user-type as well,
-        // so that we can implement DeserializeSeed unambiguously. The user-type is an associated
-        // type of the DeserializeSeed trait, and not a type parameter.)
-        //
-        // There are a few things we impl on the Seed:
-        //
-        // impl From<ConfSerdeContext> for Seed
-        // impl Visitor<'de> for &Seed
-        // impl DeserializeSeed<'de> for Seed
-        //
-        // Then we impl ConfSerde on Self, naming Seed as the associated type.
-        //
-        // * DeserializeSeed is the main workhorse here.
-        // * From<ConfSerdeContext> is necessary so that the ConfSerde impl has a way to actually
-        //   construct the seed.
-        // * We do need something to impl Visitor, but it didn't have to be &Seed. It was just
-        //   convenient to do it that way.
 
         let ident = self.struct_item.get_ident();
+        let machine_ident = Ident::new("__MACHINE__", Span::call_site());
         let seed_ident = Ident::new("__SEED__", Span::call_site());
 
-        let visitor_impl = self.gen_serde_visitor_impl(&seed_ident, generics)?;
-        let deserialize_seed_impl = self.gen_serde_deserialize_seed_impl(&seed_ident, generics)?;
+        let machine = self.gen_machine(&machine_ident, generics)?;
+        let deserialize_seed_impl =
+            self.gen_serde_deserialize_seed_impl(&seed_ident, &machine_ident, generics)?;
 
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -375,7 +367,9 @@ impl GenConfStruct {
             const _: () = {
                 use ::core::{fmt, option::Option, marker::PhantomData, result::Result};
                 use ::std::vec::Vec;
-                use ::conf::{ConfSerdeContext, ConfSerde, InnerError, serde::de};
+                use ::conf::{ConfSerdeContext, ConfSerde, InnerError, NextValueProducer, SubcommandsSerde, serde::de::{self, Error}};
+
+                #machine
 
                 pub struct #seed_ident #seed_generics {
                     ctxt: ConfSerdeContext<#ct>,
@@ -391,7 +385,6 @@ impl GenConfStruct {
                     }
                 }
 
-                #visitor_impl
                 #deserialize_seed_impl
 
                 impl #impl_generics ConfSerde for #ident #ty_generics #where_clause {
@@ -411,6 +404,7 @@ impl GenConfStruct {
     //   afterwards
     // * Some(None) means serde visited it and it produced an error.
     // * Some(Some(val)) means serde visited it and produced a value.
+    /*
     fn gen_visitor_tuple_type(&self) -> Type {
         let field_types: Vec<Type> = self.fields.iter().map(|f| f.get_field_type()).collect();
         // ( #ty ) is not a tuple type in rust, it must be ( #ty , ) when the tuple size is one.
@@ -422,7 +416,7 @@ impl GenConfStruct {
         parse_quote! {
             ( ( #( Option< Option< #field_types > > ),* #extra_comma) , Vec<InnerError> )
         }
-    }
+    }*/
 
     /// Generate implementation of serde::Visitor for &Seed
     /// Panics if serde was not requested on this struct
@@ -430,6 +424,7 @@ impl GenConfStruct {
     /// Arguments:
     /// * seed_ident is the identifier used in this scope for the Seed type
     /// * generics associated to this struct declaration
+    /*
     fn gen_serde_visitor_impl(
         &self,
         seed_ident: &Ident,
@@ -524,7 +519,7 @@ impl GenConfStruct {
                 }
             }
         })
-    }
+    }*/
 
     // Generate an implementation of serde::DeserializerSeed on Seed
     // Panics if serde was not requested on this struct
@@ -587,9 +582,12 @@ impl GenConfStruct {
     fn gen_serde_deserialize_seed_impl(
         &self,
         seed_ident: &Ident,
+        machine_ident: &Ident,
         generics: &Generics,
     ) -> Result<TokenStream, Error> {
-        let _serde_opts = self.struct_item.serde.as_ref().unwrap();
+        let ident = &self.struct_item.struct_ident;
+        let expecting_str = format!("Object with schema {ident}");
+        let ident_str = ident.to_string();
 
         // We need to add two generic lifetimes to the lifetime list (but only in the impl)
         // One is the "deserializer lifetime", and one is the "context lifetime".
@@ -602,22 +600,10 @@ impl GenConfStruct {
         let (_, ty_generics, _) = generics.split_for_impl();
         let (impl_generics, _, _) = visitor_generics.split_for_impl();
 
-        let ident = self.struct_item.get_ident();
-        let ident_str = ident.to_string();
-
-        let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
-        let errors_ident = Ident::new("__errors__", Span::call_site());
-
-        let deserialize_finalizer_body =
-            self.get_deserialize_finalizer_body(&conf_context_ident, &errors_ident)?;
-
-        let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
-        let field_name_strs: Vec<String> = field_names.iter().map(ToString::to_string).collect();
-
         // The Visitor impl Value type. This is a tuple containing Option< #field_type> and
         // Vec<InnerError>. It represents the partially finished work done using the
         // document values from serde.
-        let visitor_tuple_type = self.gen_visitor_tuple_type();
+        // let visitor_tuple_type = self.gen_visitor_tuple_type();
         // The type that will be the Value of this DeserializeSeed impl
         let value_type: Type = parse_quote! {
             Result<#ident #ty_generics, Vec<InnerError>>
@@ -657,77 +643,211 @@ impl GenConfStruct {
                 fn deserialize<D__>(self, __deserializer: D__) -> Result<Self::Value, D__::Error>
                     where D__: de::Deserializer<#de> {
 
-                    use ::conf::{ConfContext, ConfSerde, ConfSerdeContext, InnerError};
-
-                    fn __deserialize_finalizer(
-                        #conf_context_ident: ConfContext<'_>,
-                        (( #( mut #field_names,)* ), mut #errors_ident): #visitor_tuple_type
-                    ) -> #value_type {
-                        #deserialize_finalizer_body
+                    fn expecting_fn(f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                        write!(f, #expecting_str)
                     }
 
-                    Ok(match __deserializer.deserialize_struct(#ident_str, &[ #(#field_name_strs,)* ], &self) {
-                        Ok(tuple_val) => __deserialize_finalizer(self.ctxt.conf_context, tuple_val),
-                        Err(err) => {
-                            let ctxt: ConfSerdeContext = self.ctxt;
-                            Err(vec![ InnerError::serde(ctxt.document_name, #ident_str, err) ])
-                        },
-                    })
+                    Ok(::conf::deserialize_seed_impl::<#ct, #de, D__, #machine_ident>(#ident_str, expecting_fn, self.ctxt, __deserializer))
                 }
             }
         })
     }
 
-    // Body of the deserialize finalizer function
-    // In this scope, all #field_name variables have type Option<Option<T>>,
-    // and they are Some if the serde step encountered those fields, and None otherwise
-    //
-    // In this step, we initialize exactly those fields that were not initialized by the
-    // serde walk.
-    //
-    // Arguments:
-    // * conf_context_ident is the identifier of a ConfContext variable in scope, which we may
-    //   consume
-    // * errors_ident is the identifier of a mut Vec<InnerError> variable in scope, which we may
-    //   consume
-    fn get_deserialize_finalizer_body(
+    fn gen_machine(
         &self,
-        conf_context_ident: &Ident,
-        errors_ident: &Ident,
+        machine_ident: &Ident,
+        generics: &Generics,
     ) -> Result<TokenStream, Error> {
-        // For each field, #field_name is currently a local variable of type Option<Option<T>>.
-        // If serde+conf produced a value, then don't change anything.
-        // Otherwise, use the initializer from the non-serde path.
-        // We use `unwrap_or_else` here to accomplish this, and pass the initializer expr
-        // inside a lambda function which prevents shadowing the let binding.
-        // Push all errors into #errors_ident.
-        let initializations: Vec<TokenStream> = self
+        let struct_ident = &self.struct_item.struct_ident;
+        let struct_ident_str = struct_ident.to_string();
+        let serde_opts = self.struct_item.serde.as_ref().unwrap();
+
+        let conf_serde_context_ident = Ident::new("__conf_serde_context__", Span::call_site());
+        let errors_ident = Ident::new("__errors__", Span::call_site());
+        let nvp_ident = Ident::new("__nvp__", Span::call_site());
+        let nvp_type_ident = Ident::new("NVP__", Span::call_site());
+
+        let (_, ty_generics, _) = generics.split_for_impl();
+
+        let ct = make_lifetime("'ctctct");
+
+        //let seed_generics = prepend_generic_lifetimes(generics, [&ct]);
+        //let (impl_from_generics, _, _) = seed_generics.split_for_impl();
+
+        let de = make_lifetime("'dedede");
+        let visitor_generics = prepend_generic_lifetimes(&generics, [&de]);
+        let (impl_visitor_generics, _, _) = visitor_generics.split_for_impl();
+
+        let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
+        let serde_strategies = self
+            .fields
+            .iter()
+            .map(|f| {
+                f.gen_serde_strategy(
+                    &conf_serde_context_ident,
+                    &nvp_ident,
+                    &nvp_type_ident,
+                    &errors_ident,
+                )
+            })
+            .collect::<Result<Vec<SerdeStrategy>, _>>()?;
+
+        // The machine has member variables of the form #field_name: Option<#field_machine_type>
+        let field_machine_types: Vec<&Type> = serde_strategies
+            .iter()
+            .map(|s| &s.state_machine_type)
+            .collect();
+
+        // These match arms are used to implement `next`
+        let field_match_arms: Vec<&TokenStream> =
+            serde_strategies.iter().map(|s| &s.match_arm).collect();
+
+        // This is the catch-all arm in the match statement
+        let handle_unknown_field = if !serde_opts.allow_unknown_fields {
+            let serde_help_names = serde_strategies
+                .iter()
+                .flat_map(|s| match &s.serde_help_keys {
+                    SerdeKeys::Lit(v) => v.iter(),
+                    SerdeKeys::Expr(_) => [].iter(),
+                })
+                .collect::<Vec<&LitStr>>();
+            Some(quote! {
+                #errors_ident.push(
+                   InnerError::serde(
+                     #conf_serde_context_ident.document_name,
+                     #struct_ident_str,
+                     #nvp_type_ident::Error::unknown_field(__other__, &[ #(#serde_help_names),* ])
+                   )
+                );
+            })
+        } else {
+            None
+        };
+
+        // This is the implementation of the keys function which *MUST* match the patterns declared
+        // in the field match arms.
+        let serde_keys: Vec<&SerdeKeys> = serde_strategies.iter().map(|s| &s.serde_keys).collect();
+        let keys_fn_body = if serde_keys.iter().any(|sk| matches!(sk, SerdeKeys::Expr(_))) {
+            let tokens: Vec<TokenStream> = serde_keys
+                .iter()
+                .map(|sk| match sk {
+                    SerdeKeys::Lit(v) => quote! { [#(#v,)*].iter() },
+                    SerdeKeys::Expr(x) => quote! { #x },
+                })
+                .collect();
+
+            quote! {
+              static KEYS: ::std::sync::OnceLock<Vec<&'static str>> = ::std::sync::OnceLock::new();
+              KEYS.get_or_init(|| {
+                let mut result = vec![];
+                #(result.extend(#tokens);)*
+                result
+              })
+            }
+        } else {
+            let lit_keys = serde_keys
+                .iter()
+                .flat_map(|sk| match sk {
+                    SerdeKeys::Lit(v) => v.iter(),
+                    SerdeKeys::Expr(_) => [].iter(),
+                })
+                .collect::<Vec<&LitStr>>();
+
+            quote! {
+              &[ #(#lit_keys,)* ]
+            }
+        };
+
+        // Pick out the names of fields that need a call to finalizer to finalize their state machine
+        let fields_with_finalizers: Vec<&Ident> = field_names
+            .iter()
+            .zip(serde_strategies.iter())
+            .filter(|(_n, s)| s.has_finalizer)
+            .map(|(n, _s)| *n)
+            .collect();
+
+        // Expressions that initialize things without serde, in case serde traversal doesn't ever produce
+        // this field.
+        let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
+        let fallback_initializers: Vec<TokenStream> = self
             .fields
             .iter()
             .map(|field| {
-                let field_name = field.get_field_name();
-                let initializer = field.gen_initialize_from_conf_context_and_push_errors(
-                    conf_context_ident,
-                    errors_ident,
-                )?;
-
-                Ok(quote! {
-                    let #field_name = #field_name.unwrap_or_else(|| {
-                        #initializer
-                    });
-                })
+                field.gen_initialize_from_conf_context_and_push_errors(
+                    &conf_context_ident,
+                    &errors_ident,
+                )
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
-        // Now, every variable has either been initialized by the serde path or the non serde path,
-        // and if it is still None, it means there was an error. We can gather and validate as
-        // usual.
-        let gather_and_validate = self.gather_and_validate(conf_context_ident, errors_ident)?;
+        let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         Ok(quote! {
-            #(#initializations)*
+            struct #machine_ident #ty_generics {
+                #errors_ident: Vec<InnerError>,
+                #(#field_names: Option<#field_machine_types>),*
+            };
 
-            #gather_and_validate
+            impl #generics ::core::default::Default for #machine_ident #ty_generics {
+                fn default() -> Self {
+                    #(let #field_names: Option<#field_machine_types> = None;)*
+
+                    Self {
+                        #errors_ident: Default::default(),
+                        #(#field_names,)*
+                    }
+                }
+            }
+
+            impl #impl_visitor_generics ::conf::InitializationStateMachine<#de> for #machine_ident #ty_generics {
+                type Value = #struct_ident #ty_generics;
+                type Context<#ct> = ConfSerdeContext<#ct>;
+
+                fn keys() -> &'static[&'static str] {
+                    #keys_fn_body
+                }
+
+                fn next<#ct, #nvp_type_ident>(self, __key__: &str, #nvp_ident: #nvp_type_ident, #conf_serde_context_ident: &Self::Context<#ct>) -> Self
+                where #nvp_type_ident: NextValueProducer<#de>
+                {
+                    let Self {
+                        mut #errors_ident,
+                        #(mut #field_names,)*
+                    } = self;
+
+                    'match_statement: {
+                        match __key__ {
+                            #(#field_match_arms)*
+                            __other__ => { #handle_unknown_field }
+                        }
+                    }
+
+                    Self {
+                        #errors_ident,
+                        #(#field_names,)*
+                    }
+                }
+
+                fn finalize<#ct>(self, #conf_serde_context_ident: &Self::Context<#ct>) -> Result<Self::Value, Vec<InnerError>> {
+                    let Self {
+                        mut #errors_ident,
+                        #(#field_names,)*
+                    } = self;
+
+                    // Finalize all state machines, collecting any errors.
+                    #(let #fields_with_finalizers = #fields_with_finalizers.and_then(|m| match m.finalize(#conf_serde_context_ident) { Ok(val) => Some(val), Err(err) => { #errors_ident.extend(err); None }});)*
+
+                    // If anything hasn't been initialized by serde, try to initialize with
+                    // the no-serde code path.
+                    let #conf_context_ident = #conf_serde_context_ident.conf_context.clone(); // FIXME
+                    #(let #field_names = #field_names.unwrap_or_else(|| { #fallback_initializers });)*
+
+                    // Now, every variable has either been initialized by the serde path or the non serde path,
+                    // and if it is still None, it means there was an error. We can gather and validate as
+                    // usual.
+                    #gather_and_validate
+                }
+            }
         })
     }
 

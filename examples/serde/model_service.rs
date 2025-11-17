@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 /// Configuration for an http client
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 #[conf(serde)]
 pub struct HttpClientConfig {
@@ -17,6 +18,7 @@ pub struct HttpClientConfig {
 }
 
 /// Configuration for model service
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 #[conf(serde)]
 pub struct ModelServiceConfig {
@@ -42,6 +44,7 @@ pub struct ModelServiceConfig {
 }
 
 /// Subcommands that can be used with this service
+#[allow(dead_code)]
 #[derive(Subcommands, Debug)]
 #[conf(serde)]
 pub enum Command {
@@ -51,6 +54,7 @@ pub enum Command {
     ShowPendingMigrations(MigrationConfig),
 }
 
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 #[conf(serde)]
 pub struct MigrationConfig {

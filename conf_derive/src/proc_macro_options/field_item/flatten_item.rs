@@ -1,10 +1,12 @@
-use super::StructItem;
+use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
 use heck::{ToKebabCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
-use syn::{Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, spanned::Spanned, token};
+use syn::{
+    Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
+};
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
 pub struct FlattenSerdeItem {
@@ -404,16 +406,16 @@ impl FlattenItem {
     //
     // Arguments:
     // * ctxt: identifier of a &ConfSerdeContext in scope
-    // * map_access: identifier of a MapAccess in scope
-    // * map_access_type: identifier of the MapAccess type in this scope
+    // * nvp: identifier of a NextValueProducer in scope
+    // * nvp_type: identifier of the NextValueProducer type in this scope
     // * errors_ident: identifier of a mut Vec<InnerError> errors buffer to which we can push
-    pub fn gen_serde_match_arm(
+    pub fn gen_serde_strategy(
         &self,
         ctxt: &Ident,
-        map_access: &Ident,
-        map_access_type: &Ident,
+        nvp: &Ident,
+        nvp_type: &Ident,
         errors_ident: &Ident,
-    ) -> Result<(TokenStream, Vec<LitStr>), Error> {
+    ) -> Result<SerdeStrategy, Error> {
         let field_name = &self.field_name;
         let field_name_str = field_name.to_string();
         let field_type = &self.field_type;
@@ -422,7 +424,7 @@ impl FlattenItem {
         let id_prefix = self.get_id_prefix();
 
         // It's necessary to do special handling for optional flattened structs here,
-        // because ConfSerdeContext is only implemented on the inner one.
+        // because ConfSerde is only implemented on the inner one.
         //
         // We also don't *have* to do any of the "any program option appeared" stuff here,
         // because we only reach this line if serde provided a value for this struct,
@@ -463,14 +465,14 @@ impl FlattenItem {
                 InnerError::serde(
                   #ctxt.document_name,
                   #field_name_str,
-                  #map_access_type::Error::duplicate_field(#serde_name_str)
+                  #nvp_type::Error::duplicate_field(#serde_name_str)
                 )
               );
             } else {
               let __seed__ = <#inner_type as ConfSerde>::Seed::from(
                 #ctxt.for_flattened(#id_prefix)
               );
-              #field_name = Some(match #map_access.next_value_seed(__seed__) {
+              #field_name = Some(match #nvp.next_value_seed(__seed__) {
                 Ok(Ok(__val__)) => {
                   Some(#val_expr)
                 }
@@ -494,9 +496,17 @@ impl FlattenItem {
         };
 
         // Return all names for error messages
-        let mut all_names = vec![serde_name_str];
+        let mut all_names = vec![serde_name_str.clone()];
         all_names.extend(serde_aliases);
-        Ok((match_arm, all_names))
+
+        let field_type = self.get_field_type();
+        Ok(SerdeStrategy {
+            state_machine_type: parse_quote! { Option<#field_type> },
+            match_arm,
+            has_finalizer: false,
+            serde_keys: SerdeKeys::Lit(all_names),
+            serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
+        })
     }
 
     /// Generate debug assertions for this flatten field

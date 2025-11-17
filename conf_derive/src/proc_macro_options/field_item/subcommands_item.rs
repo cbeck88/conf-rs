@@ -1,8 +1,10 @@
-use super::StructItem;
+use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, spanned::Spanned, token};
+use syn::{
+    Error, Expr, Field, Ident, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
+};
 
 /// #[conf(serde(...))] options listed on a field of Subcommands kind
 pub struct SubcommandsSerdeItem {
@@ -177,14 +179,14 @@ impl SubcommandsItem {
         Ok((initializer, true))
     }
 
-    // A serde match arm for the subcommand.
-    pub fn gen_serde_match_arm(
+    // A serde strategy for the subcommand.
+    pub fn gen_serde_strategy(
         &self,
         ctxt: &Ident,
-        map_access: &Ident,
-        map_access_type: &Ident,
+        nvp: &Ident,
+        nvp_type: &Ident,
         errors_ident: &Ident,
-    ) -> Result<(TokenStream, Vec<LitStr>), Error> {
+    ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
 
         let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
@@ -209,20 +211,24 @@ impl SubcommandsItem {
         // * Otherwise, we are attempting to recurse into the subcommand.
         let match_arm = quote! {
           key__ if <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().any(|(_c, s)| *s == key__) => {
-            let Some((command_name, conf_context_serde)) = #ctxt.for_subcommand() else { continue };
+            // Get the active subcommand from context, or skip if none
+            let Some((command_name, conf_context_serde)) = #ctxt.for_subcommand() else { break 'match_statement };
 
-            let Some((static_command_name, static_serde_name)) = <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().find(|(c, s)| *c == command_name && *s == key__) else { continue };
+            // Find the subcommand entry that matches BOTH the active command AND this key.
+            // This ensures we only process this key if it corresponds to the active subcommand.
+            // E.g., if key is "b" but active command is "a", the find returns None and we skip.
+            let Some((static_command_name, static_serde_name)) = <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().find(|(c, s)| *c == command_name && *s == key__) else { break 'match_statement };
 
             if #field_name.is_some() {
               #errors_ident.push(
                 InnerError::serde(
                   #ctxt.document_name,
                   static_command_name,
-                  #map_access_type::Error::duplicate_field(static_serde_name)
+                  #nvp_type::Error::duplicate_field(static_serde_name)
                 )
               );
             } else {
-              #field_name = Some(match <#inner_type as SubcommandsSerde>::from_conf_serde_context(&command_name, conf_context_serde, &mut #map_access) {
+              #field_name = Some(match <#inner_type as SubcommandsSerde>::from_conf_serde_context(&command_name, conf_context_serde, #nvp) {
                 Ok(__val__) => {
                   Some(#val_expr)
                 },
@@ -236,7 +242,17 @@ impl SubcommandsItem {
         };
         // We don't know the SERDE_NAMES as string literals in this proc_macro, they are only in the
         // proc_macro invocation for the enum.
-        Ok((match_arm, vec![]))
+        let field_type = self.get_field_type();
+        let all_names_expr: Expr = parse_quote! {
+            <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().map(|(_c, s)| s)
+        };
+        Ok(SerdeStrategy {
+            state_machine_type: parse_quote! { Option<#field_type> },
+            match_arm,
+            has_finalizer: false,
+            serde_keys: SerdeKeys::Expr(all_names_expr.clone()),
+            serde_help_keys: SerdeKeys::Expr(all_names_expr),
+        })
     }
 
     /// Generate debug assertions for this subcommands field

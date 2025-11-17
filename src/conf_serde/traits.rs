@@ -1,6 +1,6 @@
 use super::NextValueProducer;
 use crate::{Conf, ConfContext, InnerError, Subcommands};
-use serde::de::{DeserializeSeed};
+use serde::de::DeserializeSeed;
 
 /// Extension to Conf trait with serde-integration implementation details.
 ///

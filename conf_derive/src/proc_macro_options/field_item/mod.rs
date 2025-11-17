@@ -3,7 +3,9 @@ use crate::util::type_is_bool;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Expr, Field, Ident, LitStr, Meta, Path, Token, Type, punctuated::Punctuated};
+use syn::{
+    Error, Expr, Field, Ident, LitStr, Meta, Path, Token, Type, parse_quote, punctuated::Punctuated,
+};
 
 mod flag_item;
 mod flatten_item;
@@ -31,6 +33,81 @@ pub enum ExprRequest {
     Str,
     /// We need an expr manipulating OsStr
     OsStr,
+}
+
+/// Indicates the strategy used for serde deserialization
+///
+/// To perform deserialization of structs with ConfSerde,
+/// each field has a "state machine".
+///
+/// Given a map access, we enter a loop of the form:
+///
+/// while let Some(key) = ma.next_key::<...>()? {
+///   match key.as_str() {
+///
+///   }
+/// }
+///
+/// During this loop, a local variable whose name matches each field is in scope,
+/// and it's value is Option<StateMachine>, initially None.
+///
+/// In the simplest case, StateMachine is simply Option<#field_type>, and
+/// initialization happens in one shot, producing #field_type, or failing and
+/// producing an Error, which goes to the error buffer.
+/// In the most complex case, it's something implementing InitializationStateMachine.
+///
+/// After this loop, we must "finalize" any state machines, converting every variable
+/// #field_name to have type Option<Option<#field_type>> and gathering errors.
+///
+/// Then, any values that are still None, meaning they weren't visited as we traversed
+/// the serde document, should be initialized using the non-serde code path.
+/// This step uses an unwrap-or-else and invokes the codegen from the no-serde version.
+/// At that point, every #field_name is Option<#field_type>. We use the same "gather"
+/// routine used in the non-serde path to reconstitute the struct, run validations, and
+/// handle errors from there.
+///
+/// For any field, a SerdeStrategy has to tell us:
+/// * What is the type of "StateMachine"
+/// * What match arm should we use
+/// * How do we finalize this state machine
+///
+/// Finally, if there are errors, we return the errors, otherwise we use a match expression
+/// to unwrap all these options and initialize the struct. We also run any validation
+/// predicates, and ultimately return it if everything is okay.
+///
+/// The SerdeStrategy carries all this data in one collection, to help ensure that it is computed
+/// in a cohesive way.
+pub struct SerdeStrategy {
+    /// The state machine type. Typically just Option<#field_type>, even for serde(skip).
+    pub state_machine_type: Type,
+    /// The match arm to use
+    pub match_arm: TokenStream,
+    /// Whether to call `IninitializationStateMachine::finalize` or not
+    pub has_finalizer: bool,
+    /// The serde keys. This MUST match the values matched in the match arm.
+    pub serde_keys: SerdeKeys,
+    /// Serde keys to advertise in help messages. Doesn't include aliases.
+    pub serde_help_keys: SerdeKeys,
+}
+
+impl SerdeStrategy {
+    /// Used for serde(skip) fields
+    pub fn skip(field: &FieldItem) -> Self {
+        let ty = field.get_field_type();
+        Self {
+            state_machine_type: parse_quote! { Option<#ty> },
+            match_arm: quote! {},
+            has_finalizer: false,
+            serde_keys: SerdeKeys::Lit(vec![]),
+            serde_help_keys: SerdeKeys::Lit(vec![]),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum SerdeKeys {
+    Lit(Vec<LitStr>),
+    Expr(Expr),
 }
 
 /// #[conf(...)] options listed in a field of a struct which has `#[derive(Conf)]`
@@ -330,30 +407,26 @@ impl FieldItem {
     /// we want to advertise in error messages.
     ///
     /// Arguments:
-    /// * Ident for conf_serde_context which is in scope and may be consumed
-    /// * Ident for map_access object which is in scope and may be consumed
-    /// * Ident for map_access type
+    /// * Ident for &conf_serde_context which is in scope and may be consumed
+    /// * Ident for NextValueProducer object which is in scope and may be consumed
+    /// * Ident for NextValueProducer type
     /// * Ident for errors buffer which is in scope, to which we may push.
-    pub fn gen_serde_match_arm(
+    pub fn gen_serde_strategy(
         &self,
         ctxt: &Ident,
-        map_access: &Ident,
-        map_access_type: &Ident,
+        nvp: &Ident,
+        nvp_type: &Ident,
         errors_ident: &Ident,
-    ) -> Result<(TokenStream, Vec<LitStr>), Error> {
+    ) -> Result<SerdeStrategy, Error> {
         if self.get_serde_skip() {
-            return Ok((quote! {}, vec![]));
+            return Ok(SerdeStrategy::skip(self));
         }
         match self {
             Self::Flag(_) | Self::Parameter(_) | Self::Repeat(_) => {
-                self.gen_simple_serde_match_arm(ctxt, map_access, map_access_type, errors_ident)
+                self.gen_simple_serde_strategy(ctxt, nvp, nvp_type, errors_ident)
             }
-            Self::Flatten(item) => {
-                item.gen_serde_match_arm(ctxt, map_access, map_access_type, errors_ident)
-            }
-            Self::Subcommands(item) => {
-                item.gen_serde_match_arm(ctxt, map_access, map_access_type, errors_ident)
-            }
+            Self::Flatten(item) => item.gen_serde_strategy(ctxt, nvp, nvp_type, errors_ident),
+            Self::Subcommands(item) => item.gen_serde_strategy(ctxt, nvp, nvp_type, errors_ident),
         }
     }
 
@@ -364,15 +437,17 @@ impl FieldItem {
     //
     // The field has controls on what happens in this match arm via:
     // * get_serde_name()
+    // * get_serde_aliases()
     // * get_serde_type()
+    // * get_serde_deserialize_with()
     // * gen_initializer_with_doc_val()
-    fn gen_simple_serde_match_arm(
+    fn gen_simple_serde_strategy(
         &self,
         ctxt: &Ident,
-        map_access: &Ident,
-        map_access_type: &Ident,
+        nvp: &Ident,
+        nvp_type: &Ident,
         errors_ident: &Ident,
-    ) -> Result<(TokenStream, Vec<LitStr>), Error> {
+    ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
         let field_name_str = field_name.to_string();
 
@@ -403,21 +478,21 @@ impl FieldItem {
             quote! {
               {
                 struct __DeserializeWith;
-                impl<'de> ::serde::de::DeserializeSeed<'de> for __DeserializeWith {
+                impl<'dedede2> ::serde::de::DeserializeSeed<'dedede2> for __DeserializeWith {
                   type Value = #serde_type;
                   fn deserialize<__D>(self, __deserializer: __D) -> ::std::result::Result<Self::Value, __D::Error>
                   where
-                    __D: ::serde::de::Deserializer<'de>
+                    __D: ::serde::de::Deserializer<'dedede2>
                   {
-                    #deserialize_with_path(__deserializer)
+                    (#deserialize_with_path)(__deserializer)
                   }
                 }
-                #map_access.next_value_seed(__DeserializeWith)
+                #nvp.next_value_seed(__DeserializeWith)
               }
             }
         } else {
             quote! {
-              #map_access.next_value::<#serde_type>()
+              #nvp.next_value::<#serde_type>()
             }
         };
 
@@ -428,7 +503,7 @@ impl FieldItem {
                 InnerError::serde(
                   #ctxt.document_name,
                   #field_name_str,
-                  #map_access_type::Error::duplicate_field(#serde_name_str)
+                  #nvp_type::Error::duplicate_field(#serde_name_str)
                 )
               );
             } else {
@@ -454,9 +529,17 @@ impl FieldItem {
         };
 
         // Return all names for error messages
-        let mut all_names = vec![serde_name_str];
+        let mut all_names = vec![serde_name_str.clone()];
         all_names.extend(serde_aliases);
-        Ok((match_arm, all_names))
+
+        let field_type = self.get_field_type();
+        Ok(SerdeStrategy {
+            state_machine_type: parse_quote! { Option<#field_type> },
+            match_arm,
+            has_finalizer: false,
+            serde_keys: SerdeKeys::Lit(all_names),
+            serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
+        })
     }
 
     /// Get the serde name (only when "is_single_option" is true)

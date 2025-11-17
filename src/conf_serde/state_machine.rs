@@ -60,13 +60,27 @@ where
 /// up front all of the keys it is interested in, in some format so that we can detect collisions.
 /// However, the design of that is complex and it seems better to start with the simplest version
 /// and iterate towards success.
+///
+/// NOTE: The API was modified to take reference to context
+///
+/// The context could be stored in the machine generally, and this trait would be simpler. But it actually leads
+/// to more complex code-gen on the proc-macro side, because it makes it harder to work with the current implementation
+/// of the non-serde side of things, and so we push some complexity onto this trait instead for now.
 #[doc(hidden)]
 pub trait InitializationStateMachine<'de>: Sized {
     type Value;
+    type Context<'c>;
 
-    fn keys(&self) -> &'static [&'static str];
-    fn next(&mut self, key: &str, next_value_producer: impl NextValueProducer<'de>);
-    fn finalize(self) -> Result<Self::Value, Vec<InnerError>>;
+    fn keys() -> &'static [&'static str];
+    fn next<'c, NVP>(
+        self,
+        key: &str,
+        next_value_producer: NVP,
+        context: &Self::Context<'c>,
+    ) -> Self
+    where
+        NVP: NextValueProducer<'de>;
+    fn finalize<'c>(self, context: &Self::Context<'c>) -> Result<Self::Value, Vec<InnerError>>;
 }
 
 /// Wrapper type to treat an initialization state machine as a serde::de::Visitor impl.
@@ -75,82 +89,72 @@ pub trait InitializationStateMachine<'de>: Sized {
 /// An ISM can be used in phases, but it can also obviously be used in one shot from a deserializer.
 /// That's used when implementing DeserializeSeed on a struct.
 #[doc(hidden)]
-pub struct AsVisitor<M> {
-    pub machine: M,
-    expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
-}
-
-impl<'de, M> serde::de::Visitor<'de> for AsVisitor<M>
+pub struct AsVisitor<'c, 'de, M>
 where
     M: InitializationStateMachine<'de>,
 {
-    type Value = M;
+    pub machine: M,
+    pub ctxt: M::Context<'c>,
+    pub expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
+}
+
+impl<'c, 'de, M> serde::de::Visitor<'de> for AsVisitor<'c, 'de, M>
+where
+    M: InitializationStateMachine<'de>,
+{
+    type Value = Result<M::Value, Vec<InnerError>>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
         (self.expecting_fn)(f)
     }
 
-    fn visit_map<MA>(mut self, mut map_access: MA) -> Result<M, MA::Error>
+    fn visit_map<MA>(self, mut map_access: MA) -> Result<Self::Value, MA::Error>
     where
         MA: serde::de::MapAccess<'de>,
     {
+        let Self {
+            ctxt, mut machine, ..
+        } = self;
+
         while let Some(key) = map_access.next_key::<IdentString>()? {
-            self.machine.next(key.as_str(), &mut map_access);
+            machine = machine.next(key.as_str(), &mut map_access, &ctxt);
         }
-        Ok(self.machine)
+        Ok(machine.finalize(&ctxt))
     }
 }
 
-/// Wrapper type to treat an initialization state machine as a DeserializeSeed impl.
-/// This is only here to avoid using blanket implementations, which can become problematic.
+/// The details of DeserializeSeed::deserialize don't really need to be code-genned,
+/// and it's simpler to move code out of the proc macro when possible.
 ///
-/// Note: AsSeed<M> implements DeserializeSeed, and calls to &AsSeed<M> which implements Visitor,
-/// just for convenience.
+/// But because of orphan rules, the Seed can't actually appear in the conf crate,
+/// it has to be in the user's crate.
 ///
-/// The visitor returns M right before finalization should occur, then the finalization is
-/// done in fn deserialize.
-/// Moving the call to finalize allows for slightly cleaner error handling in the visitor function.
+/// So the `struct Seed` is code-genned and the `impl DeserializeSeed` is a thin
+/// stub that calls right to this.
 #[doc(hidden)]
-pub struct AsSeed<'a, M> {
-    pub struct_name: &'static str,
-    pub expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
-    pub ctxt: ConfSerdeContext<'a>,
-    pub _phantom_data: core::marker::PhantomData<fn() -> M>,
-}
-
-impl<'a, 'de, M> serde::de::DeserializeSeed<'de> for AsSeed<'a, M>
+pub fn deserialize_seed_impl<'a, 'de, D, M>(
+    struct_name: &'static str,
+    expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
+    ctxt: ConfSerdeContext<'a>,
+    deserializer: D,
+) -> Result<M::Value, Vec<InnerError>>
 where
-    M: InitializationStateMachine<'de> + From<ConfSerdeContext<'a>>,
+    M: InitializationStateMachine<'de, Context<'a> = ConfSerdeContext<'a>> + Default,
+    D: serde::de::Deserializer<'de>,
 {
-    type Value = Result<M::Value, Vec<InnerError>>;
+    let doc_name = ctxt.document_name;
+    let machine = M::default();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let AsSeed {
-            struct_name,
-            expecting_fn,
+    match deserializer.deserialize_struct(
+        struct_name,
+        M::keys(),
+        AsVisitor {
+            machine,
             ctxt,
-            ..
-        } = self;
-
-        let doc_name = ctxt.document_name;
-        let machine = M::from(ctxt);
-
-        // This returns Result<Result, ...>> but it's always Ok because we map the serde error to a vec inner error.
-        Ok(
-            match deserializer.deserialize_struct(
-                struct_name,
-                machine.keys(),
-                AsVisitor {
-                    machine,
-                    expecting_fn,
-                },
-            ) {
-                Ok(machine) => machine.finalize(),
-                Err(err) => Err(vec![InnerError::serde(doc_name, struct_name, err)]),
-            },
-        )
+            expecting_fn,
+        },
+    ) {
+        Ok(result) => result,
+        Err(err) => Err(vec![InnerError::serde(doc_name, struct_name, err)]),
     }
 }
