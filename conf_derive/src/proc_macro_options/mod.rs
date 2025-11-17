@@ -9,7 +9,7 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, parse_quote};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type};
 
 mod field_item;
 use field_item::{FieldItem, SerdeKeys, SerdeStrategy};
@@ -264,7 +264,7 @@ impl GenConfStruct {
     // Otherwise returns it.
     //
     // Arguments:
-    // * conf_context_ident: The identifier of a ConfContext variable that we can use (and consume)
+    // * conf_context_ident: The identifier of a &ConfContext in scope
     // * errors_ident: the identifier of a `mut Vec<InnerError>` buffer variable which is in scope.
     fn gather_and_validate(
         &self,
@@ -305,7 +305,7 @@ impl GenConfStruct {
                 #validation_routine
             }
 
-            validation(&return_value, &#conf_context_ident)?;
+            validation(&return_value, #conf_context_ident)?;
 
             Ok(return_value)
         })
@@ -348,7 +348,7 @@ impl GenConfStruct {
         // const _: () = { ... };
         //
 
-        let ident = self.struct_item.get_ident();
+        let struct_ident = self.struct_item.get_ident();
         let machine_ident = Ident::new("__MACHINE__", Span::call_site());
         let seed_ident = Ident::new("__SEED__", Span::call_site());
 
@@ -376,7 +376,7 @@ impl GenConfStruct {
 
                 pub struct #seed_ident #seed_generics {
                     ctxt: ConfSerdeContext<#ct>,
-                    marker: PhantomData<fn() -> #ident #ty_generics>,
+                    marker: PhantomData<fn() -> #struct_ident #ty_generics>,
                 };
 
                 impl #seed_impl_generics From<ConfSerdeContext<#ct>> for #seed_ident #seed_ty_generics #seed_where_clause {
@@ -390,141 +390,14 @@ impl GenConfStruct {
 
                 #deserialize_seed_impl
 
-                impl #impl_generics ConfSerde for #ident #ty_generics #where_clause {
+                impl #impl_generics ConfSerde for #struct_ident #ty_generics #where_clause {
                     type Seed<#ct> = #seed_ident #seed_generics;
                 }
             };
         }))
     }
 
-    // Helper which generates the tuple type used as the serde::Visitor::Value,
-    // the "output type" of the visitor.
-    //
-    // ( ( Option< Option< #field_type > >... ), Vec<InnerError> )
-    //
-    // For a given #field_name,
-    // * None means serde did not produce this key and so we still have to visit it without serde
-    //   afterwards
-    // * Some(None) means serde visited it and it produced an error.
-    // * Some(Some(val)) means serde visited it and produced a value.
-    /*
-    fn gen_visitor_tuple_type(&self) -> Type {
-        let field_types: Vec<Type> = self.fields.iter().map(|f| f.get_field_type()).collect();
-        // ( #ty ) is not a tuple type in rust, it must be ( #ty , ) when the tuple size is one.
-        let extra_comma = if field_types.len() == 1 {
-            Some(<Token![,]>::default())
-        } else {
-            None
-        };
-        parse_quote! {
-            ( ( #( Option< Option< #field_types > > ),* #extra_comma) , Vec<InnerError> )
-        }
-    }*/
-
-    /// Generate implementation of serde::Visitor for &Seed
-    /// Panics if serde was not requested on this struct
-    ///
-    /// Arguments:
-    /// * seed_ident is the identifier used in this scope for the Seed type
-    /// * generics associated to this struct declaration
-    /*
-    fn gen_serde_visitor_impl(
-        &self,
-        seed_ident: &Ident,
-        generics: &Generics,
-    ) -> Result<TokenStream, Error> {
-        let serde_opts = self.struct_item.serde.as_ref().unwrap();
-
-        // We need to add two generic lifetimes to the lifetime list (but only in the impl)
-        // One is the "deserializer lifetime", and one is the "context lifetime".
-        let de = make_lifetime("'dedede");
-        let ct = make_lifetime("'ctctct");
-
-        let seed_generics = prepend_generic_lifetimes(generics, [&ct]);
-        let visitor_generics = prepend_generic_lifetimes(&seed_generics, [&de]);
-
-        let (impl_generics, _, _) = visitor_generics.split_for_impl();
-
-        let ident = self.struct_item.get_ident();
-        let expecting_str = format!("Object with schema {ident}");
-        let ident_str = ident.to_string();
-
-        let conf_serde_context_ident = Ident::new("__conf_serde_context__", Span::call_site());
-        let errors_ident = Ident::new("__errors__", Span::call_site());
-        let map_access_ident = Ident::new("__map_access__", Span::call_site());
-        let map_access_type = Ident::new("MA__", Span::call_site());
-
-        let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
-        let field_match_arms_and_serde_names = self
-            .fields
-            .iter()
-            .map(|f| {
-                f.gen_serde_match_arm(
-                    &conf_serde_context_ident,
-                    &map_access_ident,
-                    &map_access_type,
-                    &errors_ident,
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let (field_match_arms, serde_names): (Vec<TokenStream>, Vec<Vec<LitStr>>) =
-            field_match_arms_and_serde_names.into_iter().unzip();
-        let serde_names: Vec<LitStr> = serde_names.into_iter().flatten().collect();
-
-        // The Visitor impl Value type. This is a tuple containing Option< #field_type> and
-        // Vec<InnerError> It represents the partially finished work done using the document
-        // values from serde.
-        let visitor_tuple_type = self.gen_visitor_tuple_type();
-        // ( #id ) is not a tuple in rust, it must be ( #id , ) when the tuple size is one.
-        let extra_comma = if field_names.len() == 1 {
-            Some(<Token![,]>::default())
-        } else {
-            None
-        };
-
-        let handle_unknown_field = if !serde_opts.allow_unknown_fields {
-            Some(quote! {
-                #errors_ident.push(
-                   InnerError::serde(
-                     #conf_serde_context_ident.document_name,
-                     #ident_str,
-                     #map_access_type::Error::unknown_field(__other__, &[ #(#serde_names),* ])
-                   )
-                );
-            })
-        } else {
-            None
-        };
-
-        Ok(quote! {
-            impl #impl_generics de::Visitor<#de> for &#seed_ident #seed_generics {
-                type Value = #visitor_tuple_type;
-
-                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    write!(f, #expecting_str)
-                }
-
-                fn visit_map<#map_access_type>(self, mut #map_access_ident: #map_access_type) -> Result<Self::Value, #map_access_type::Error>
-                    where #map_access_type: de::MapAccess<#de>
-                {
-                    use ::conf::{ConfSerdeContext, IdentString, InnerError, SubcommandsSerde, serde::de::Error};
-                    let #conf_serde_context_ident: &ConfSerdeContext = &self.ctxt;
-                    let ( ( #(mut #field_names),* #extra_comma), mut #errors_ident ) = Self::Value::default();
-
-                    while let Some(key) = #map_access_ident.next_key::<IdentString>()? {
-                        match key.as_str() {
-                            #(#field_match_arms)*
-                            __other__ => { #handle_unknown_field }
-                        }
-                    }
-
-                    Ok( ( ( #(#field_names),* #extra_comma), #errors_ident ) )
-                }
-            }
-        })
-    }*/
-
-    // Generate an implementation of serde::DeserializerSeed on Seed
+    // Generate an implementation of serde::DeserializeSeed on Seed
     // Panics if serde was not requested on this struct
     //
     // *** How does this work? ***
@@ -588,9 +461,9 @@ impl GenConfStruct {
         machine_ident: &Ident,
         generics: &Generics,
     ) -> Result<TokenStream, Error> {
-        let ident = &self.struct_item.struct_ident;
-        let expecting_str = format!("Object with schema {ident}");
-        let ident_str = ident.to_string();
+        let struct_ident = &self.struct_item.struct_ident;
+        let expecting_str = format!("Object with schema {struct_ident}");
+        let struct_ident_str = struct_ident.to_string();
 
         // We need to add two generic lifetimes to the lifetime list (but only in the impl)
         // One is the "deserializer lifetime", and one is the "context lifetime".
@@ -603,45 +476,12 @@ impl GenConfStruct {
         let (_, ty_generics, _) = generics.split_for_impl();
         let (impl_generics, _, _) = visitor_generics.split_for_impl();
 
-        // The Visitor impl Value type. This is a tuple containing Option< #field_type> and
-        // Vec<InnerError>. It represents the partially finished work done using the
-        // document values from serde.
-        // let visitor_tuple_type = self.gen_visitor_tuple_type();
-        // The type that will be the Value of this DeserializeSeed impl
-        let value_type: Type = parse_quote! {
-            Result<#ident #ty_generics, Vec<InnerError>>
-        };
-
-        // High level:
-        //
-        // To implement deserialize seed, we take the deserializer, and call deserialize_struct.
-        // We pass a reference to ourself as the visitor, which was implemented in
-        // gen_serde_visitor_impl.
-        //
-        // This produces a Visitor::Value, which is a tuple consisting of
-        // Option<Option<#field_type>>, indicating which fields we successfully
-        // deserialized, which ones tried to deserialize and failed, and which ones were not
-        // attempted in the serde phase. The __deserialize_finalizer finishes the job,
-        // initializing everything that serde didn't attempt to initialize, and then running
-        // validators etc.
-        //
-        // It may also produce a serde::de::Error. See gen_serde_visitor_impl -- that only happens
-        // if there is an error getting the next key from the map.
-        //
-        // If there is an error getting the next key from the map, it means that the deserializer
-        // data is not very well-formed -- most likely, the user is not iterating
-        // serde_json::Value or serde_yaml::Value or similar, because that should not give
-        // such an error. There may be a bunch of other key-value pairs that are in the
-        // user's data file, but are not parseable due to a syntax issue.
-        //
-        // If we continue trying to initialize stuff, we're likely going to get nonsense -- missing
-        // field errors for all the subsequent keys in this map that serde could not read.
-        //
-        // We'd rather only report the root cause -- that we couldn't iterate the map properly.
-        // So we bail out in that case, and don't attempt to proceed with finalizing.
+        // To implement deserialize seed, we just take all the arguments and needed
+        // code gen and pass it to ::conf::deserialize_seed_impl, to avoid relying
+        // code gen unnecessarily. Only the state machine details really need to be code-genned.
         Ok(quote! {
             impl #impl_generics de::DeserializeSeed<#de> for #seed_ident #seed_generics {
-                type Value = #value_type;
+                type Value = Result<#struct_ident #ty_generics, Vec<InnerError>>;
 
                 fn deserialize<D__>(self, __deserializer: D__) -> Result<Self::Value, D__::Error>
                     where D__: de::Deserializer<#de> {
@@ -650,7 +490,12 @@ impl GenConfStruct {
                         write!(f, #expecting_str)
                     }
 
-                    Ok(::conf::deserialize_seed_impl::<#ct, #de, D__, #machine_ident>(#ident_str, expecting_fn, self.ctxt, __deserializer))
+                    Ok(::conf::deserialize_seed_impl::<#ct, #de, D__, #machine_ident>(
+                        #struct_ident_str,
+                        expecting_fn,
+                        self.ctxt,
+                        __deserializer
+                    ))
                 }
             }
         })
@@ -672,13 +517,11 @@ impl GenConfStruct {
 
         let (_, ty_generics, _) = generics.split_for_impl();
 
+        // One is the "deserializer lifetime", and one is the "context lifetime".
         let ct = make_lifetime("'ctctct");
-
-        //let seed_generics = prepend_generic_lifetimes(generics, [&ct]);
-        //let (impl_from_generics, _, _) = seed_generics.split_for_impl();
-
         let de = make_lifetime("'dedede");
-        let visitor_generics = prepend_generic_lifetimes(&generics, [&de]);
+
+        let visitor_generics = prepend_generic_lifetimes(generics, [&de]);
         let (impl_visitor_generics, _, _) = visitor_generics.split_for_impl();
 
         let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
