@@ -83,6 +83,8 @@ pub struct SerdeStrategy {
     /// When present, `InitializationStateMachine::finalize` will be called on the state machine type
     /// at the end of the serde walk.
     pub state_machine_type: Option<Type>,
+    /// The state machine initializer. If omitted, it is None
+    pub state_machine_init: Option<TokenStream>,
     /// The match expr to use
     pub match_expr: TokenStream,
     /// The serde keys. This is used to generate the match pattern.
@@ -94,6 +96,7 @@ impl SerdeStrategy {
     pub fn skip() -> Self {
         Self {
             state_machine_type: None,
+            state_machine_init: None,
             match_expr: quote! {},
             serde_keys: SerdeKeys::default(),
         }
@@ -579,6 +582,7 @@ impl FieldItem {
 
         Ok(SerdeStrategy {
             state_machine_type: None,
+            state_machine_init: None,
             match_expr,
             serde_keys: SerdeKeys::Lit(all_names),
         })

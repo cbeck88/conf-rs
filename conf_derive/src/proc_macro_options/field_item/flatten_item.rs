@@ -504,60 +504,50 @@ impl FlattenItem {
         };
 
         if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
+            // For the flatten case, we are going to use the state machine corresponding
+            // to the thing we are flattening
+
+            // Key matching: check prefix and then inner wants_key on stripped key
             let key = Ident::new("key__", Span::call_site());
+            let keys_expr: TokenStream = quote! {
+                #key if #field_name.wants_key(#key)
+            };
+
+            let match_expr: TokenStream = quote! {
+                {
+                    #field_name = #field_name.next(#key, #nvp);
+                },
+            };
+
+            let state_machine_type: Type;
+            let state_machine_init: TokenStream;
 
             // Check if we have a prefix to strip
             if let Some(prefix) = self.get_serde_flatten_prefix() {
                 // With prefix: use PrefixStrippingStateMachine
                 // The state machine type wraps the inner type's ISM
-                let inner_ism_type: Type =
-                    parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
-                let state_machine_type: Type = parse_quote! {
-                    ::conf::PrefixStrippingStateMachine<'static, #inner_ism_type>
+                state_machine_type = parse_quote! {
+                    ::conf::PrefixStrippingStateMachine<'static, <#inner_type as ::conf::ConfSerde>::ISM::<#ct>>
                 };
-
-                // Key matching: check prefix and then inner wants_key on stripped key
-                let keys_expr: TokenStream = quote! {
-                    #key if #key.starts_with(#prefix) && #inner_ism_type::wants_key(&#key[#prefix.len()..])
+                state_machine_init = quote! {
+                    ::conf::PrefixStrippingStateMachine::new(#prefix, #ctxt.for_flattened(#id_prefix).into())
                 };
-
-                let match_expr = quote! {
-                    {
-                        let __m__ = #field_name.take().unwrap_or_else(|| {
-                            let __inner__ = #ctxt.for_flattened(#id_prefix).into();
-                            ::conf::PrefixStrippingStateMachine::new(#prefix, __inner__)
-                        });
-                        // Pass a context scoped to this flattened field so child can look up options correctly
-                        #field_name = Some(__m__.next(#key, #nvp));
-                    },
-                };
-
-                Ok(SerdeStrategy {
-                    state_machine_type: Some(state_machine_type),
-                    match_expr,
-                    serde_keys: SerdeKeys::Expr(keys_expr),
-                })
             } else {
                 // Without prefix: original behavior
-                let state_machine_type: Type =
+                state_machine_type =
                     parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
-                let keys_expr: TokenStream =
-                    quote! { #key if #state_machine_type::wants_key(#key) };
-
-                let match_expr = quote! {
-                    {
-                        let __m__ = #field_name.take().unwrap_or_else(|| #ctxt.for_flattened(#id_prefix).into());
-                        // Pass a context scoped to this flattened field so child can look up options correctly
-                        #field_name = Some(__m__.next(#key, #nvp));
-                    },
+                state_machine_init = quote! {
+                    #ctxt.for_flattened(#id_prefix).into()
                 };
-
-                Ok(SerdeStrategy {
-                    state_machine_type: Some(state_machine_type),
-                    match_expr,
-                    serde_keys: SerdeKeys::Expr(keys_expr),
-                })
             }
+
+            Ok(SerdeStrategy {
+                state_machine_type: Some(state_machine_type),
+                state_machine_init: Some(state_machine_init),
+                match_expr,
+                serde_keys: SerdeKeys::Expr(keys_expr),
+            })
+
         } else if let Some(try_from_type) = self.get_serde_try_from() {
             // When try_from is set, deserialize the try_from type using ConfSerdeSeed
             // (so CLI/env shadowing works), then convert to the target type via TryFrom.
@@ -618,6 +608,7 @@ impl FlattenItem {
 
             Ok(SerdeStrategy {
                 state_machine_type: None,
+                state_machine_init: None,
                 match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
             })
@@ -670,6 +661,7 @@ impl FlattenItem {
 
             Ok(SerdeStrategy {
                 state_machine_type: None,
+                state_machine_init: None,
                 match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
             })

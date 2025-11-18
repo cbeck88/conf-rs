@@ -247,6 +247,7 @@ impl SubcommandsItem {
         // proc_macro invocation for the enum.
         Ok(SerdeStrategy {
             state_machine_type: None,
+            state_machine_init: None,
             serde_keys: SerdeKeys::Expr(match_pattern),
             match_expr,
         })

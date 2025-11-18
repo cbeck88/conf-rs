@@ -58,7 +58,7 @@ where
 pub trait InitializationStateMachine<'de>: Sized {
     type Value;
 
-    fn wants_key(key: &str) -> bool;
+    fn wants_key(&self, key: &str) -> bool;
     fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self
     where
         NVP: NextValueProducer<'de>;
@@ -185,15 +185,12 @@ where
 {
     type Value = M::Value;
 
-    fn wants_key(key: &str) -> bool {
-        // We can't check the prefix here since this is a static method.
-        // The caller must ensure that keys are only passed if they start with the prefix.
-        // We always return false here since we can't do a proper check.
-        //
-        // The actual filtering happens in the generated code which uses
-        // starts_with to check the prefix before calling next().
-        let _ = key;
-        false
+    fn wants_key(&self, key: &str) -> bool {
+        if let Some(stripped_key) = key.strip_prefix(self.prefix) {
+            self.inner.wants_key(stripped_key)
+        } else {
+            false
+        }
     }
 
     fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self

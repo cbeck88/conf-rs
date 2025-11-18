@@ -443,10 +443,15 @@ impl GenConfStruct {
             })
             .collect::<Result<Vec<SerdeStrategy>, _>>()?;
 
-        // The machine has member variables of the form #field_name: Option<#field_machine_type>
+        // The machine has member variables of the form #field_name: #field_machine_type
         let field_machine_types: Vec<Type> = self.fields.iter().zip(serde_strategies
             .iter())
-            .map(|(field, strat)| strat.state_machine_type.clone().unwrap_or_else(|| { let field_type = field.get_field_type(); parse_quote!{ Option<#field_type> }}))
+            .map(|(field, strat)| strat.state_machine_type.clone().unwrap_or_else(|| { let field_type = field.get_field_type(); parse_quote!{ Option<Option<#field_type>> }}))
+            .collect();
+
+        // The machines are initialized by these initializer expressions.
+        let field_machine_initializers: Vec<TokenStream> = serde_strategies.iter()
+            .map(|strat| strat.state_machine_init.clone().unwrap_or_else(|| quote!{ None }))
             .collect();
 
         // These match arms are used to implement `wants_key`
@@ -486,34 +491,30 @@ impl GenConfStruct {
 
         // Pick out the names of fields that need a call to finalizer to finalize their state machine,
         // along with the context expression to use for each.
-        let finalizer_statements: Vec<TokenStream> = field_names
+        // For fields without an actual state machine, we include expressions that initialize things
+        // without serde, in case serde traversal doesn't ever produce this field.
+        let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
+        let finalizer_statements: Vec<TokenStream> = self.fields
             .iter()
             .zip(serde_strategies.iter())
-            .filter_map(|(n, s)| {
-                if s.state_machine_type.is_some() {
-                    Some(quote! {
-                        let #n = #n.map(|m| match m.finalize() {
+            .map(|(field, strat)| {
+                let n = field.get_field_name();
+                Ok(if strat.state_machine_type.is_some() {
+                    quote! {
+                        let #n = match #n.finalize() {
                             Ok(val) => Some(val),
                             Err(err) => { #errors_ident.extend(err); None }
-                        });
-                    })
+                        };
+                    }
                 } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Expressions that initialize things without serde, in case serde traversal doesn't ever produce
-        // this field.
-        let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
-        let fallback_initializers: Vec<TokenStream> = self
-            .fields
-            .iter()
-            .map(|field| {
-                field.gen_initialize_from_conf_context_and_push_errors(
-                    &conf_context_ident,
-                    &errors_ident,
-                )
+                    let fallback_initializer = field.gen_initialize_from_conf_context_and_push_errors(
+                        &conf_context_ident,
+                        &errors_ident,
+                    )?;
+                    quote! {
+                        let #n = #n.unwrap_or_else(|| #fallback_initializer);
+                    }
+                })
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
@@ -523,12 +524,12 @@ impl GenConfStruct {
             pub struct #machine_ident #machine_ty_generics {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
-                #(#field_names: Option<#field_machine_types>),*
+                #(#field_names: #field_machine_types),*
             };
 
             impl #impl_machine_generics From<ConfSerdeContext<#ct>> for #machine_ident #machine_ty_generics #machine_where_clause {
                 fn from(#conf_serde_context_ident: ConfSerdeContext<#ct>) -> Self {
-                    #(let #field_names: Option<#field_machine_types> = None;)*
+                    #(let #field_names: #field_machine_types = #field_machine_initializers;)*
 
                     Self {
                         #conf_serde_context_ident,
@@ -541,7 +542,10 @@ impl GenConfStruct {
             impl #impl_visitor_generics ::conf::InitializationStateMachine<#de> for #machine_ident #machine_ty_generics #machine_where_clause {
                 type Value = #struct_ident #ty_generics;
 
-                fn wants_key(__key__: &str) -> bool {
+                #[allow(unused)]
+                fn wants_key(&self, __key__: &str) -> bool {
+                    #(let #field_names = &self.#field_names;)*
+
                     match __key__ {
                         #(#field_match_patterns => true,)*
                         _ => false,
@@ -578,13 +582,9 @@ impl GenConfStruct {
                         #(#field_names,)*
                     } = self;
 
-                    // Finalize all state machines, collecting any errors.
-                    #(#finalizer_statements)*
-
-                    // If anything hasn't been initialized by serde, try to initialize with
-                    // the no-serde code path.
                     let #conf_context_ident = &#conf_serde_context_ident.conf_context;
-                    #(let #field_names = #field_names.unwrap_or_else(|| { #fallback_initializers });)*
+                    // Finalize all state machines and non-state machines, collecting any errors.
+                    #(#finalizer_statements)*
 
                     // Now, every variable has either been initialized by the serde path or the non serde path,
                     // and if it is still None, it means there was an error. We can gather and validate as
