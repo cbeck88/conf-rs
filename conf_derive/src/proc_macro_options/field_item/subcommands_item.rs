@@ -2,7 +2,10 @@ use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Field, Ident, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token};
+use syn::{
+    Error, Field, Ident, Lifetime, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned,
+    token,
+};
 
 /// #[conf(serde(...))] options listed on a field of Subcommands kind
 pub struct SubcommandsSerdeItem {
@@ -180,6 +183,7 @@ impl SubcommandsItem {
     // A serde strategy for the subcommand.
     pub fn gen_serde_strategy(
         &self,
+        _ct: &Lifetime,
         ctxt: &Ident,
         nvp: &Ident,
         nvp_type: &Ident,
@@ -248,7 +252,7 @@ impl SubcommandsItem {
             state_machine_type: parse_quote! { Option<#field_type> },
             serde_keys: SerdeKeys::Expr(match_pattern),
             match_expr,
-            finalizer_context: None,
+            needs_finalizer: false,
         })
     }
 

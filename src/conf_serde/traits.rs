@@ -27,12 +27,8 @@ pub trait ConfSerde: Conf + Sized {
     ///
     /// To obtain an actual seed, implementing serde DeserializeSeed, use ConfSerdeSeed.
     #[doc(hidden)]
-    type ISM: Default
-        + for<'a, 'de> InitializationStateMachine<
-            'de,
-            Value = Self,
-            Context<'a> = ConfSerdeContext<'a>,
-        >;
+    type ISM<'a>: From<ConfSerdeContext<'a>>
+        + for<'de> InitializationStateMachine<'de, Value = Self>;
 
     /// Struct name used with serde
     #[doc(hidden)]

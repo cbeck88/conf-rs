@@ -5,7 +5,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
 use syn::{
-    Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
+    Error, Field, Ident, Lifetime, LitStr, Type, meta::ParseNestedMeta, parse_quote,
+    spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -410,12 +411,14 @@ impl FlattenItem {
     // serde walk, then later we will try to initialize the group normally.
     //
     // Arguments:
+    // * ct: context lifetime
     // * ctxt: identifier of a &ConfSerdeContext in scope
     // * nvp: identifier of a NextValueProducer in scope
     // * nvp_type: identifier of the NextValueProducer type in this scope
     // * errors_ident: identifier of a mut Vec<InnerError> errors buffer to which we can push
     pub fn gen_serde_strategy(
         &self,
+        ct: &Lifetime,
         ctxt: &Ident,
         nvp: &Ident,
         nvp_type: &Ident,
@@ -454,15 +457,15 @@ impl FlattenItem {
         if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
             let key = Ident::new("key__", Span::call_site());
 
-            let state_machine_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM };
-            let keys_expr: TokenStream =
-                quote! { #key if <#inner_type as ::conf::ConfSerde>::ISM::wants_key(#key) };
+            let state_machine_type: Type =
+                parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
+            let keys_expr: TokenStream = quote! { #key if #state_machine_type::wants_key(#key) };
 
             let match_expr = quote! {
                 {
-                    let __m__ = #field_name.take().unwrap_or_default();
+                    let __m__ = #field_name.take().unwrap_or_else(|| #ctxt.for_flattened(#id_prefix).into());
                     // Pass a context scoped to this flattened field so child can look up options correctly
-                    #field_name = Some(__m__.next(#key, #nvp, &#ctxt.for_flattened(#id_prefix)));
+                    #field_name = Some(__m__.next(#key, #nvp));
                 },
             };
 
@@ -471,7 +474,7 @@ impl FlattenItem {
                 match_expr,
                 serde_keys: SerdeKeys::Expr(keys_expr),
                 // Scoped context for finalize so child can look up options with correct prefix
-                finalizer_context: Some(quote! { &#ctxt.for_flattened(#id_prefix) }),
+                needs_finalizer: true,
             })
         } else {
             // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means
@@ -524,7 +527,7 @@ impl FlattenItem {
                 state_machine_type: parse_quote! { Option<#field_type> },
                 match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
-                finalizer_context: None,
+                needs_finalizer: false,
             })
         }
     }

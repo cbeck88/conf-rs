@@ -52,35 +52,17 @@ where
 /// then go somewhere, else, and then return and continue with B. This means that while initing B,
 /// we need to have a state machine.
 ///
-/// The state machine is advanced by passing it (&str, NextValueProducer).
-/// It can also declare which keys (&str) it's actually interested in.
+/// The state machine is advanced by passing it (&str, NextValueProducer) which it wants
 /// It can be finalized when there are no more key-value pairs, producing Value or a set of errors.
-///
-/// TODO: Ideally, instead of wants_key(key: &str) -> bool, the state machine would have to declare
-/// up front all of the keys it is interested in, in some format so that we can detect collisions.
-/// However, the design of that is complex and it seems better to start with the simplest version
-/// and iterate towards success.
-///
-/// NOTE: The API was modified to take reference to context
-///
-/// The context could be stored in the machine generally, and this trait would be simpler. But it actually leads
-/// to more complex code-gen on the proc-macro side, because it makes it harder to work with the current implementation
-/// of the non-serde side of things, and so we push some complexity onto this trait instead for now.
 #[doc(hidden)]
 pub trait InitializationStateMachine<'de>: Sized {
     type Value;
-    type Context<'c>;
 
     fn wants_key(key: &str) -> bool;
-    fn next<'c, NVP>(
-        self,
-        key: &str,
-        next_value_producer: NVP,
-        context: &Self::Context<'c>,
-    ) -> Self
+    fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self
     where
         NVP: NextValueProducer<'de>;
-    fn finalize<'c>(self, context: &Self::Context<'c>) -> Result<Self::Value, Vec<InnerError>>;
+    fn finalize(self) -> Result<Self::Value, Vec<InnerError>>;
 }
 
 /// Wrapper type to treat an initialization state machine as a serde::de::Visitor impl.
@@ -89,16 +71,12 @@ pub trait InitializationStateMachine<'de>: Sized {
 /// An ISM can be used in phases, but it can also obviously be used in one shot from a deserializer.
 /// That's used when implementing DeserializeSeed on a struct.
 #[doc(hidden)]
-pub struct AsVisitor<'c, 'de, M>
-where
-    M: InitializationStateMachine<'de>,
-{
+pub struct AsVisitor<M> {
     pub machine: M,
-    pub ctxt: M::Context<'c>,
     pub expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
 }
 
-impl<'c, 'de, M> serde::de::Visitor<'de> for AsVisitor<'c, 'de, M>
+impl<'de, M> serde::de::Visitor<'de> for AsVisitor<M>
 where
     M: InitializationStateMachine<'de>,
 {
@@ -112,14 +90,12 @@ where
     where
         MA: serde::de::MapAccess<'de>,
     {
-        let Self {
-            ctxt, mut machine, ..
-        } = self;
+        let Self { mut machine, .. } = self;
 
         while let Some(key) = map_access.next_key::<IdentString>()? {
-            machine = machine.next(key.as_str(), &mut map_access, &ctxt);
+            machine = machine.next(key.as_str(), &mut map_access);
         }
-        Ok(machine.finalize(&ctxt))
+        Ok(machine.finalize())
     }
 }
 
@@ -155,10 +131,9 @@ where
         let expecting_fn = V::expecting;
 
         let doc_name = self.ctxt.document_name;
-        let machine = V::ISM::default();
+        let machine = V::ISM::<'a>::from(self.ctxt);
         let visitor = AsVisitor {
             machine,
-            ctxt: self.ctxt,
             expecting_fn,
         };
 

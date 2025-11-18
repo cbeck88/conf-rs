@@ -341,6 +341,11 @@ impl GenConfStruct {
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+        // The machine has a context lifetime in it
+        let ct = make_lifetime("'ctctct");
+        let machine_generics = prepend_generic_lifetimes(generics, [&ct]);
+        let (_, machine_ty_generics, _) = machine_generics.split_for_impl();
+
         Ok(Some(quote! {
             const _: () = {
                 use ::core::{fmt, option::Option, marker::PhantomData, result::Result};
@@ -350,7 +355,7 @@ impl GenConfStruct {
                 #machine
 
                 impl #impl_generics ConfSerde for #struct_ident #ty_generics #where_clause {
-                    type ISM = #machine_ident #ty_generics;
+                    type ISM<#ct> = #machine_ident #machine_ty_generics;
 
                     const STRUCT_NAME: &str = #struct_ident_str;
                     const STRUCT_KEYS: Option<&[&str]> = #struct_keys;
@@ -414,7 +419,13 @@ impl GenConfStruct {
         let ct = make_lifetime("'ctctct");
         let de = make_lifetime("'dedede");
 
-        let visitor_generics = prepend_generic_lifetimes(generics, [&de]);
+        // machine is generic over ct since it contains a context
+        let machine_generics = prepend_generic_lifetimes(generics, [&ct]);
+        let (impl_machine_generics, machine_ty_generics, machine_where_clause) =
+            machine_generics.split_for_impl();
+
+        // Used when we impl state machine trait
+        let visitor_generics = prepend_generic_lifetimes(&machine_generics, [&de]);
         let (impl_visitor_generics, _, _) = visitor_generics.split_for_impl();
 
         let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
@@ -423,6 +434,7 @@ impl GenConfStruct {
             .iter()
             .map(|f| {
                 f.gen_serde_strategy(
+                    &ct,
                     &conf_serde_context_ident,
                     &nvp_ident,
                     &nvp_type_ident,
@@ -478,14 +490,16 @@ impl GenConfStruct {
             .iter()
             .zip(serde_strategies.iter())
             .filter_map(|(n, s)| {
-                s.finalizer_context.as_ref().map(|ctx| {
-                    quote! {
-                        let #n = #n.map(|m| match m.finalize(#ctx) {
+                if s.needs_finalizer {
+                    Some(quote! {
+                        let #n = #n.map(|m| match m.finalize() {
                             Ok(val) => Some(val),
                             Err(err) => { #errors_ident.extend(err); None }
                         });
-                    }
-                })
+                    })
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -506,25 +520,26 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            pub struct #machine_ident #ty_generics {
+            pub struct #machine_ident #machine_ty_generics {
+                #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
                 #(#field_names: Option<#field_machine_types>),*
             };
 
-            impl #generics ::core::default::Default for #machine_ident #ty_generics {
-                fn default() -> Self {
+            impl #impl_machine_generics From<ConfSerdeContext<#ct>> for #machine_ident #machine_ty_generics #machine_where_clause {
+                fn from(#conf_serde_context_ident: ConfSerdeContext<#ct>) -> Self {
                     #(let #field_names: Option<#field_machine_types> = None;)*
 
                     Self {
+                        #conf_serde_context_ident,
                         #errors_ident: Default::default(),
                         #(#field_names,)*
                     }
                 }
             }
 
-            impl #impl_visitor_generics ::conf::InitializationStateMachine<#de> for #machine_ident #ty_generics {
+            impl #impl_visitor_generics ::conf::InitializationStateMachine<#de> for #machine_ident #machine_ty_generics #machine_where_clause {
                 type Value = #struct_ident #ty_generics;
-                type Context<#ct> = ConfSerdeContext<#ct>;
 
                 fn wants_key(__key__: &str) -> bool {
                     match __key__ {
@@ -533,10 +548,11 @@ impl GenConfStruct {
                     }
                 }
 
-                fn next<#ct, #nvp_type_ident>(self, __key__: &str, #nvp_ident: #nvp_type_ident, #conf_serde_context_ident: &Self::Context<#ct>) -> Self
-                where #nvp_type_ident: NextValueProducer<#de>
+                fn next<#nvp_type_ident>(self, __key__: &str, #nvp_ident: #nvp_type_ident) -> Self
+                  where #nvp_type_ident: NextValueProducer<#de>
                 {
                     let Self {
+                        #conf_serde_context_ident,
                         mut #errors_ident,
                         #(mut #field_names,)*
                     } = self;
@@ -549,13 +565,15 @@ impl GenConfStruct {
                     }
 
                     Self {
+                        #conf_serde_context_ident,
                         #errors_ident,
                         #(#field_names,)*
                     }
                 }
 
-                fn finalize<#ct>(self, #conf_serde_context_ident: &Self::Context<#ct>) -> Result<Self::Value, Vec<InnerError>> {
+                fn finalize(self) -> Result<Self::Value, Vec<InnerError>> {
                     let Self {
+                        #conf_serde_context_ident,
                         mut #errors_ident,
                         #(#field_names,)*
                     } = self;

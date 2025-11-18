@@ -4,7 +4,8 @@ use crate::util::type_is_bool;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Expr, Field, Ident, LitStr, Meta, Path, Token, Type, parse_quote, punctuated::Punctuated,
+    Error, Expr, Field, Ident, Lifetime, LitStr, Meta, Path, Token, Type, parse_quote,
+    punctuated::Punctuated,
 };
 
 mod flag_item;
@@ -86,7 +87,7 @@ pub struct SerdeStrategy {
     pub serde_keys: SerdeKeys,
     /// Context expression to use when calling `InitializationStateMachine::finalize`.
     /// If Some, finalize will be called with this context. If None, no finalize call is made.
-    pub finalizer_context: Option<TokenStream>,
+    pub needs_finalizer: bool,
 }
 
 impl SerdeStrategy {
@@ -97,7 +98,7 @@ impl SerdeStrategy {
             state_machine_type: parse_quote! { Option<#ty> },
             match_expr: quote! {},
             serde_keys: SerdeKeys::default(),
-            finalizer_context: None,
+            needs_finalizer: false,
         }
     }
 }
@@ -147,20 +148,17 @@ impl SerdeKeys {
     pub fn all_literal_keys<'a>(
         mut iter: impl Iterator<Item = &'a SerdeKeys>,
     ) -> Option<Vec<&'a LitStr>> {
-        iter.try_fold(
-            vec![],
-            |mut vec, serde_keys| -> Option<Vec<&LitStr>> {
-                match serde_keys {
-                    SerdeKeys::Lit(v) => {
-                        vec.extend(v);
-                    }
-                    SerdeKeys::Expr(_) => {
-                        return None;
-                    }
+        iter.try_fold(vec![], |mut vec, serde_keys| -> Option<Vec<&LitStr>> {
+            match serde_keys {
+                SerdeKeys::Lit(v) => {
+                    vec.extend(v);
                 }
-                Some(vec)
-            },
-        )
+                SerdeKeys::Expr(_) => {
+                    return None;
+                }
+            }
+            Some(vec)
+        })
     }
 }
 
@@ -466,6 +464,7 @@ impl FieldItem {
     /// * Ident for errors buffer which is in scope, to which we may push.
     pub fn gen_serde_strategy(
         &self,
+        ct: &Lifetime,
         ctxt: &Ident,
         nvp: &Ident,
         nvp_type: &Ident,
@@ -476,10 +475,12 @@ impl FieldItem {
         }
         match self {
             Self::Flag(_) | Self::Parameter(_) | Self::Repeat(_) => {
-                self.gen_simple_serde_strategy(ctxt, nvp, nvp_type, errors_ident)
+                self.gen_simple_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident)
             }
-            Self::Flatten(item) => item.gen_serde_strategy(ctxt, nvp, nvp_type, errors_ident),
-            Self::Subcommands(item) => item.gen_serde_strategy(ctxt, nvp, nvp_type, errors_ident),
+            Self::Flatten(item) => item.gen_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident),
+            Self::Subcommands(item) => {
+                item.gen_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident)
+            }
         }
     }
 
@@ -496,6 +497,7 @@ impl FieldItem {
     // * gen_initializer_with_doc_val()
     fn gen_simple_serde_strategy(
         &self,
+        _ct: &Lifetime,
         ctxt: &Ident,
         nvp: &Ident,
         nvp_type: &Ident,
@@ -583,7 +585,7 @@ impl FieldItem {
             state_machine_type: parse_quote! { Option<#field_type> },
             match_expr,
             serde_keys: SerdeKeys::Lit(all_names),
-            finalizer_context: None,
+            needs_finalizer: false,
         })
     }
 
