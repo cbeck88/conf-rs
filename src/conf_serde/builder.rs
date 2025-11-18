@@ -1,5 +1,6 @@
 use crate::{
-    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, Error, InnerError, ParsedArgs,
+    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, ConfSerdeSeed, Error, InnerError,
+    ParsedArgs,
 };
 use serde::de::{DeserializeSeed, Deserializer};
 use std::{ffi::OsString, marker::PhantomData};
@@ -90,7 +91,7 @@ where
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
         let conf_context = ConfContext::new(parsed_args, &parsed_env);
         let conf_serde_context = ConfSerdeContext::new(conf_context, document_name.as_str());
-        let seed = <S as ConfSerde>::Seed::from(conf_serde_context);
+        let seed = ConfSerdeSeed::<S>::from(conf_serde_context);
         // Code gen should produce:
         // impl<'de> DeserializeSeed for Seed {
         //   type Value = Result<Self, Vec<conf::InnerError>>;

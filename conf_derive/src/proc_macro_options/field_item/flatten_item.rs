@@ -469,7 +469,7 @@ impl FlattenItem {
                 )
               );
             } else {
-              let __seed__ = <#inner_type as ConfSerde>::Seed::from(
+              let __seed__ = ConfSerdeSeed::<#inner_type>::from(
                 #ctxt.for_flattened(#id_prefix)
               );
               #field_name = Some(match #nvp.next_value_seed(__seed__) {

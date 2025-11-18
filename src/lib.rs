@@ -58,8 +58,8 @@ pub use conf_serde::{ConfSerde, ConfSerdeBuilder};
 #[doc(hidden)]
 #[cfg(feature = "serde")]
 pub use conf_serde::{
-    ConfSerdeContext, IdentString, InitializationStateMachine, NextValueProducer, SubcommandsSerde,
-    deserialize_seed_impl,
+    ConfSerdeContext, ConfSerdeSeed, IdentString, InitializationStateMachine, NextValueProducer,
+    SubcommandsSerde,
 };
 // Re-export serde crate for the proc macro
 #[doc(hidden)]

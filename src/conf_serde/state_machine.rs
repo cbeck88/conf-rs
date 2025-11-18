@@ -1,6 +1,6 @@
-use crate::{ConfSerdeContext, IdentString, InnerError};
+use crate::{ConfSerde, ConfSerdeContext, IdentString, InnerError};
 use core::fmt;
-use serde::de::{Deserialize, DeserializeSeed};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer};
 
 /// A handle to a subset of the [`serde::de::MapAccess`] functionality.
 /// This handle allows one to call `next_value` or `next_value_seed` *once*, with
@@ -123,24 +123,62 @@ where
     }
 }
 
-/// The details of DeserializeSeed::deserialize don't really need to be code-genned,
-/// and it's simpler to move code out of the proc macro when possible.
+/// An object which can serve as a seed to generate any struct implementing ConfSerde.
 ///
-/// But because of orphan rules, the Seed can't actually appear in the conf crate,
-/// it has to be in the user's crate.
-///
-/// So the `struct Seed` is code-genned and the `impl DeserializeSeed` is a thin
-/// stub that calls right to this.
-#[doc(hidden)]
-pub fn deserialize_seed_impl<'a, 'de, D, M>(
+/// It's a bit simpler to code-gen the initialization state machine than to code-gen this object,
+/// and the initialization state machine needs to be reified in order to implement serde(flatten).
+pub struct ConfSerdeSeed<'a, V> {
+    ctxt: ConfSerdeContext<'a>,
+    _marker: core::marker::PhantomData<fn() -> V>,
+}
+
+impl<'a, V> From<ConfSerdeContext<'a>> for ConfSerdeSeed<'a, V> {
+    fn from(ctxt: ConfSerdeContext<'a>) -> Self {
+        Self {
+            ctxt,
+            _marker: Default::default(),
+        }
+    }
+}
+
+impl<'de, 'a, V> DeserializeSeed<'de> for ConfSerdeSeed<'a, V>
+where
+    V: ConfSerde,
+{
+    type Value = Result<V, Vec<InnerError>>;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let struct_name = V::STRUCT_NAME;
+        let expecting = V::expecting;
+        Ok(deserialize_seed_impl::<D, V::ISM>(
+            struct_name,
+            expecting,
+            self.ctxt,
+            deserializer,
+        ))
+    }
+}
+
+// The details of DeserializeSeed::deserialize don't really need to be code-genned,
+// and it's simpler to move code out of the proc macro when possible.
+//
+// But because of orphan rules, the Seed can't actually appear in the conf crate,
+// it has to be in the user's crate.
+//
+// So the `struct Seed` is code-genned and the `impl DeserializeSeed` is a thin
+// stub that calls right to this.
+fn deserialize_seed_impl<'a, 'de, D, M>(
     struct_name: &'static str,
     expecting_fn: fn(&mut fmt::Formatter) -> fmt::Result,
     ctxt: ConfSerdeContext<'a>,
     deserializer: D,
 ) -> Result<M::Value, Vec<InnerError>>
 where
-    M: InitializationStateMachine<'de, Context<'a> = ConfSerdeContext<'a>> + Default,
-    D: serde::de::Deserializer<'de>,
+    M: Default::InitializationStateMachine<'de, Context<'a> = ConfSerdeContext<'a>>,
+    D: Deserializer<'de>,
 {
     let doc_name = ctxt.document_name;
     let machine = M::default();

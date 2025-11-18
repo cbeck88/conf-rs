@@ -64,7 +64,7 @@ mod builder;
 pub use builder::ConfSerdeBuilder;
 
 mod state_machine;
-pub use state_machine::{InitializationStateMachine, NextValueProducer, deserialize_seed_impl};
+pub use state_machine::{ConfSerdeSeed, InitializationStateMachine, NextValueProducer};
 
 mod traits;
 pub use traits::{ConfSerde, ConfSerdeContext, SubcommandsSerde};

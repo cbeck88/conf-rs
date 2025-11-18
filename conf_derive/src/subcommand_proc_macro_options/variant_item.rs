@@ -220,7 +220,7 @@ impl VariantItem {
             Ok(quote! {
                 #command_name => {
                   let document_name = #conf_context_ident.document_name;
-                  let seed = <#ty as ConfSerde>::Seed::from(ctxt);
+                  let seed = ::conf::ConfSerdeSeed::<#ty>::from(ctxt);
                   Ok(Self::#name(#next_value_producer_ident.next_value_seed(seed).map_err(|err| {
                    vec![InnerError::serde(
                      document_name,
