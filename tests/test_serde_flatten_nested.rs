@@ -960,7 +960,12 @@ pub struct ValueParserParentConfig {
 fn test_flatten_with_value_parser_from_args() {
     // value_parser should apply when coming from args
     let result = ValueParserParentConfig::conf_builder()
-        .args([".", "--name=app", "--doubled-value=5", "--normal-value=test"])
+        .args([
+            ".",
+            "--name=app",
+            "--doubled-value=5",
+            "--normal-value=test",
+        ])
         .env::<&str, &str>([])
         .doc("config.json", json!({}))
         .try_parse()
@@ -1008,7 +1013,12 @@ fn test_flatten_with_value_parser_from_json() {
 fn test_flatten_with_value_parser_args_shadow_json() {
     // When args shadow JSON, value_parser should apply to the arg value
     let result = ValueParserParentConfig::conf_builder()
-        .args([".", "--name=app", "--doubled-value=3", "--normal-value=test"])
+        .args([
+            ".",
+            "--name=app",
+            "--doubled-value=3",
+            "--normal-value=test",
+        ])
         .env::<&str, &str>([])
         .doc(
             "config.json",
@@ -1155,7 +1165,13 @@ fn test_flatten_with_subcommand_common_from_json() {
 fn test_flatten_with_subcommand_args_shadow_flattened_json() {
     // Args should shadow flattened JSON values
     let result = AppWithSubcommands::conf_builder()
-        .args([".", "--verbose", "--log-level=error", "build", "--output=out"])
+        .args([
+            ".",
+            "--verbose",
+            "--log-level=error",
+            "build",
+            "--output=out",
+        ])
         .env::<&str, &str>([])
         .doc(
             "config.json",
