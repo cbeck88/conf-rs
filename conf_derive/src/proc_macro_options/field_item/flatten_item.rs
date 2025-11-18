@@ -499,7 +499,9 @@ impl FlattenItem {
                 needs_finalizer: true,
             })
         } else if let Some(try_from_type) = self.get_serde_try_from() {
-            // When try_from is set, deserialize the try_from type using plain serde and convert to field_type
+            // When try_from is set, deserialize the try_from type using ConfSerdeSeed
+            // (so CLI/env shadowing works), then convert to the target type via TryFrom.
+            // The try_from type must implement ConfSerde.
             let match_expr = quote! {
               {
                 if #field_name.is_some() {
@@ -511,8 +513,11 @@ impl FlattenItem {
                     )
                   );
                 } else {
-                  #field_name = Some(match #nvp.next_value::<#try_from_type>() {
-                    Ok(__intermediate__) => {
+                  let __seed__ = ConfSerdeSeed::<#try_from_type>::from(
+                    #ctxt.for_flattened(#id_prefix)
+                  );
+                  #field_name = Some(match #nvp.next_value_seed(__seed__) {
+                    Ok(Ok(__intermediate__)) => {
                       // Convert from try_from type to field type
                       match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__) {
                         Ok(__val__) => Some(#val_expr),
@@ -527,6 +532,10 @@ impl FlattenItem {
                           None
                         }
                       }
+                    }
+                    Ok(Err(__errs__)) => {
+                      #errors_ident.extend(__errs__);
+                      None
                     }
                     Err(__err__) => {
                       #errors_ident.push(

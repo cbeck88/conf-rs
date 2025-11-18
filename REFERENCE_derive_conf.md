@@ -1085,9 +1085,11 @@ and you can customize this if another choice of delimiter is more appropriate.
      t: T,
      ```
 
-     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type and then converts to the target type using `TryFrom::try_from`.
+     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type (`U`) and then converts to the target type (`T`) using `TryFrom::try_from`.
 
-     This can be useful when `T` implements `Conf` but another type `U` more easily represents the schema you want to use in `serde`. `TryFrom` then bridges the gap. This can be less complex than using `deserialize_with`.
+     **Important**: The intermediate type `U` must implement `ConfSerde` (i.e., it must be a `#[derive(Conf)] #[conf(serde)]` struct). This ensures that CLI arguments and environment variables can still override values from the serde document for fields within the flattened type.
+
+     This can be useful if you want to transform a group of values after hierarchical config resolution.
 
      This attribute is mutually exclusive with `serde(flatten)`.
 

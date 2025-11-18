@@ -444,7 +444,14 @@ However, you can use other libraries to help with this.
 ```
 
 The [`Figment::extract` function](https://docs.rs/figment/latest/figment/struct.Figment.html#method.extract) invokes [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html), and so can only report one error. But extracting into a [`figment::Value`](https://docs.rs/figment/latest/figment/value/enum.Value.html) is not expected to fail, since this is the internal representation that `figment` uses.
+
 The `figment::Value` can then be passed to `conf` as a document, since it implements [`serde::de::Deserializer`](https://docs.rs/serde/latest/serde/trait.Deserializer.html). Then `conf` is driving the initialization of your struct, and not `serde_derive`, which retains all the benefits of `conf`'s design.
+
+This negates some of the challenges of using `figment`. For example in their [docu](https://docs.rs/figment/latest/figment/#tips):
+
+> Using #[serde(flatten)] [can break error attribution](https://github.com/SergioBenitez/Figment/issues/80#issuecomment-1701946622), so it’s best to avoid using it when possible.
+
+When using `conf`, our `serde(flatten)` implementation doesn't have the same limitations as the stock serde, and none of the same caveats around it apply.
 
 In this manner, you can get all 6 categories of hierarchical config in your app if needed, without significant restrictions on config file formats.
 
@@ -665,7 +672,7 @@ It's possible that when parsing a `Config`, the `auth_service` fails to parse be
 
 The crate is probably most attractive if:
 
-* you have a medium-to-large project, and you run into limits of `clap-derive`, particularly around flatten-with-prefix
+* you have a medium-to-large project, and you run into limits of `clap-derive`. You start to have "diamond pattern" in your structs, and you need flatten-with-prefix
 * you want to do layered config, including with config files, but
   * you don't want to define the same config parameters over and over again (for args, for env, and for serde)
   * you want the auto-generated help to be useful

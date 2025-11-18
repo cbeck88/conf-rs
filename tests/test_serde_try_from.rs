@@ -396,10 +396,125 @@ fn test_full_path_try_from_with_formatted_error() {
     assert!(err_str.contains("-5"), "error: {}", err_str);
 }
 
-// TODO: try_from on flatten fields requires more work
-// The field type must still implement Conf for CLI parsing,
-// but with try_from we only change the serde deserialization.
-// This is a more advanced use case that can be added later.
+// Test try_from on flatten field itself
+// The intermediate type must implement ConfSerde so that CLI/env shadowing works properly.
+// This is different from having try_from on fields *within* a flattened struct.
+
+// Intermediate type - implements Conf + ConfSerde
+#[derive(Conf, Debug, Clone)]
+#[conf(serde)]
+pub struct IntermediateConfig {
+    #[conf(long)]
+    pub value: i32,
+    #[conf(long)]
+    pub name: String,
+}
+
+// Target type - implements Conf + TryFrom<IntermediateConfig>
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct ValidatedConfig {
+    #[conf(long)]
+    pub value: i32,
+    #[conf(long)]
+    pub name: String,
+}
+
+impl TryFrom<IntermediateConfig> for ValidatedConfig {
+    type Error = String;
+
+    fn try_from(intermediate: IntermediateConfig) -> Result<Self, Self::Error> {
+        if intermediate.value < 0 {
+            return Err(format!("value {} must be non-negative", intermediate.value));
+        }
+        if intermediate.name.is_empty() {
+            return Err("name must not be empty".to_string());
+        }
+        Ok(ValidatedConfig {
+            value: intermediate.value,
+            name: intermediate.name,
+        })
+    }
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct ParentWithFlattenTryFrom {
+    #[conf(long)]
+    pub flag: bool,
+    #[conf(flatten, serde(try_from = "IntermediateConfig"))]
+    pub config: ValidatedConfig,
+}
+
+#[test]
+fn test_flatten_try_from_basic() {
+    let result = ParentWithFlattenTryFrom::conf_builder()
+        .args(["test", "--flag"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"config": {"value": 42, "name": "test"}}))
+        .try_parse()
+        .unwrap();
+    assert!(result.flag);
+    assert_eq!(result.config.value, 42);
+    assert_eq!(result.config.name, "test");
+}
+
+#[test]
+fn test_flatten_try_from_cli_overrides_serde() {
+    // This is the key test: CLI args should override serde values
+    // because the intermediate type uses ConfSerdeSeed
+    let result = ParentWithFlattenTryFrom::conf_builder()
+        .args(["test", "--flag", "--value", "99", "--name", "from_cli"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"config": {"value": 42, "name": "from_json"}}))
+        .try_parse()
+        .unwrap();
+    assert!(result.flag);
+    // CLI values should win
+    assert_eq!(result.config.value, 99);
+    assert_eq!(result.config.name, "from_cli");
+}
+
+#[test]
+fn test_flatten_try_from_partial_cli_override() {
+    // Test that some fields come from CLI, others from serde
+    let result = ParentWithFlattenTryFrom::conf_builder()
+        .args(["test", "--flag", "--value", "77"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"config": {"value": 42, "name": "from_json"}}))
+        .try_parse()
+        .unwrap();
+    assert!(result.flag);
+    assert_eq!(result.config.value, 77); // From CLI
+    assert_eq!(result.config.name, "from_json"); // From serde
+}
+
+#[test]
+fn test_flatten_try_from_validation_failure() {
+    let result = ParentWithFlattenTryFrom::conf_builder()
+        .args(["test", "--flag"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"config": {"value": -5, "name": "test"}}))
+        .try_parse();
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let err_str = err.to_string();
+    assert!(err_str.contains("must be non-negative"), "error: {}", err_str);
+}
+
+#[test]
+fn test_flatten_try_from_cli_only() {
+    // Test that it works with CLI args only (no serde doc for the config)
+    let result = ParentWithFlattenTryFrom::conf_builder()
+        .args(["test", "--flag", "--value", "123", "--name", "cli_only"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+    assert!(result.flag);
+    assert_eq!(result.config.value, 123);
+    assert_eq!(result.config.name, "cli_only");
+}
 
 // Test try_from with default value
 #[derive(Conf, Debug)]
