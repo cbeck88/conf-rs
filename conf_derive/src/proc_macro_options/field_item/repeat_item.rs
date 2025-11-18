@@ -14,6 +14,7 @@ pub struct RepeatSerdeItem {
     pub skip: bool,
     pub use_value_parser: bool,
     pub deserialize_with: Option<Path>,
+    pub try_from: Option<Type>,
     span: Span,
 }
 
@@ -25,6 +26,7 @@ impl RepeatSerdeItem {
             skip: false,
             use_value_parser: false,
             deserialize_with: None,
+            try_from: None,
             span: meta.input.span(),
         };
 
@@ -52,17 +54,37 @@ impl RepeatSerdeItem {
                         &mut result.deserialize_with,
                         Some(parse_path_from_str(meta)?),
                     )
+                } else if path.is_ident("try_from") {
+                    set_once(
+                        &path,
+                        &mut result.try_from,
+                        Some(parse_type_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
             })?;
         }
 
-        // Validate that deserialize_with and use_value_parser are mutually exclusive
+        // Validate mutual exclusivity
         if result.deserialize_with.is_some() && result.use_value_parser {
             return Err(Error::new(
                 result.span,
                 "deserialize_with and use_value_parser are mutually exclusive",
+            ));
+        }
+
+        if result.try_from.is_some() && result.use_value_parser {
+            return Err(Error::new(
+                result.span,
+                "try_from and use_value_parser are mutually exclusive",
+            ));
+        }
+
+        if result.try_from.is_some() && result.deserialize_with.is_some() {
+            return Err(Error::new(
+                result.span,
+                "try_from and deserialize_with are mutually exclusive",
             ));
         }
 
@@ -306,6 +328,17 @@ impl RepeatItem {
     }
 
     pub fn get_serde_type(&self) -> Type {
+        // Check for try_from first
+        if let Some(try_from_type) = self
+            .serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
+        {
+            // For Vec<T> fields with try_from = "U", deserialize Vec<U>
+            // and convert each element via TryFrom
+            return parse_quote! { ::std::vec::Vec<#try_from_type> };
+        }
+
         let use_value_parser = self
             .serde
             .as_ref()
@@ -317,6 +350,12 @@ impl RepeatItem {
         } else {
             self.field_type.clone()
         }
+    }
+
+    pub fn get_serde_try_from(&self) -> Option<Type> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
     }
 
     pub fn get_serde_skip(&self) -> bool {
@@ -590,7 +629,40 @@ impl RepeatItem {
             .map(|serde| serde.use_value_parser)
             .unwrap_or(false);
 
-        if use_value_parser {
+        let try_from = self.get_serde_try_from();
+
+        if let Some(_try_from_type) = try_from {
+            // When try_from is set, #doc_val has type Vec<try_from_type>.
+            // We convert each element via TryFrom to get Vec<inner_type>.
+            let field_name_str = self.field_name.to_string();
+
+            // Get the inner type of Vec<T>
+            let inner_type = type_is_vec(&self.field_type)?
+                .ok_or_else(|| Error::new(self.field_type.span(), "Expected Vec<T> type"))?;
+
+            let before_value_parser = |_| {
+                quote! {
+                    if value_source.is_default() {
+                        let mut __result__ = Vec::with_capacity(#doc_val.len());
+                        for __item__ in #doc_val {
+                            match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
+                                Ok(__converted__) => __result__.push(__converted__),
+                                Err(__err__) => {
+                                    return Err(vec![::conf::InnerError::serde(
+                                        #doc_name,
+                                        #field_name_str,
+                                        __err__
+                                    )]);
+                                }
+                            }
+                        }
+                        return Ok(__result__);
+                    }
+                }
+            };
+
+            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
+        } else if use_value_parser {
             // When use_value_parser is enabled, the behavior is, if conf_context produced a default
             // value, we should overwrite it with the document value. `strs` is a `Vec<&str>`,
             // and #doc_val is a `Vec<String>`.

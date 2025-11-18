@@ -13,6 +13,7 @@ pub struct FlagSerdeItem {
     pub aliases: Vec<LitStr>,
     pub skip: bool,
     pub deserialize_with: Option<Path>,
+    pub try_from: Option<Type>,
     span: Span,
 }
 
@@ -23,6 +24,7 @@ impl FlagSerdeItem {
             aliases: Vec::new(),
             skip: false,
             deserialize_with: None,
+            try_from: None,
             span: meta.input.span(),
         };
 
@@ -47,10 +49,24 @@ impl FlagSerdeItem {
                         &mut result.deserialize_with,
                         Some(parse_path_from_str(meta)?),
                     )
+                } else if path.is_ident("try_from") {
+                    set_once(
+                        &path,
+                        &mut result.try_from,
+                        Some(parse_type_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
             })?;
+        }
+
+        // Validate mutual exclusivity
+        if result.try_from.is_some() && result.deserialize_with.is_some() {
+            return Err(Error::new(
+                result.span,
+                "try_from and deserialize_with are mutually exclusive",
+            ));
         }
 
         Ok(result)
@@ -196,7 +212,22 @@ impl FlagItem {
     }
 
     pub fn get_serde_type(&self) -> Type {
+        // Check for try_from first
+        if let Some(try_from_type) = self
+            .serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
+        {
+            return try_from_type;
+        }
+
         parse_quote! { bool }
+    }
+
+    pub fn get_serde_try_from(&self) -> Option<Type> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
     }
 
     pub fn get_serde_skip(&self) -> bool {
@@ -269,22 +300,46 @@ impl FlagItem {
     pub fn gen_initializer_with_doc_val(
         &self,
         conf_context_ident: &Ident,
-        _doc_name: &Ident,
+        doc_name: &Ident,
         doc_val: &Ident,
     ) -> Result<(TokenStream, bool), Error> {
         let id = self.field_name.to_string();
+        let field_name_str = self.field_name.to_string();
 
-        Ok((
-            quote! {
-                let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
-                if src.is_default() {
-                    Ok(#doc_val)
-                } else {
-                    Ok(val)
-                }
-            },
-            false,
-        ))
+        let try_from = self.get_serde_try_from();
+
+        if let Some(_try_from_type) = try_from {
+            // When try_from is set, #doc_val has type #try_from_type.
+            // To pick this value for the field, we use TryFrom::try_from to convert.
+            Ok((
+                quote! {
+                    let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                    if src.is_default() {
+                        <bool as ::core::convert::TryFrom<_>>::try_from(#doc_val)
+                            .map_err(|err| ::conf::InnerError::serde(
+                                #doc_name,
+                                #field_name_str,
+                                err
+                            ))
+                    } else {
+                        Ok(val)
+                    }
+                },
+                false,
+            ))
+        } else {
+            Ok((
+                quote! {
+                    let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                    if src.is_default() {
+                        Ok(#doc_val)
+                    } else {
+                        Ok(val)
+                    }
+                },
+                false,
+            ))
+        }
     }
 
     /// Generate debug assertions for this flag

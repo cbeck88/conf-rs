@@ -15,6 +15,7 @@ pub struct FlattenSerdeItem {
     pub aliases: Vec<LitStr>,
     pub skip: bool,
     pub flatten: bool,
+    pub try_from: Option<Type>,
     span: Span,
 }
 
@@ -25,6 +26,7 @@ impl FlattenSerdeItem {
             aliases: Vec::new(),
             skip: false,
             flatten: false,
+            try_from: None,
             span: meta.input.span(),
         };
 
@@ -46,10 +48,24 @@ impl FlattenSerdeItem {
                 } else if path.is_ident("flatten") {
                     result.flatten = true;
                     Ok(())
+                } else if path.is_ident("try_from") {
+                    set_once(
+                        &path,
+                        &mut result.try_from,
+                        Some(parse_type_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
             })?;
+        }
+
+        // Validate mutual exclusivity
+        if result.try_from.is_some() && result.flatten {
+            return Err(Error::new(
+                result.span,
+                "try_from and flatten are mutually exclusive",
+            ));
         }
 
         Ok(result)
@@ -205,6 +221,12 @@ impl FlattenItem {
 
     pub fn get_serde_skip(&self) -> bool {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
+    }
+
+    fn get_serde_try_from(&self) -> Option<Type> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
     }
 
     // Body of a routine which extends #program_options_ident to hold any program options associated
@@ -475,6 +497,61 @@ impl FlattenItem {
                 serde_keys: SerdeKeys::Expr(keys_expr),
                 // Scoped context for finalize so child can look up options with correct prefix
                 needs_finalizer: true,
+            })
+        } else if let Some(try_from_type) = self.get_serde_try_from() {
+            // When try_from is set, deserialize the try_from type using plain serde and convert to field_type
+            let match_expr = quote! {
+              {
+                if #field_name.is_some() {
+                  #errors_ident.push(
+                    InnerError::serde(
+                      #ctxt.document_name,
+                      #field_name_str,
+                      #nvp_type::Error::duplicate_field(#serde_name_str)
+                    )
+                  );
+                } else {
+                  #field_name = Some(match #nvp.next_value::<#try_from_type>() {
+                    Ok(__intermediate__) => {
+                      // Convert from try_from type to field type
+                      match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__) {
+                        Ok(__val__) => Some(#val_expr),
+                        Err(__err__) => {
+                          #errors_ident.push(
+                            InnerError::serde(
+                              #ctxt.document_name,
+                              #field_name_str,
+                              __err__
+                            )
+                          );
+                          None
+                        }
+                      }
+                    }
+                    Err(__err__) => {
+                      #errors_ident.push(
+                        InnerError::serde(
+                          #ctxt.document_name,
+                          #field_name_str,
+                          __err__
+                        )
+                      );
+                      None
+                    }
+                  });
+                }
+              },
+            };
+
+            // Return all names for error messages
+            let mut all_names = vec![serde_name_str.clone()];
+            all_names.extend(serde_aliases);
+
+            Ok(SerdeStrategy {
+                state_machine_type: parse_quote! { Option<#field_type> },
+                match_expr,
+                serde_keys: SerdeKeys::Lit(all_names),
+                needs_finalizer: false,
             })
         } else {
             // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means

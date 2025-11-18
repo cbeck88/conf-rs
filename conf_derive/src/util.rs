@@ -130,6 +130,12 @@ pub fn parse_path_from_str(meta: ParseNestedMeta<'_>) -> Result<syn::Path, Error
     lit_str.parse()
 }
 
+/// Helper for reading a type from a string literal, similar to serde's try_from
+pub fn parse_type_from_str(meta: ParseNestedMeta<'_>) -> Result<syn::Type, Error> {
+    let lit_str: syn::LitStr = parse_required_value(meta)?;
+    lit_str.parse()
+}
+
 /// Helper for reading an optional value, which may come after a key, during `.parse_nested_meta`
 pub fn parse_optional_value<T: Parse>(meta: ParseNestedMeta<'_>) -> Result<Option<T>, Error> {
     if meta.input.is_empty() || meta.input.peek(Token![,]) {

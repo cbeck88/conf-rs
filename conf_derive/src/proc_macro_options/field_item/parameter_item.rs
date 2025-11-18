@@ -14,6 +14,7 @@ pub struct ParameterSerdeItem {
     pub skip: bool,
     pub use_value_parser: bool,
     pub deserialize_with: Option<Path>,
+    pub try_from: Option<Type>,
     span: Span,
 }
 
@@ -25,6 +26,7 @@ impl ParameterSerdeItem {
             skip: false,
             use_value_parser: false,
             deserialize_with: None,
+            try_from: None,
             span: meta.input.span(),
         };
 
@@ -52,17 +54,37 @@ impl ParameterSerdeItem {
                         &mut result.deserialize_with,
                         Some(parse_path_from_str(meta)?),
                     )
+                } else if path.is_ident("try_from") {
+                    set_once(
+                        &path,
+                        &mut result.try_from,
+                        Some(parse_type_from_str(meta)?),
+                    )
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
                 }
             })?;
         }
 
-        // Validate that deserialize_with and use_value_parser are mutually exclusive
+        // Validate mutual exclusivity
         if result.deserialize_with.is_some() && result.use_value_parser {
             return Err(Error::new(
                 result.span,
                 "deserialize_with and use_value_parser are mutually exclusive",
+            ));
+        }
+
+        if result.try_from.is_some() && result.use_value_parser {
+            return Err(Error::new(
+                result.span,
+                "try_from and use_value_parser are mutually exclusive",
+            ));
+        }
+
+        if result.try_from.is_some() && result.deserialize_with.is_some() {
+            return Err(Error::new(
+                result.span,
+                "try_from and deserialize_with are mutually exclusive",
             ));
         }
 
@@ -346,6 +368,20 @@ impl ParameterItem {
     }
 
     pub fn get_serde_type(&self) -> Type {
+        // Check for try_from first
+        if let Some(try_from_type) = self
+            .serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
+        {
+            // If field is Option<T>, wrap try_from type in Option as well
+            // This allows the field to be optional in the JSON
+            if self.is_optional_type.is_some() {
+                return parse_quote! { ::core::option::Option<#try_from_type> };
+            }
+            return try_from_type;
+        }
+
         let use_value_parser = self
             .serde
             .as_ref()
@@ -357,6 +393,12 @@ impl ParameterItem {
         } else {
             self.field_type.clone()
         }
+    }
+
+    pub fn get_serde_try_from(&self) -> Option<Type> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.try_from.clone())
     }
 
     pub fn get_serde_skip(&self) -> bool {
@@ -617,7 +659,88 @@ impl ParameterItem {
             .map(|serde| serde.use_value_parser)
             .unwrap_or(false);
 
-        if use_value_parser {
+        let try_from = self.get_serde_try_from();
+
+        if let Some(_try_from_type) = try_from {
+            // When try_from is set, #doc_val has the try_from type (or Option<try_from_type> for optional fields).
+            // To pick this value for the field, we use TryFrom::try_from to convert.
+            let field_type = &self.field_type;
+            let field_name_str = self.field_name.to_string();
+
+            // For Option<T> fields, we deserialize Option<U> and map the conversion
+            // For non-optional fields, we convert directly
+            if let Some(inner_type) = &self.is_optional_type {
+                let if_no_conf_context_val = |_| {
+                    quote! {
+                        return match #doc_val {
+                            Some(__intermediate__) => {
+                                <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__)
+                                    .map(Some)
+                                    .map_err(|err| ::conf::InnerError::serde(
+                                        #doc_name,
+                                        #field_name_str,
+                                        err
+                                    ))
+                            }
+                            None => Ok(None),
+                        };
+                    }
+                };
+
+                let before_value_parser = |_| {
+                    quote! {
+                        if value_source.is_default() {
+                            return match #doc_val {
+                                Some(__intermediate__) => {
+                                    <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__)
+                                        .map(Some)
+                                        .map_err(|err| ::conf::InnerError::serde(
+                                            #doc_name,
+                                            #field_name_str,
+                                            err
+                                        ))
+                                }
+                                None => Ok(None),
+                            };
+                        }
+                    }
+                };
+                self.gen_initializer_helper(
+                    conf_context_ident,
+                    &if_no_conf_context_val,
+                    Some(&before_value_parser),
+                )
+            } else {
+                let if_no_conf_context_val = |_| {
+                    quote! {
+                        return <#field_type as ::core::convert::TryFrom<_>>::try_from(#doc_val)
+                            .map_err(|err| ::conf::InnerError::serde(
+                                #doc_name,
+                                #field_name_str,
+                                err
+                            ));
+                    }
+                };
+
+                let before_value_parser = |_| {
+                    quote! {
+                        if value_source.is_default() {
+                            return <#field_type as ::core::convert::TryFrom<_>>::try_from(#doc_val)
+                                .map_err(|err| ::conf::InnerError::serde(
+                                    #doc_name,
+                                    #field_name_str,
+                                    err
+                                ));
+                        }
+                    }
+                };
+                self.gen_initializer_helper(
+                    conf_context_ident,
+                    &if_no_conf_context_val,
+                    Some(&before_value_parser),
+                )
+            }
+        } else if use_value_parser {
             // When use_value_parser is true, then #doc_val has type String.
             // To pick this value for the field, we have to set value_source and val_os/val_str
             // to indicate that we are selecting the document value.

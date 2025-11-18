@@ -19,6 +19,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [rename](#flag-serde-rename)
       * [alias](#flag-serde-alias)
       * [deserialize_with](#flag-serde-deserialize-with)
+      * [try_from](#flag-serde-try-from)
       * [skip](#flag-serde-skip)
   * [Parameter](#parameter)
     * [short](#parameter-short)
@@ -36,6 +37,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [rename](#parameter-serde-rename)
       * [alias](#parameter-serde-alias)
       * [deserialize_with](#parameter-serde-deserialize-with)
+      * [try_from](#parameter-serde-try-from)
       * [skip](#parameter-serde-skip)
       * [use_value_parser](#parameter-serde-use-value-parser)
     * [test](#parameter-test)
@@ -56,6 +58,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [rename](#repeat-serde-rename)
       * [alias](#repeat-serde-alias)
       * [deserialize_with](#repeat-serde-deserialize-with)
+      * [try_from](#repeat-serde-try-from)
       * [skip](#repeat-serde-skip)
       * [use_value_parser](#repeat-serde-use-value-parser)
   * [Flatten](#flatten)
@@ -67,6 +70,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [serde](#flatten-serde)
       * [rename](#flatten-serde-rename)
       * [alias](#flatten-serde-alias)
+      * [try_from](#flatten-serde-try-from)
       * [skip](#flatten-serde-skip)
       * [flatten](#flatten-serde-flatten)
   * [Subcommands](#subcommands)
@@ -277,7 +281,19 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      # }
      ```
 
-     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
+     This attribute is mutually exclusive with `try_from`.
+
+   * <a name="flag-serde-try-from"></a> `try_from` (type string argument)
+
+     example: `#[conf(serde(try_from = "u32"))]`
+
+     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type and then converts to the target type using `TryFrom::try_from`.
+
+     The type must implement `TryFrom<IntermediateType>` where the error type implements `Display`.
+
+     This attribute only affects deserialization from serde documents. Values from CLI arguments and environment variables are parsed normally.
+
+     This attribute is mutually exclusive with `deserialize_with`.
 
    * <a name="flag-serde-skip"></a> `skip` (no arguments)
 
@@ -542,7 +558,65 @@ A parameter represents a single value that can be parsed from a string.
      # }
      ```
 
-     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
+     This attribute is mutually exclusive with `use_value_parser` and `try_from`.
+
+   * <a name="parameter-serde-try-from"></a> `try_from` (type string argument)
+
+     example:
+     ```rust ignore
+     #[conf(serde(try_from = "U"))]
+     t: T,
+     ```
+
+     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type (`U`) and then converts to the target type (`T`) using `TryFrom::try_from`.
+
+     The type `T` must implement `TryFrom<U>` where the error type implements `Display`.
+
+     This can be simpler or more convenient than using `deserialize_with`, especially when `U` has a simple representation in serde.
+
+     This attribute only affects deserialization from serde documents. Values from CLI arguments and environment variables are parsed normally using `FromStr` or `value_parser`.
+
+     **Note**: For `Option<T>` fields with `try_from = "U"`: deserializes `Option<U>` and converts via `.map(TryFrom::try_from)`. This allows the field to be optional in JSON (null or missing), and the same `TryFrom<U> for T` impl works for both optional and required fields. If your `TryFrom` implementation doesn't line up with this, you can use `deserialize_with` to make it fit.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     # #[cfg(feature = "serde")]
+     # {
+     #[derive(Debug, Clone)]
+     pub struct PositiveNumber(u32);
+
+     impl TryFrom<u32> for PositiveNumber {
+         type Error = &'static str;
+         fn try_from(value: u32) -> Result<Self, Self::Error> {
+             if value > 0 { Ok(PositiveNumber(value)) }
+             else { Err("number must be positive") }
+         }
+     }
+
+     impl std::str::FromStr for PositiveNumber {
+         type Err = String;
+         fn from_str(s: &str) -> Result<Self, Self::Err> {
+             let value: u32 = s.parse().map_err(|e| format!("{}", e))?;
+             PositiveNumber::try_from(value).map_err(|e| e.to_string())
+         }
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         // Required field
+         #[conf(long, serde(try_from = "u32"))]
+         pub count: PositiveNumber,
+
+         // Optional field - deserializes Option<u32>, converts inner value
+         #[conf(long, serde(try_from = "u32"))]
+         pub limit: Option<PositiveNumber>,
+     }
+     # }
+     ```
+
+     Mutually exclusive with `use_value_parser` and `deserialize_with`.
 
    * <a name="parameter-serde-skip"></a> `skip` (no arguments)
 
@@ -557,6 +631,8 @@ A parameter represents a single value that can be parsed from a string.
 
      If used, then instead of asking `serde` to deserialize the field type, `serde` will deserialize a `String`,
      and then the `value_parser` will convert the string to the field type.
+
+     Mutually exclusive with `deserialize_with` and `try_from`.
 
 *  <a name="parameter-test"></a> `test` (supports nested options)
 
@@ -746,7 +822,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    }
    ```
 
-   *Note*: This attribute is mutually exclusive with `value_parser`.
+   This attribute is mutually exclusive with `value_parser`.
 
 *  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
 
@@ -839,7 +915,50 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      # }
      ```
 
-     This attribute is mutually exclusive with `use_value_parser`.
+     This attribute is mutually exclusive with `use_value_parser` and `try_from`.
+
+   * <a name="repeat-serde-try-from"></a> `try_from` (type string argument)
+
+     example: `#[conf(repeat, long, serde(try_from = "u32"))]`
+
+     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type and then converts to the target type using `TryFrom::try_from`.
+
+     For `Vec<T>` fields with `try_from = "U"`: deserializes `Vec<U>` and converts each element via `TryFrom::try_from`.
+
+     This can be simpler or more convenient than using `deserialize_with`, especially when `U` has a simple representation in serde.
+
+     Mutually exclusive with `deserialize_with` and `use_value_parser`.
+
+     **Example**:
+     ```rust
+     # use conf::Conf;
+     # #[cfg(feature = "serde")]
+     # {
+     # #[derive(Debug, Clone)]
+     # pub struct PositiveNumber(u32);
+     # impl TryFrom<u32> for PositiveNumber {
+     #     type Error = &'static str;
+     #     fn try_from(value: u32) -> Result<Self, Self::Error> {
+     #         if value > 0 { Ok(PositiveNumber(value)) }
+     #         else { Err("number must be positive") }
+     #     }
+     # }
+     # impl std::str::FromStr for PositiveNumber {
+     #     type Err = String;
+     #     fn from_str(s: &str) -> Result<Self, Self::Err> {
+     #         let value: u32 = s.parse().map_err(|e| format!("{}", e))?;
+     #         PositiveNumber::try_from(value).map_err(|e| e.to_string())
+     #     }
+     # }
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct Config {
+         // Vec field - deserializes Vec<u32>, converts each element
+         #[conf(repeat, long, serde(try_from = "u32"))]
+         pub counts: Vec<PositiveNumber>,
+     }
+     # }
+     ```
 
    * <a name="repeat-serde-skip"></a> `skip` (no arguments)
 
@@ -854,6 +973,8 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
      If used, then instead of asking `serde` to deserialize `Vec<T>`, `serde` will deserialize a `Vec<String>`,
      and then the `value_parser` will convert each string to `T`. The default `value_parser` is `FromStr`.
+
+     Mutually exclusive with `deserialize_with` and `try_from`.
 
 #### Notes
 
@@ -956,6 +1077,20 @@ and you can customize this if another choice of delimiter is more appropriate.
 
      Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
+   * <a name="flatten-serde-try-from"></a> `try_from` (type string argument)
+
+     example:
+     ```rust ignore
+     #[conf(flatten, serde(try_from = "U"))]
+     t: T,
+     ```
+
+     Similar to [`#[serde(try_from)]`](https://serde.rs/container-attrs.html#try_from), deserializes an intermediate type and then converts to the target type using `TryFrom::try_from`.
+
+     This can be useful when `T` implements `Conf` but another type `U` more easily represents the schema you want to use in `serde`. `TryFrom` then bridges the gap. This can be less complex than using `deserialize_with`.
+
+     This attribute is mutually exclusive with `serde(flatten)`.
+
    * <a name="flatten-serde-skip"></a> `skip` (no arguments)
 
      example: `#[conf(flatten, serde(skip))]`
@@ -969,7 +1104,7 @@ and you can customize this if another choice of delimiter is more appropriate.
      Similar to [`#[serde(flatten)]`](https://serde.rs/attr-flatten.html), the fields of the child struct are inlined into the parent during serde deserialization.
      Without this attribute, the child struct is expected to appear as a nested object in the serde document.
      With this attribute, all fields from the child appear at the same level as the parent's fields.
-     
+
      **Note**: `conf`'s implementation of `serde(flatten)` doesn't have the same limitations as stock `serde(flatten)` --
      `deny-unknown-fields` works fine (and is on by default), there is no ["internal buffering"](https://github.com/serde-rs/serde/issues/2186#issue-1163413259),
      and it works with any number of flattened or nested flattened fields.
