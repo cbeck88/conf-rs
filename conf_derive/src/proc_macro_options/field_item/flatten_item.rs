@@ -55,15 +55,14 @@ impl FlattenSerdeItem {
                         meta.parse_nested_meta(|nested| {
                             if nested.path.is_ident("prefix") {
                                 // Check if user provided a custom prefix string
-                                let prefix = if let Some(lit) =
-                                    parse_optional_value::<LitStr>(nested)?
-                                {
-                                    // User-specified prefix, use as-is
-                                    lit.value()
-                                } else {
-                                    // Generate prefix from field name: snake_case + underscore
-                                    format!("{}_", field_name.to_string().to_snake_case())
-                                };
+                                let prefix =
+                                    if let Some(lit) = parse_optional_value::<LitStr>(nested)? {
+                                        // User-specified prefix, use as-is
+                                        lit.value()
+                                    } else {
+                                        // Generate prefix from field name: snake_case + underscore
+                                        format!("{}_", field_name.to_string().to_snake_case())
+                                    };
                                 result.flatten_prefix = Some(prefix);
                                 Ok(())
                             } else {
