@@ -847,3 +847,326 @@ fn test_error_message_in_three_level_nesting() {
         "Error should mention the invalid field: {err_str}"
     );
 }
+
+/// Edge case tests for flatten
+
+/// Flatten with default values
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct DefaultsLeafConfig {
+    #[arg(long, env, default_value = "localhost")]
+    pub host: String,
+    #[arg(long, env, default_value = "8080")]
+    pub port: u16,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct DefaultsParentConfig {
+    #[arg(long, env)]
+    pub name: String,
+    #[conf(flatten, serde(flatten))]
+    pub server: DefaultsLeafConfig,
+}
+
+#[test]
+fn test_flatten_with_defaults_all_defaulted() {
+    // Only provide required field, let defaults fill in the rest
+    let result = DefaultsParentConfig::conf_builder()
+        .args([".", "--name=myapp"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert_eq!(result.server.host, "localhost");
+    assert_eq!(result.server.port, 8080);
+}
+
+#[test]
+fn test_flatten_with_defaults_partial_override_from_json() {
+    // Override one default from JSON
+    let result = DefaultsParentConfig::conf_builder()
+        .args([".", "--name=myapp"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "host": "0.0.0.0"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.server.host, "0.0.0.0");
+    assert_eq!(result.server.port, 8080); // still default
+}
+
+#[test]
+fn test_flatten_with_defaults_override_from_args() {
+    // Override defaults from args
+    let result = DefaultsParentConfig::conf_builder()
+        .args([".", "--name=myapp", "--port=9090"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.server.host, "localhost"); // still default
+    assert_eq!(result.server.port, 9090);
+}
+
+#[test]
+fn test_flatten_with_defaults_args_shadow_json() {
+    // Args should shadow JSON even when defaults exist
+    let result = DefaultsParentConfig::conf_builder()
+        .args([".", "--name=myapp", "--host=from_args"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "host": "from_json",
+                "port": 3000
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.server.host, "from_args");
+    assert_eq!(result.server.port, 3000);
+}
+
+/// Flatten with value_parser
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct ValueParserLeafConfig {
+    #[arg(long, env, value_parser = |s: &str| s.parse::<u32>().map(|n| n * 2))]
+    pub doubled_value: u32,
+    #[arg(long, env)]
+    pub normal_value: String,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct ValueParserParentConfig {
+    #[arg(long, env)]
+    pub name: String,
+    #[conf(flatten, serde(flatten))]
+    pub leaf: ValueParserLeafConfig,
+}
+
+#[test]
+fn test_flatten_with_value_parser_from_args() {
+    // value_parser should apply when coming from args
+    let result = ValueParserParentConfig::conf_builder()
+        .args([".", "--name=app", "--doubled-value=5", "--normal-value=test"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "app");
+    assert_eq!(result.leaf.doubled_value, 10); // 5 * 2
+    assert_eq!(result.leaf.normal_value, "test");
+}
+
+#[test]
+fn test_flatten_with_value_parser_from_env() {
+    // value_parser should apply when coming from env
+    let result = ValueParserParentConfig::conf_builder()
+        .args([".", "--name=app", "--normal-value=test"])
+        .env([("DOUBLED_VALUE", "7")])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.leaf.doubled_value, 14); // 7 * 2
+}
+
+#[test]
+fn test_flatten_with_value_parser_from_json() {
+    // JSON values should NOT go through value_parser (they're already the target type)
+    let result = ValueParserParentConfig::conf_builder()
+        .args([".", "--name=app"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "doubled_value": 100,
+                "normal_value": "from_json"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.leaf.doubled_value, 100); // NOT doubled, JSON is already u32
+    assert_eq!(result.leaf.normal_value, "from_json");
+}
+
+#[test]
+fn test_flatten_with_value_parser_args_shadow_json() {
+    // When args shadow JSON, value_parser should apply to the arg value
+    let result = ValueParserParentConfig::conf_builder()
+        .args([".", "--name=app", "--doubled-value=3", "--normal-value=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "doubled_value": 100,
+                "normal_value": "from_json"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.leaf.doubled_value, 6); // 3 * 2 from args, not 100 from JSON
+    assert_eq!(result.leaf.normal_value, "test");
+}
+
+/// Flatten combined with subcommands in the same struct
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct CommonOptions {
+    #[arg(long, env)]
+    pub verbose: bool,
+    #[arg(long, env, default_value = "info")]
+    pub log_level: String,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct ServeCommand {
+    #[arg(long, env)]
+    pub port: u16,
+    #[arg(long, env, default_value = "0.0.0.0")]
+    pub bind: String,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct BuildCommand {
+    #[arg(long, env)]
+    pub output: String,
+    #[arg(long, env)]
+    pub release: bool,
+}
+
+#[derive(conf::Subcommands, Debug)]
+#[conf(serde)]
+pub enum AppSubcommand {
+    Serve(ServeCommand),
+    Build(BuildCommand),
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct AppWithSubcommands {
+    #[arg(long, env)]
+    pub config_file: Option<String>,
+    #[conf(flatten, serde(flatten))]
+    pub common: CommonOptions,
+    #[conf(subcommands)]
+    pub command: AppSubcommand,
+}
+
+#[test]
+fn test_flatten_with_subcommand_serve() {
+    let result = AppWithSubcommands::conf_builder()
+        .args([".", "serve", "--port=8080"])
+        .env([("VERBOSE", "true")])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert!(result.common.verbose);
+    assert_eq!(result.common.log_level, "info");
+    match result.command {
+        AppSubcommand::Serve(cmd) => {
+            assert_eq!(cmd.port, 8080);
+            assert_eq!(cmd.bind, "0.0.0.0");
+        }
+        _ => panic!("Expected Serve command"),
+    }
+}
+
+#[test]
+fn test_flatten_with_subcommand_build() {
+    let result = AppWithSubcommands::conf_builder()
+        .args([".", "build", "--output=dist", "--release"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "verbose": false,
+                "log_level": "debug"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert!(!result.common.verbose);
+    assert_eq!(result.common.log_level, "debug");
+    match result.command {
+        AppSubcommand::Build(cmd) => {
+            assert_eq!(cmd.output, "dist");
+            assert!(cmd.release);
+        }
+        _ => panic!("Expected Build command"),
+    }
+}
+
+#[test]
+fn test_flatten_with_subcommand_common_from_json() {
+    // Common flattened options from JSON, subcommand options from args
+    // Note: subcommand-specific options (bind) must come from args/env, not top-level JSON
+    let result = AppWithSubcommands::conf_builder()
+        .args([
+            ".",
+            "--config-file=app.toml",
+            "serve",
+            "--port=3000",
+            "--bind=127.0.0.1",
+        ])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "verbose": true,
+                "log_level": "warn"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.config_file, Some("app.toml".to_string()));
+    assert!(result.common.verbose);
+    assert_eq!(result.common.log_level, "warn");
+    match result.command {
+        AppSubcommand::Serve(cmd) => {
+            assert_eq!(cmd.port, 3000);
+            assert_eq!(cmd.bind, "127.0.0.1");
+        }
+        _ => panic!("Expected Serve command"),
+    }
+}
+
+#[test]
+fn test_flatten_with_subcommand_args_shadow_flattened_json() {
+    // Args should shadow flattened JSON values
+    let result = AppWithSubcommands::conf_builder()
+        .args([".", "--verbose", "--log-level=error", "build", "--output=out"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "verbose": false,
+                "log_level": "info"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert!(result.common.verbose); // from args
+    assert_eq!(result.common.log_level, "error"); // from args
+}
