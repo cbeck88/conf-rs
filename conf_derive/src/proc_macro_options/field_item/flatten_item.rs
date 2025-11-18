@@ -1,6 +1,6 @@
 use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
-use heck::{ToKebabCase, ToShoutySnakeCase};
+use heck::{ToKebabCase, ToShoutySnakeCase, ToSnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
@@ -15,17 +15,20 @@ pub struct FlattenSerdeItem {
     pub aliases: Vec<LitStr>,
     pub skip: bool,
     pub flatten: bool,
+    /// If flatten(prefix) is used, this is the prefix string (snake_case field name + underscore)
+    pub flatten_prefix: Option<String>,
     pub try_from: Option<Type>,
     span: Span,
 }
 
 impl FlattenSerdeItem {
-    pub fn new(meta: ParseNestedMeta<'_>) -> Result<Self, Error> {
+    pub fn new(meta: ParseNestedMeta<'_>, field_name: &Ident) -> Result<Self, Error> {
         let mut result = Self {
             rename: None,
             aliases: Vec::new(),
             skip: false,
             flatten: false,
+            flatten_prefix: None,
             try_from: None,
             span: meta.input.span(),
         };
@@ -47,6 +50,20 @@ impl FlattenSerdeItem {
                     Ok(())
                 } else if path.is_ident("flatten") {
                     result.flatten = true;
+                    // Check for nested (prefix)
+                    if meta.input.peek(token::Paren) {
+                        meta.parse_nested_meta(|nested| {
+                            if nested.path.is_ident("prefix") {
+                                // Generate prefix from field name: snake_case + underscore
+                                let prefix =
+                                    format!("{}_", field_name.to_string().to_snake_case());
+                                result.flatten_prefix = Some(prefix);
+                                Ok(())
+                            } else {
+                                Err(nested.error("unrecognized conf(serde(flatten(...))) option"))
+                            }
+                        })?;
+                    }
                     Ok(())
                 } else if path.is_ident("try_from") {
                     set_once(
@@ -175,7 +192,11 @@ impl FlattenItem {
                             Some(parse_required_value::<LitCharArray>(meta)?),
                         )
                     } else if path.is_ident("serde") {
-                        set_once(&path, &mut result.serde, Some(FlattenSerdeItem::new(meta)?))
+                        set_once(
+                            &path,
+                            &mut result.serde,
+                            Some(FlattenSerdeItem::new(meta, &result.field_name)?),
+                        )
                     } else {
                         Err(meta.error("unrecognized conf flatten option"))
                     }
@@ -227,6 +248,12 @@ impl FlattenItem {
         self.serde
             .as_ref()
             .and_then(|serde| serde.try_from.clone())
+    }
+
+    fn get_serde_flatten_prefix(&self) -> Option<&str> {
+        self.serde
+            .as_ref()
+            .and_then(|serde| serde.flatten_prefix.as_deref())
     }
 
     // Body of a routine which extends #program_options_ident to hold any program options associated
@@ -479,25 +506,58 @@ impl FlattenItem {
         if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
             let key = Ident::new("key__", Span::call_site());
 
-            let state_machine_type: Type =
-                parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
-            let keys_expr: TokenStream = quote! { #key if #state_machine_type::wants_key(#key) };
+            // Check if we have a prefix to strip
+            if let Some(prefix) = self.get_serde_flatten_prefix() {
+                // With prefix: use PrefixStrippingStateMachine
+                // The state machine type wraps the inner type's ISM
+                let inner_ism_type: Type =
+                    parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
+                let state_machine_type: Type = parse_quote! {
+                    ::conf::PrefixStrippingStateMachine<'static, #inner_ism_type>
+                };
 
-            let match_expr = quote! {
-                {
-                    let __m__ = #field_name.take().unwrap_or_else(|| #ctxt.for_flattened(#id_prefix).into());
-                    // Pass a context scoped to this flattened field so child can look up options correctly
-                    #field_name = Some(__m__.next(#key, #nvp));
-                },
-            };
+                // Key matching: check prefix and then inner wants_key on stripped key
+                let keys_expr: TokenStream = quote! {
+                    #key if #key.starts_with(#prefix) && #inner_ism_type::wants_key(&#key[#prefix.len()..])
+                };
 
-            Ok(SerdeStrategy {
-                state_machine_type,
-                match_expr,
-                serde_keys: SerdeKeys::Expr(keys_expr),
-                // Scoped context for finalize so child can look up options with correct prefix
-                needs_finalizer: true,
-            })
+                let match_expr = quote! {
+                    {
+                        let __m__ = #field_name.take().unwrap_or_else(|| {
+                            let __inner__ = #ctxt.for_flattened(#id_prefix).into();
+                            ::conf::PrefixStrippingStateMachine::new(#prefix, __inner__)
+                        });
+                        // Pass a context scoped to this flattened field so child can look up options correctly
+                        #field_name = Some(__m__.next(#key, #nvp));
+                    },
+                };
+
+                Ok(SerdeStrategy {
+                    state_machine_type: Some(state_machine_type),
+                    match_expr,
+                    serde_keys: SerdeKeys::Expr(keys_expr),
+                })
+            } else {
+                // Without prefix: original behavior
+                let state_machine_type: Type =
+                    parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
+                let keys_expr: TokenStream =
+                    quote! { #key if #state_machine_type::wants_key(#key) };
+
+                let match_expr = quote! {
+                    {
+                        let __m__ = #field_name.take().unwrap_or_else(|| #ctxt.for_flattened(#id_prefix).into());
+                        // Pass a context scoped to this flattened field so child can look up options correctly
+                        #field_name = Some(__m__.next(#key, #nvp));
+                    },
+                };
+
+                Ok(SerdeStrategy {
+                    state_machine_type: Some(state_machine_type),
+                    match_expr,
+                    serde_keys: SerdeKeys::Expr(keys_expr),
+                })
+            }
         } else if let Some(try_from_type) = self.get_serde_try_from() {
             // When try_from is set, deserialize the try_from type using ConfSerdeSeed
             // (so CLI/env shadowing works), then convert to the target type via TryFrom.
@@ -557,10 +617,9 @@ impl FlattenItem {
             all_names.extend(serde_aliases);
 
             Ok(SerdeStrategy {
-                state_machine_type: parse_quote! { Option<#field_type> },
+                state_machine_type: None,
                 match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
-                needs_finalizer: false,
             })
         } else {
             // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means
@@ -610,10 +669,9 @@ impl FlattenItem {
             all_names.extend(serde_aliases);
 
             Ok(SerdeStrategy {
-                state_machine_type: parse_quote! { Option<#field_type> },
+                state_machine_type: None,
                 match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
-                needs_finalizer: false,
             })
         }
     }

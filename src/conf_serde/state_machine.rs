@@ -149,3 +149,69 @@ where
         })
     }
 }
+
+/// A wrapper around an [`InitializationStateMachine`] that strips a prefix from keys.
+///
+/// This is used to implement `serde(flatten(prefix))`, where keys in the serde document
+/// have a common prefix (e.g., `database_host`, `database_port`) that should be stripped
+/// before being passed to the inner state machine.
+///
+/// # Example
+///
+/// If you have a `DatabaseConfig` struct with fields `host` and `port`, and you use
+/// `#[conf(flatten, serde(flatten(prefix)))]`, then the JSON keys would be:
+/// - `database_host` (stripped to `host`)
+/// - `database_port` (stripped to `port`)
+///
+/// Where `database_` is the snake_case of the field name plus an underscore.
+#[doc(hidden)]
+pub struct PrefixStrippingStateMachine<'a, M> {
+    prefix: &'a str,
+    inner: M,
+}
+
+impl<'a, M> PrefixStrippingStateMachine<'a, M> {
+    /// Create a new prefix-stripping wrapper around an inner state machine.
+    ///
+    /// The `prefix` should include the trailing underscore (e.g., `"database_"`).
+    pub fn new(prefix: &'a str, inner: M) -> Self {
+        Self { prefix, inner }
+    }
+}
+
+impl<'de, 'a, M> InitializationStateMachine<'de> for PrefixStrippingStateMachine<'a, M>
+where
+    M: InitializationStateMachine<'de>,
+{
+    type Value = M::Value;
+
+    fn wants_key(key: &str) -> bool {
+        // We can't check the prefix here since this is a static method.
+        // The caller must ensure that keys are only passed if they start with the prefix.
+        // We always return false here since we can't do a proper check.
+        //
+        // The actual filtering happens in the generated code which uses
+        // starts_with to check the prefix before calling next().
+        let _ = key;
+        false
+    }
+
+    fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self
+    where
+        NVP: NextValueProducer<'de>,
+    {
+        // Strip the prefix and pass to inner machine
+        let stripped_key = key
+            .strip_prefix(self.prefix)
+            .unwrap_or_else(|| panic!("key '{}' does not start with prefix '{}'", key, self.prefix));
+
+        Self {
+            prefix: self.prefix,
+            inner: self.inner.next(stripped_key, next_value_producer),
+        }
+    }
+
+    fn finalize(self) -> Result<Self::Value, Vec<InnerError>> {
+        self.inner.finalize()
+    }
+}

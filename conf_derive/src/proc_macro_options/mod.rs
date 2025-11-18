@@ -9,7 +9,7 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, parse_quote};
 
 mod field_item;
 use field_item::{FieldItem, SerdeKeys, SerdeStrategy};
@@ -444,9 +444,9 @@ impl GenConfStruct {
             .collect::<Result<Vec<SerdeStrategy>, _>>()?;
 
         // The machine has member variables of the form #field_name: Option<#field_machine_type>
-        let field_machine_types: Vec<&Type> = serde_strategies
-            .iter()
-            .map(|s| &s.state_machine_type)
+        let field_machine_types: Vec<Type> = self.fields.iter().zip(serde_strategies
+            .iter())
+            .map(|(field, strat)| strat.state_machine_type.clone().unwrap_or_else(|| { let field_type = field.get_field_type(); parse_quote!{ Option<#field_type> }}))
             .collect();
 
         // These match arms are used to implement `wants_key`
@@ -490,7 +490,7 @@ impl GenConfStruct {
             .iter()
             .zip(serde_strategies.iter())
             .filter_map(|(n, s)| {
-                if s.needs_finalizer {
+                if s.state_machine_type.is_some() {
                     Some(quote! {
                         let #n = #n.map(|m| match m.finalize() {
                             Ok(val) => Some(val),

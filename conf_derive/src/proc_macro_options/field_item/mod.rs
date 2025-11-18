@@ -4,8 +4,7 @@ use crate::util::type_is_bool;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Expr, Field, Ident, Lifetime, LitStr, Meta, Path, Token, Type, parse_quote,
-    punctuated::Punctuated,
+    Error, Expr, Field, Ident, Lifetime, LitStr, Meta, Path, Token, Type, punctuated::Punctuated,
 };
 
 mod flag_item;
@@ -79,26 +78,24 @@ pub enum ExprRequest {
 /// The SerdeStrategy carries all this data in one collection, to help ensure that it is computed
 /// in a cohesive way.
 pub struct SerdeStrategy {
-    /// The state machine type. Typically just Option<#field_type>, even for serde(skip).
-    pub state_machine_type: Type,
+    /// The state machine type. If omitted, then it falls back to Option<#field_type>,
+    /// which is the correct state machine in simple cases.
+    /// When present, `InitializationStateMachine::finalize` will be called on the state machine type
+    /// at the end of the serde walk.
+    pub state_machine_type: Option<Type>,
     /// The match expr to use
     pub match_expr: TokenStream,
     /// The serde keys. This is used to generate the match pattern.
     pub serde_keys: SerdeKeys,
-    /// Context expression to use when calling `InitializationStateMachine::finalize`.
-    /// If Some, finalize will be called with this context. If None, no finalize call is made.
-    pub needs_finalizer: bool,
 }
 
 impl SerdeStrategy {
     /// Used for serde(skip) fields
-    pub fn skip(field: &FieldItem) -> Self {
-        let ty = field.get_field_type();
+    pub fn skip() -> Self {
         Self {
-            state_machine_type: parse_quote! { Option<#ty> },
+            state_machine_type: None,
             match_expr: quote! {},
             serde_keys: SerdeKeys::default(),
-            needs_finalizer: false,
         }
     }
 }
@@ -471,7 +468,7 @@ impl FieldItem {
         errors_ident: &Ident,
     ) -> Result<SerdeStrategy, Error> {
         if self.get_serde_skip() {
-            return Ok(SerdeStrategy::skip(self));
+            return Ok(SerdeStrategy::skip());
         }
         match self {
             Self::Flag(_) | Self::Parameter(_) | Self::Repeat(_) => {
@@ -580,12 +577,10 @@ impl FieldItem {
         let mut all_names = vec![serde_name_str];
         all_names.extend(serde_aliases);
 
-        let field_type = self.get_field_type();
         Ok(SerdeStrategy {
-            state_machine_type: parse_quote! { Option<#field_type> },
+            state_machine_type: None,
             match_expr,
             serde_keys: SerdeKeys::Lit(all_names),
-            needs_finalizer: false,
         })
     }
 

@@ -3,8 +3,7 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Field, Ident, Lifetime, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned,
-    token,
+    Error, Field, Ident, Lifetime, Type, meta::ParseNestedMeta, spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Subcommands kind
@@ -190,8 +189,6 @@ impl SubcommandsItem {
         errors_ident: &Ident,
     ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
-        let field_type = self.get_field_type();
-
         let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
 
         let val_expr = if self.is_optional_type.is_some() {
@@ -249,10 +246,9 @@ impl SubcommandsItem {
         // We don't know the SERDE_NAMES as string literals in this proc_macro, they are only in the
         // proc_macro invocation for the enum.
         Ok(SerdeStrategy {
-            state_machine_type: parse_quote! { Option<#field_type> },
+            state_machine_type: None,
             serde_keys: SerdeKeys::Expr(match_pattern),
             match_expr,
-            needs_finalizer: false,
         })
     }
 
