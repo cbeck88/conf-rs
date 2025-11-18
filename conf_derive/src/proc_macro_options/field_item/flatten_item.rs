@@ -55,8 +55,7 @@ impl FlattenSerdeItem {
                         meta.parse_nested_meta(|nested| {
                             if nested.path.is_ident("prefix") {
                                 // Generate prefix from field name: snake_case + underscore
-                                let prefix =
-                                    format!("{}_", field_name.to_string().to_snake_case());
+                                let prefix = format!("{}_", field_name.to_string().to_snake_case());
                                 result.flatten_prefix = Some(prefix);
                                 Ok(())
                             } else {
@@ -245,9 +244,7 @@ impl FlattenItem {
     }
 
     fn get_serde_try_from(&self) -> Option<Type> {
-        self.serde
-            .as_ref()
-            .and_then(|serde| serde.try_from.clone())
+        self.serde.as_ref().and_then(|serde| serde.try_from.clone())
     }
 
     fn get_serde_flatten_prefix(&self) -> Option<&str> {
@@ -547,7 +544,6 @@ impl FlattenItem {
                 match_expr,
                 serde_keys: SerdeKeys::Expr(keys_expr),
             })
-
         } else if let Some(try_from_type) = self.get_serde_try_from() {
             // When try_from is set, deserialize the try_from type using ConfSerdeSeed
             // (so CLI/env shadowing works), then convert to the target type via TryFrom.

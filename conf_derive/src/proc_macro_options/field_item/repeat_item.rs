@@ -329,11 +329,7 @@ impl RepeatItem {
 
     pub fn get_serde_type(&self) -> Type {
         // Check for try_from first
-        if let Some(try_from_type) = self
-            .serde
-            .as_ref()
-            .and_then(|serde| serde.try_from.clone())
-        {
+        if let Some(try_from_type) = self.serde.as_ref().and_then(|serde| serde.try_from.clone()) {
             // For Vec<T> fields with try_from = "U", deserialize Vec<U>
             // and convert each element via TryFrom
             return parse_quote! { ::std::vec::Vec<#try_from_type> };
@@ -353,9 +349,7 @@ impl RepeatItem {
     }
 
     pub fn get_serde_try_from(&self) -> Option<Type> {
-        self.serde
-            .as_ref()
-            .and_then(|serde| serde.try_from.clone())
+        self.serde.as_ref().and_then(|serde| serde.try_from.clone())
     }
 
     pub fn get_serde_skip(&self) -> bool {

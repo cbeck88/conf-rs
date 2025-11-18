@@ -444,14 +444,27 @@ impl GenConfStruct {
             .collect::<Result<Vec<SerdeStrategy>, _>>()?;
 
         // The machine has member variables of the form #field_name: #field_machine_type
-        let field_machine_types: Vec<Type> = self.fields.iter().zip(serde_strategies
-            .iter())
-            .map(|(field, strat)| strat.state_machine_type.clone().unwrap_or_else(|| { let field_type = field.get_field_type(); parse_quote!{ Option<Option<#field_type>> }}))
+        let field_machine_types: Vec<Type> = self
+            .fields
+            .iter()
+            .zip(serde_strategies.iter())
+            .map(|(field, strat)| {
+                strat.state_machine_type.clone().unwrap_or_else(|| {
+                    let field_type = field.get_field_type();
+                    parse_quote! { Option<Option<#field_type>> }
+                })
+            })
             .collect();
 
         // The machines are initialized by these initializer expressions.
-        let field_machine_initializers: Vec<TokenStream> = serde_strategies.iter()
-            .map(|strat| strat.state_machine_init.clone().unwrap_or_else(|| quote!{ None }))
+        let field_machine_initializers: Vec<TokenStream> = serde_strategies
+            .iter()
+            .map(|strat| {
+                strat
+                    .state_machine_init
+                    .clone()
+                    .unwrap_or_else(|| quote! { None })
+            })
             .collect();
 
         // These match arms are used to implement `wants_key`
@@ -494,7 +507,8 @@ impl GenConfStruct {
         // For fields without an actual state machine, we include expressions that initialize things
         // without serde, in case serde traversal doesn't ever produce this field.
         let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
-        let finalizer_statements: Vec<TokenStream> = self.fields
+        let finalizer_statements: Vec<TokenStream> = self
+            .fields
             .iter()
             .zip(serde_strategies.iter())
             .map(|(field, strat)| {
@@ -507,10 +521,11 @@ impl GenConfStruct {
                         };
                     }
                 } else {
-                    let fallback_initializer = field.gen_initialize_from_conf_context_and_push_errors(
-                        &conf_context_ident,
-                        &errors_ident,
-                    )?;
+                    let fallback_initializer = field
+                        .gen_initialize_from_conf_context_and_push_errors(
+                            &conf_context_ident,
+                            &errors_ident,
+                        )?;
                     quote! {
                         let #n = #n.unwrap_or_else(|| #fallback_initializer);
                     }

@@ -77,12 +77,7 @@ fn test_serde_flatten_prefix_mixed_sources() {
 fn test_serde_flatten_prefix_shadowing() {
     // Args shadow JSON values for flattened fields (args don't have prefix)
     let result = AppConfig::conf_builder()
-        .args([
-            ".",
-            "--app-name=myapp",
-            "--host=from_args",
-            "--port=9999",
-        ])
+        .args([".", "--app-name=myapp", "--host=from_args", "--port=9999"])
         .env([("DEBUG", "false")])
         .doc(
             "config.json",

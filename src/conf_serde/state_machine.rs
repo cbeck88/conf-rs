@@ -198,9 +198,9 @@ where
         NVP: NextValueProducer<'de>,
     {
         // Strip the prefix and pass to inner machine
-        let stripped_key = key
-            .strip_prefix(self.prefix)
-            .unwrap_or_else(|| panic!("key '{}' does not start with prefix '{}'", key, self.prefix));
+        let stripped_key = key.strip_prefix(self.prefix).unwrap_or_else(|| {
+            panic!("key '{}' does not start with prefix '{}'", key, self.prefix)
+        });
 
         Self {
             prefix: self.prefix,

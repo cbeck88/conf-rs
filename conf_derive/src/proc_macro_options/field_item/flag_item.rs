@@ -213,11 +213,7 @@ impl FlagItem {
 
     pub fn get_serde_type(&self) -> Type {
         // Check for try_from first
-        if let Some(try_from_type) = self
-            .serde
-            .as_ref()
-            .and_then(|serde| serde.try_from.clone())
-        {
+        if let Some(try_from_type) = self.serde.as_ref().and_then(|serde| serde.try_from.clone()) {
             return try_from_type;
         }
 
@@ -225,9 +221,7 @@ impl FlagItem {
     }
 
     pub fn get_serde_try_from(&self) -> Option<Type> {
-        self.serde
-            .as_ref()
-            .and_then(|serde| serde.try_from.clone())
+        self.serde.as_ref().and_then(|serde| serde.try_from.clone())
     }
 
     pub fn get_serde_skip(&self) -> bool {

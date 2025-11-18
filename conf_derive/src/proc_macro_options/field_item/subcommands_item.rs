@@ -2,9 +2,7 @@ use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{
-    Error, Field, Ident, Lifetime, Type, meta::ParseNestedMeta, spanned::Spanned, token,
-};
+use syn::{Error, Field, Ident, Lifetime, Type, meta::ParseNestedMeta, spanned::Spanned, token};
 
 /// #[conf(serde(...))] options listed on a field of Subcommands kind
 pub struct SubcommandsSerdeItem {

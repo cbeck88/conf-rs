@@ -77,7 +77,11 @@ fn test_basic_try_from_failure() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("number must be positive"), "error: {}", err_str);
+    assert!(
+        err_str.contains("number must be positive"),
+        "error: {}",
+        err_str
+    );
 }
 
 // A type that converts from string to number
@@ -182,7 +186,11 @@ fn test_optional_try_from_conversion_failure() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("number must be positive"), "error: {}", err_str);
+    assert!(
+        err_str.contains("number must be positive"),
+        "error: {}",
+        err_str
+    );
 }
 
 // Test try_from with Vec (repeat) fields
@@ -230,7 +238,11 @@ fn test_vec_try_from_conversion_failure() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("number must be positive"), "error: {}", err_str);
+    assert!(
+        err_str.contains("number must be positive"),
+        "error: {}",
+        err_str
+    );
 }
 
 #[test]
@@ -269,7 +281,10 @@ fn test_try_from_in_flattened_struct() {
     let result = ParentWithFlatten::conf_builder()
         .args(["test"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"name": "test", "config": {"threshold": 100}}))
+        .doc(
+            "config.json",
+            json!({"name": "test", "config": {"threshold": 100}}),
+        )
         .try_parse()
         .unwrap();
     assert_eq!(result.name, "test");
@@ -281,7 +296,10 @@ fn test_try_from_in_flattened_struct_failure() {
     let result = ParentWithFlatten::conf_builder()
         .args(["test"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"name": "test", "config": {"threshold": 0}}))
+        .doc(
+            "config.json",
+            json!({"name": "test", "config": {"threshold": 0}}),
+        )
         .try_parse();
     assert!(result.is_err());
 }
@@ -392,7 +410,11 @@ fn test_full_path_try_from_with_formatted_error() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("must be non-negative"), "error: {}", err_str);
+    assert!(
+        err_str.contains("must be non-negative"),
+        "error: {}",
+        err_str
+    );
     assert!(err_str.contains("-5"), "error: {}", err_str);
 }
 
@@ -451,7 +473,10 @@ fn test_flatten_try_from_basic() {
     let result = ParentWithFlattenTryFrom::conf_builder()
         .args(["test", "--flag"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"config": {"value": 42, "name": "test"}}))
+        .doc(
+            "config.json",
+            json!({"config": {"value": 42, "name": "test"}}),
+        )
         .try_parse()
         .unwrap();
     assert!(result.flag);
@@ -466,7 +491,10 @@ fn test_flatten_try_from_cli_overrides_serde() {
     let result = ParentWithFlattenTryFrom::conf_builder()
         .args(["test", "--flag", "--value", "99", "--name", "from_cli"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"config": {"value": 42, "name": "from_json"}}))
+        .doc(
+            "config.json",
+            json!({"config": {"value": 42, "name": "from_json"}}),
+        )
         .try_parse()
         .unwrap();
     assert!(result.flag);
@@ -481,7 +509,10 @@ fn test_flatten_try_from_partial_cli_override() {
     let result = ParentWithFlattenTryFrom::conf_builder()
         .args(["test", "--flag", "--value", "77"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"config": {"value": 42, "name": "from_json"}}))
+        .doc(
+            "config.json",
+            json!({"config": {"value": 42, "name": "from_json"}}),
+        )
         .try_parse()
         .unwrap();
     assert!(result.flag);
@@ -494,12 +525,19 @@ fn test_flatten_try_from_validation_failure() {
     let result = ParentWithFlattenTryFrom::conf_builder()
         .args(["test", "--flag"])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"config": {"value": -5, "name": "test"}}))
+        .doc(
+            "config.json",
+            json!({"config": {"value": -5, "name": "test"}}),
+        )
         .try_parse();
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("must be non-negative"), "error: {}", err_str);
+    assert!(
+        err_str.contains("must be non-negative"),
+        "error: {}",
+        err_str
+    );
 }
 
 #[test]
