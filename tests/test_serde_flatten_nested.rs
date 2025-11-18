@@ -702,3 +702,148 @@ fn test_partial_json_at_each_level() {
     assert_eq!(result.database.pool.credentials.username, "user");
     assert_eq!(result.database.pool.credentials.password, "secret");
 }
+
+/// Tests for error message quality in deeply nested structures
+/// These tests verify that error messages include enough context to locate problems
+
+#[test]
+fn test_error_message_invalid_type_in_nested_field() {
+    // Invalid type for a deeply nested field (max_connections is u32, not string)
+    let err = RootConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "env": "prod",
+                "db_host": "localhost",
+                "db_port": 5432,
+                "min_connections": 1,
+                "max_connections": "not_a_number",
+                "username": "user",
+                "password": "pass"
+            }),
+        )
+        .try_parse()
+        .unwrap_err();
+
+    let err_str = err.to_string();
+    // The error should mention max_connections and ideally indicate its location
+    assert!(
+        err_str.contains("max_connections"),
+        "Error should mention the field name: {err_str}"
+    );
+}
+
+#[test]
+fn test_error_message_missing_nested_required_field() {
+    // Missing a required field deep in the hierarchy (password)
+    let err = RootConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "env": "prod",
+                "db_host": "localhost",
+                "db_port": 5432,
+                "min_connections": 1,
+                "max_connections": 10,
+                "username": "user"
+                // password is missing
+            }),
+        )
+        .try_parse()
+        .unwrap_err();
+
+    let err_str = err.to_string();
+    // The error should mention password
+    assert!(
+        err_str.contains("password"),
+        "Error should mention the missing field: {err_str}"
+    );
+}
+
+#[test]
+fn test_error_message_unknown_field_in_nested() {
+    // Unknown field at the deepest level
+    assert_error_contains_text!(
+        RootConfig::conf_builder()
+            .args(["."])
+            .env::<&str, &str>([])
+            .doc(
+                "config.json",
+                json!({
+                    "env": "prod",
+                    "db_host": "localhost",
+                    "db_port": 5432,
+                    "min_connections": 1,
+                    "max_connections": 10,
+                    "username": "user",
+                    "password": "pass",
+                    "unknown_credential_field": "bad"
+                })
+            )
+            .try_parse(),
+        ["unknown field", "unknown_credential_field"]
+    );
+}
+
+#[test]
+fn test_error_message_multiple_errors_at_different_levels() {
+    // Multiple errors: invalid type at one level, missing field at another
+    let err = RootConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "env": "prod",
+                "db_host": "localhost",
+                "db_port": "not_a_port",  // invalid type at database level
+                "min_connections": 1,
+                "max_connections": 10,
+                "username": "user"
+                // password missing at credentials level
+            }),
+        )
+        .try_parse()
+        .unwrap_err();
+
+    let err_str = err.to_string();
+    // Should mention both problematic fields
+    assert!(
+        err_str.contains("db_port") || err_str.contains("port"),
+        "Error should mention db_port: {err_str}"
+    );
+    assert!(
+        err_str.contains("password"),
+        "Error should mention password: {err_str}"
+    );
+}
+
+#[test]
+fn test_error_message_in_three_level_nesting() {
+    // Using AppConfig (3 levels: App -> Service -> Connection)
+    let err = AppConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "app_name": "myapp",
+                "debug": true,
+                "timeout_ms": 1000,
+                "host": "localhost",
+                "port": "not_a_port"  // invalid at deepest level
+            }),
+        )
+        .try_parse()
+        .unwrap_err();
+
+    let err_str = err.to_string();
+    assert!(
+        err_str.contains("port"),
+        "Error should mention the invalid field: {err_str}"
+    );
+}
