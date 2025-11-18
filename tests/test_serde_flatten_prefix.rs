@@ -207,3 +207,85 @@ fn test_serde_flatten_prefix_unknown_field_rejected() {
 
     assert!(result.is_err());
 }
+
+/// Test with custom prefix string
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct CustomPrefixConfig {
+    #[arg(long, env)]
+    pub name: String,
+    #[conf(flatten, serde(flatten(prefix = "db.")))]
+    pub database: ServerConfig,
+}
+
+#[test]
+fn test_serde_flatten_custom_prefix() {
+    // Custom prefix "db." instead of auto-generated "database_"
+    let result = CustomPrefixConfig::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "db.host": "customhost",
+                "db.port": 9999
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert_eq!(result.database.host, "customhost");
+    assert_eq!(result.database.port, 9999);
+}
+
+#[test]
+fn test_serde_flatten_custom_prefix_cli_override() {
+    // CLI args override custom prefixed JSON values
+    let result = CustomPrefixConfig::conf_builder()
+        .args([".", "--name=test", "--host=from_cli"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "db.host": "from_json",
+                "db.port": 8080
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.database.host, "from_cli");
+    assert_eq!(result.database.port, 8080);
+}
+
+/// Test with empty prefix (fields at root level, like regular flatten)
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct EmptyPrefixConfig {
+    #[arg(long, env)]
+    pub name: String,
+    #[conf(flatten, serde(flatten(prefix = "")))]
+    pub server: ServerConfig,
+}
+
+#[test]
+fn test_serde_flatten_empty_prefix() {
+    // Empty prefix means fields are at root level
+    let result = EmptyPrefixConfig::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "host": "roothost",
+                "port": 7777
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert_eq!(result.server.host, "roothost");
+    assert_eq!(result.server.port, 7777);
+}
