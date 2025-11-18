@@ -92,7 +92,11 @@ fn test_three_levels_mixed_sources() {
 fn test_three_levels_args_shadow_json() {
     let result = AppConfig::conf_builder()
         .args([".", "--host=override", "--port=1234"])
-        .env([("APP_NAME", "env_app"), ("DEBUG", "true"), ("TIMEOUT_MS", "100")])
+        .env([
+            ("APP_NAME", "env_app"),
+            ("DEBUG", "true"),
+            ("TIMEOUT_MS", "100"),
+        ])
         .doc(
             "config.json",
             json!({
@@ -422,10 +426,16 @@ fn test_diamond_pattern_all_from_json() {
 
     assert_eq!(result.id, "diamond");
     assert_eq!(result.primary.primary_name, "primary");
-    assert_eq!(result.primary.endpoint.primary_url, "http://primary.example.com");
+    assert_eq!(
+        result.primary.endpoint.primary_url,
+        "http://primary.example.com"
+    );
     assert_eq!(result.primary.endpoint.primary_timeout, 1000);
     assert_eq!(result.secondary.secondary_name, "secondary");
-    assert_eq!(result.secondary.endpoint.secondary_url, "http://secondary.example.com");
+    assert_eq!(
+        result.secondary.endpoint.secondary_url,
+        "http://secondary.example.com"
+    );
     assert_eq!(result.secondary.endpoint.secondary_timeout, 2000);
 }
 
@@ -450,7 +460,10 @@ fn test_diamond_pattern_mixed_sources() {
     assert_eq!(result.primary.endpoint.primary_url, "from_args");
     assert_eq!(result.primary.endpoint.primary_timeout, 500);
     assert_eq!(result.secondary.secondary_name, "env_secondary");
-    assert_eq!(result.secondary.endpoint.secondary_url, "http://json.example.com");
+    assert_eq!(
+        result.secondary.endpoint.secondary_url,
+        "http://json.example.com"
+    );
     assert_eq!(result.secondary.endpoint.secondary_timeout, 9999);
 }
 
@@ -506,7 +519,10 @@ fn test_optional_fields_at_various_levels_all_present() {
     assert_eq!(result.middle.middle_required, "middle");
     assert_eq!(result.middle.middle_optional, Some(42));
     assert_eq!(result.middle.leaf.required_field, "leaf");
-    assert_eq!(result.middle.leaf.optional_field, Some("present".to_string()));
+    assert_eq!(
+        result.middle.leaf.optional_field,
+        Some("present".to_string())
+    );
 }
 
 #[test]
@@ -546,7 +562,10 @@ fn test_optional_fields_from_different_sources() {
         .unwrap();
 
     assert_eq!(result.middle.middle_optional, Some(99));
-    assert_eq!(result.middle.leaf.optional_field, Some("from_args".to_string()));
+    assert_eq!(
+        result.middle.leaf.optional_field,
+        Some("from_args".to_string())
+    );
 }
 
 /// Renames at different levels

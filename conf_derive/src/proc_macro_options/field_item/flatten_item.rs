@@ -5,7 +5,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
 use syn::{
-    Error, Expr, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
+    Error, Expr, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned,
+    token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -453,7 +454,8 @@ impl FlattenItem {
 
         if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
             let state_machine_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM };
-            let keys_expr: Expr = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::keys().iter().copied() };
+            let keys_expr: Expr =
+                parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::keys().iter().copied() };
 
             let match_arm = quote! {
                 key__ if <#inner_type as ::conf::ConfSerde>::ISM::keys().contains(&key__) => {
@@ -472,7 +474,6 @@ impl FlattenItem {
                 finalizer_context: Some(quote! { &#ctxt.for_flattened(#id_prefix) }),
             })
         } else {
-
             // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means
             // that our DeserializeSeed implementation never ran, since it never does that.
             // But it's possible that the MapAccess will fail before even getting to that point,

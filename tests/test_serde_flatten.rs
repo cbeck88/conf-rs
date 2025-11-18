@@ -80,7 +80,12 @@ fn test_serde_flatten_mixed_sources() {
 fn test_serde_flatten_shadowing() {
     // Args shadow JSON values for flattened fields
     let result = AppConfig::conf_builder()
-        .args([".", "--app-name=myapp", "--db-host=from_args", "--db-port=9999"])
+        .args([
+            ".",
+            "--app-name=myapp",
+            "--db-host=from_args",
+            "--db-port=9999",
+        ])
         .env([("DEBUG", "false")])
         .doc(
             "config.json",
@@ -101,7 +106,11 @@ fn test_serde_flatten_optional_field() {
     // Optional field in flattened struct not provided
     let result = AppConfig::conf_builder()
         .args([".", "--app-name=myapp"])
-        .env([("DEBUG", "false"), ("DB_HOST", "localhost"), ("DB_PORT", "5432")])
+        .env([
+            ("DEBUG", "false"),
+            ("DB_HOST", "localhost"),
+            ("DB_PORT", "5432"),
+        ])
         .doc("config.json", json!({}))
         .try_parse()
         .unwrap();
@@ -117,7 +126,11 @@ fn test_serde_flatten_unknown_field_detection() {
     assert_error_contains_text!(
         AppConfig::conf_builder()
             .args([".", "--app-name=myapp"])
-            .env([("DEBUG", "false"), ("DB_HOST", "localhost"), ("DB_PORT", "5432")])
+            .env([
+                ("DEBUG", "false"),
+                ("DB_HOST", "localhost"),
+                ("DB_PORT", "5432")
+            ])
             .doc(
                 "config.json",
                 json!({
