@@ -249,9 +249,9 @@ impl SubcommandsItem {
         Ok(SerdeStrategy {
             state_machine_type: parse_quote! { Option<#field_type> },
             match_arm,
-            has_finalizer: false,
             serde_keys: SerdeKeys::Expr(all_names_expr.clone()),
             serde_help_keys: SerdeKeys::Expr(all_names_expr),
+            finalizer_context: None,
         })
     }
 

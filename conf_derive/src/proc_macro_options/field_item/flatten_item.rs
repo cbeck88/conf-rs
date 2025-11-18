@@ -5,7 +5,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
 use syn::{
-    Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
+    Error, Expr, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -13,6 +13,7 @@ pub struct FlattenSerdeItem {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
     pub skip: bool,
+    pub flatten: bool,
     span: Span,
 }
 
@@ -22,6 +23,7 @@ impl FlattenSerdeItem {
             rename: None,
             aliases: Vec::new(),
             skip: false,
+            flatten: false,
             span: meta.input.span(),
         };
 
@@ -39,6 +41,9 @@ impl FlattenSerdeItem {
                     Ok(())
                 } else if path.is_ident("skip") {
                     result.skip = true;
+                    Ok(())
+                } else if path.is_ident("flatten") {
+                    result.flatten = true;
                     Ok(())
                 } else {
                     Err(meta.error("unrecognized conf(serde) option"))
@@ -446,67 +451,89 @@ impl FlattenItem {
             quote! { __val__ }
         };
 
-        // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means
-        // that our DeserializeSeed implementation never ran, since it never does that.
-        // But it's possible that the MapAccess will fail before even getting to that point,
-        // and then it could return a singular D::Error. So we should not unwrap such errors.
+        if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
+            let state_machine_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM };
+            let keys_expr: Expr = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::keys().iter().copied() };
 
-        // Build match pattern: "name" | "alias1" | "alias2" => { ... }
-        let match_pattern = if serde_aliases.is_empty() {
-            quote! { #serde_name_str }
+            let match_arm = quote! {
+                key__ if <#inner_type as ::conf::ConfSerde>::ISM::keys().contains(&key__) => {
+                    let __m__ = #field_name.take().unwrap_or_default();
+                    // Pass a context scoped to this flattened field so child can look up options correctly
+                    #field_name = Some(__m__.next(key__, #nvp, &#ctxt.for_flattened(#id_prefix)));
+                },
+            };
+
+            Ok(SerdeStrategy {
+                state_machine_type,
+                match_arm,
+                serde_keys: SerdeKeys::Expr(keys_expr.clone()),
+                serde_help_keys: SerdeKeys::Expr(keys_expr.clone()),
+                // Scoped context for finalize so child can look up options with correct prefix
+                finalizer_context: Some(quote! { &#ctxt.for_flattened(#id_prefix) }),
+            })
         } else {
-            quote! { #serde_name_str | #(#serde_aliases)|* }
-        };
 
-        let match_arm = quote! {
-          #match_pattern => {
-            if #field_name.is_some() {
-              #errors_ident.push(
-                InnerError::serde(
-                  #ctxt.document_name,
-                  #field_name_str,
-                  #nvp_type::Error::duplicate_field(#serde_name_str)
-                )
-              );
+            // Note: If next_value_seed returns Err rather than Ok(Err), then I believe it means
+            // that our DeserializeSeed implementation never ran, since it never does that.
+            // But it's possible that the MapAccess will fail before even getting to that point,
+            // and then it could return a singular D::Error. So we should not unwrap such errors.
+
+            // Build match pattern: "name" | "alias1" | "alias2" => { ... }
+            let match_pattern = if serde_aliases.is_empty() {
+                quote! { #serde_name_str }
             } else {
-              let __seed__ = ConfSerdeSeed::<#inner_type>::from(
-                #ctxt.for_flattened(#id_prefix)
-              );
-              #field_name = Some(match #nvp.next_value_seed(__seed__) {
-                Ok(Ok(__val__)) => {
-                  Some(#val_expr)
-                }
-                Ok(Err(__errs__)) => {
-                  #errors_ident.extend(__errs__);
-                  None
-                }
-                Err(__err__) => {
+                quote! { #serde_name_str | #(#serde_aliases)|* }
+            };
+
+            let match_arm = quote! {
+              #match_pattern => {
+                if #field_name.is_some() {
                   #errors_ident.push(
                     InnerError::serde(
                       #ctxt.document_name,
                       #field_name_str,
-                      __err__
+                      #nvp_type::Error::duplicate_field(#serde_name_str)
                     )
                   );
-                  None
+                } else {
+                  let __seed__ = ConfSerdeSeed::<#inner_type>::from(
+                    #ctxt.for_flattened(#id_prefix)
+                  );
+                  #field_name = Some(match #nvp.next_value_seed(__seed__) {
+                    Ok(Ok(__val__)) => {
+                      Some(#val_expr)
+                    }
+                    Ok(Err(__errs__)) => {
+                      #errors_ident.extend(__errs__);
+                      None
+                    }
+                    Err(__err__) => {
+                      #errors_ident.push(
+                        InnerError::serde(
+                          #ctxt.document_name,
+                          #field_name_str,
+                          __err__
+                        )
+                      );
+                      None
+                    }
+                  });
                 }
-              });
-            }
-          },
-        };
+              },
+            };
 
-        // Return all names for error messages
-        let mut all_names = vec![serde_name_str.clone()];
-        all_names.extend(serde_aliases);
+            // Return all names for error messages
+            let mut all_names = vec![serde_name_str.clone()];
+            all_names.extend(serde_aliases);
 
-        let field_type = self.get_field_type();
-        Ok(SerdeStrategy {
-            state_machine_type: parse_quote! { Option<#field_type> },
-            match_arm,
-            has_finalizer: false,
-            serde_keys: SerdeKeys::Lit(all_names),
-            serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
-        })
+            Ok(SerdeStrategy {
+                state_machine_type: parse_quote! { Option<#field_type> },
+                match_arm,
+                serde_keys: SerdeKeys::Lit(all_names),
+                serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
+                finalizer_context: None,
+            })
+        }
     }
 
     /// Generate debug assertions for this flatten field

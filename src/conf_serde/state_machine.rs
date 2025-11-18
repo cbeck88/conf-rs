@@ -177,7 +177,7 @@ fn deserialize_seed_impl<'a, 'de, D, M>(
     deserializer: D,
 ) -> Result<M::Value, Vec<InnerError>>
 where
-    M: Default::InitializationStateMachine<'de, Context<'a> = ConfSerdeContext<'a>>,
+    M: Default + InitializationStateMachine<'de, Context<'a> = ConfSerdeContext<'a>>,
     D: Deserializer<'de>,
 {
     let doc_name = ctxt.document_name;

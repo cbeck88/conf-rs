@@ -82,12 +82,13 @@ pub struct SerdeStrategy {
     pub state_machine_type: Type,
     /// The match arm to use
     pub match_arm: TokenStream,
-    /// Whether to call `IninitializationStateMachine::finalize` or not
-    pub has_finalizer: bool,
     /// The serde keys. This MUST match the values matched in the match arm.
     pub serde_keys: SerdeKeys,
     /// Serde keys to advertise in help messages. Doesn't include aliases.
     pub serde_help_keys: SerdeKeys,
+    /// Context expression to use when calling `InitializationStateMachine::finalize`.
+    /// If Some, finalize will be called with this context. If None, no finalize call is made.
+    pub finalizer_context: Option<TokenStream>,
 }
 
 impl SerdeStrategy {
@@ -97,9 +98,9 @@ impl SerdeStrategy {
         Self {
             state_machine_type: parse_quote! { Option<#ty> },
             match_arm: quote! {},
-            has_finalizer: false,
             serde_keys: SerdeKeys::Lit(vec![]),
             serde_help_keys: SerdeKeys::Lit(vec![]),
+            finalizer_context: None,
         }
     }
 }
@@ -535,9 +536,9 @@ impl FieldItem {
         Ok(SerdeStrategy {
             state_machine_type: parse_quote! { Option<#field_type> },
             match_arm,
-            has_finalizer: false,
             serde_keys: SerdeKeys::Lit(all_names),
             serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
+            finalizer_context: None,
         })
     }
 

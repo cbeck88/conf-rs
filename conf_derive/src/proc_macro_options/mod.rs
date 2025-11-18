@@ -492,12 +492,21 @@ impl GenConfStruct {
             }
         };
 
-        // Pick out the names of fields that need a call to finalizer to finalize their state machine
-        let fields_with_finalizers: Vec<&Ident> = field_names
+        // Pick out the names of fields that need a call to finalizer to finalize their state machine,
+        // along with the context expression to use for each.
+        let finalizer_statements: Vec<TokenStream> = field_names
             .iter()
             .zip(serde_strategies.iter())
-            .filter(|(_n, s)| s.has_finalizer)
-            .map(|(n, _s)| *n)
+            .filter_map(|(n, s)| {
+                s.finalizer_context.as_ref().map(|ctx| {
+                    quote! {
+                        let #n = #n.map(|m| match m.finalize(#ctx) {
+                            Ok(val) => Some(val),
+                            Err(err) => { #errors_ident.extend(err); None }
+                        });
+                    }
+                })
+            })
             .collect();
 
         // Expressions that initialize things without serde, in case serde traversal doesn't ever produce
@@ -569,7 +578,7 @@ impl GenConfStruct {
                     } = self;
 
                     // Finalize all state machines, collecting any errors.
-                    #(let #fields_with_finalizers = #fields_with_finalizers.and_then(|m| match m.finalize(#conf_serde_context_ident) { Ok(val) => Some(val), Err(err) => { #errors_ident.extend(err); None }});)*
+                    #(#finalizer_statements)*
 
                     // If anything hasn't been initialized by serde, try to initialize with
                     // the no-serde code path.
