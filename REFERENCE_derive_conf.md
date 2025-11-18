@@ -68,6 +68,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [rename](#flatten-serde-rename)
       * [alias](#flatten-serde-alias)
       * [skip](#flatten-serde-skip)
+      * [flatten](#flatten-serde-flatten)
   * [Subcommands](#subcommands)
     * [serde](#subcommands-serde)
       * [skip](#subcommands-serde-skip)
@@ -216,13 +217,13 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
      example: `#[conf(serde(rename = "foo"))]`
 
-     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+     Similar to [`#[serde(rename)]`](https://serde.rs/field-attrs.html#rename), changes the name used in serialization, which by default is the field name.
 
    * <a name="flag-serde-alias"></a> `alias` (string argument, repeating)
 
      example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
 
-     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. This is useful for maintaining backwards compatibility when renaming fields - the main name (from `rename` or the field name) continues to work, and the aliases provide fallback names.
+     Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents. This is useful for maintaining backwards compatibility when renaming fields - the main name (from `rename` or the field name) continues to work, and the aliases provide fallback names.
 
      The `alias` attribute can be specified multiple times to add multiple alternative names. All aliases are treated equally - using any alias in the serde document will populate the field.
 
@@ -282,7 +283,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
      example: `#[conf(serde(skip))]`
 
-     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this field won't be read from the serde value source.
 
 ### Parameter
 
@@ -500,19 +501,19 @@ A parameter represents a single value that can be parsed from a string.
 
      example: `#[conf(serde(rename = "foo"))]`
 
-     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+     Similar to [`#[serde(rename)]`](https://serde.rs/field-attrs.html#rename), changes the name used in serialization, which by default is the field name.
 
    * <a name="parameter-serde-alias"></a> `alias` (string argument, repeating)
 
      example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
 
-     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
+     Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
    * <a name="parameter-serde-deserialize-with"></a> `deserialize_with` (path argument)
 
      example: `#[conf(serde(deserialize_with = "path::to::deserialize_fn"))]`
 
-     Similar to `#[serde(deserialize_with)]`, uses a custom deserialization function when reading from serde documents.
+     Similar to [`#[serde(deserialize_with)]`](https://serde.rs/field-attrs.html#deserialize-with), uses a custom deserialization function when reading from serde documents.
      The function must have the signature `fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>`.
 
      This attribute only affects deserialization from serde documents (JSON, TOML, etc.). Values from CLI arguments
@@ -547,7 +548,7 @@ A parameter represents a single value that can be parsed from a string.
 
      example: `#[conf(serde(skip))]`
 
-     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this field won't be read from the serde value source.
      This can be useful if the type doesn't implement `serde::Deserialize`.
 
    * <a name="parameter-serde-use-value-parser"></a> `use_value_parser` (no arguments)
@@ -555,7 +556,7 @@ A parameter represents a single value that can be parsed from a string.
      example: `#[conf(serde(use_value_parser))]`
 
      If used, then instead of asking `serde` to deserialize the field type, `serde` will deserialize a `String`,
-     and then the `value_parser` will convert the string to the field type. The default value parser is `FromStr`.
+     and then the `value_parser` will convert the string to the field type.
 
 *  <a name="parameter-test"></a> `test` (supports nested options)
 
@@ -574,7 +575,7 @@ A parameter represents a single value that can be parsed from a string.
 When a parameter is parsed from CLI arguments, the parser expects one of two syntaxes `--param=value` or `--param value` to be used. If `value` is not found as expected then parsing will fail.
 If `--param` appears twice then parsing will fail. Short switches and long switches behave similarly in this regard.
 
-As in `clap`, if a parameter's field type is `Option<T>`, it has special meaning.
+As in `clap`, if a parameter's field type is `Option<T>`, it has special meaning:
 
 * The parameter is not considered required. If it is omitted, parsing will succeed and the value will be `None`.
 * If parsing does produce a string, then the value will be `Some`.
@@ -597,7 +598,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    Specifies a long (two-dash) switch associated to this option.
    If argument is omitted, defaults to the kebab-cased field name.
 
-   example: `#[arg(long)]`, `#[arg(long = "peer")]`
+   example: `#[arg(repeat, long)]`, `#[arg(repeat, long = "peer")]`
 
    example command-line: `./my_prog --peer peer1 --peer peer2`
 
@@ -607,13 +608,11 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    Marks this repeat field as a positional argument that accepts multiple values.
 
-   When combined with `repeat`, this allows you to accept multiple positional arguments without naming each one.
+   When combined with `repeat`, this allows you to accept multiple positional arguments.
    The field must have type `Vec<T>` where `T` implements `FromStr`, or `value_parser` must be supplied.
 
-   **Important constraints**:
    - Cannot be combined with `long` or `short` (positional arguments have no switches)
-   - No other positional arguments (regular or repeat) can appear after a repeat positional argument
-   - This prevents parsing ambiguity when determining where one positional ends and another begins
+   - No other positional arguments can appear after a repeat positional argument
 
    **Examples**:
 
@@ -692,7 +691,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    Specifies an environment variable associated to this option.
    If omitted, defaults to the upper snake-cased field name.
 
-   example: `#[arg(env)]`, `#[arg(env = "PEERS")]`
+   example: `#[arg(repeat, env)]`, `#[arg(repeat, env = "PEERS")]`
 
    example command-line: `PEERS=peer1,peer2 ./my_prog`
 
@@ -703,17 +702,19 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    Specifies alternate long switches that should be an alias for this option.
    This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
 
-   example: `#[arg(aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
+   example: `#[arg(repeat, aliases=["old-param-name", "older-param-name"])]`
 
 *  <a name="repeat-env-aliases"></a> `env_aliases` (string array argument)
 
    Specifies alternate (fallback) environment variables which should be associated to this option. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
-   example: `#[arg(env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
+   example: `#[arg(repeat, env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
 
 *  <a name="repeat-value-parser"></a> `value_parser` (expr argument)
 
-   By default, `conf` invokes the trait function `std::str::FromStr::from_str` to convert the parsed string to the type `T`.
+   example: `#[arg(repeat, value_parser = serde_json::from_str)]`
+
+   By default, `conf` invokes the trait function `FromStr::from_str` to convert the parsed string to the type `T`.
    This can be overrided by setting `value_parser`. Any function expression can be used as long as it produces a `T` and any generic parameters are either specified or inferred.
 
    *Note*: This behavior is the same as in `clap-derive`.
@@ -726,7 +727,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
 
-   **Auto-detection**: Like with parameters, `conf` defaults to an appropriate OsStr-based parser for `Vec<PathBuf>` and `Vec<OsString>` types, when no `value_parser` or `value_parser_os` is specified.
+   **Auto-detection**: Like with parameters, `conf` defaults to an appropriate `OsStr`-based parser for `Vec<PathBuf>` and `Vec<OsString>` types, when no `value_parser` or `value_parser_os` is specified.
 
    **Environment variable handling**: When using `value_parser_os`, `env_delimiter` can't be used because we can't split a string without knowing its encoding. The `env_delimiter` is disabled in this case and its an error to try to set it.
 
@@ -788,27 +789,27 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
 *  <a name="repeat-serde"></a> `serde` (optional additional attributes)
 
-   example: `#[conf(serde(use_value_parser, rename = "foos"))]`
+   example: `#[conf(repeat, serde(...))]`
 
    Configuration specific to the serde integration.
 
    * <a name="repeat-serde-rename"></a> `rename` (string argument)
 
-     example: `#[conf(serde(rename = "foos"))]`
+     example: `#[conf(repeat, serde(rename = "foos"))]`
 
-     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+     Similar to [`#[serde(rename)]`](https://serde.rs/field-attrs.html#rename), changes the name used in serialization, which by default is the field name.
 
    * <a name="repeat-serde-alias"></a> `alias` (string argument, repeating)
 
      example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
 
-     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
+     Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
    * <a name="repeat-serde-deserialize-with"></a> `deserialize_with` (path argument)
 
      example: `#[conf(serde(deserialize_with = "path::to::deserialize_fn"))]`
 
-     Similar to `#[serde(deserialize_with)]`, uses a custom deserialization function when reading from serde documents.
+     Similar to [`#[serde(deserialize_with)]`](https://serde.rs/field-attrs.html#deserialize-with), uses a custom deserialization function when reading from serde documents.
      The function must have the signature `fn<'de, D>(D) -> Result<Vec<T>, D::Error> where D: Deserializer<'de>`.
 
      This attribute only affects deserialization from serde documents (JSON, TOML, etc.). Values from CLI arguments
@@ -838,13 +839,13 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      # }
      ```
 
-     This attribute cannot be used together with `use_value_parser` - they are mutually exclusive.
+     This attribute is mutually exclusive with `use_value_parser`.
 
    * <a name="repeat-serde-skip"></a> `skip` (no arguments)
 
      example: `#[conf(serde(skip))]`
 
-     Similar to `#[serde(skip)]`, this field won't be read from the serde value source.
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this field won't be read from the serde value source.
      This can be useful if the value doesn't implement `serde::Deserialize`.
 
    * <a name="repeat-serde-use-value-parser"></a> `use_value_parser` (no arguments)
@@ -852,7 +853,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
      example: `#[conf(serde(use_value_parser))]`
 
      If used, then instead of asking `serde` to deserialize `Vec<T>`, `serde` will deserialize a `Vec<String>`,
-     and then the `value_parser` will convert each string to `T`. The default value parser is `FromStr`.
+     and then the `value_parser` will convert each string to `T`. The default `value_parser` is `FromStr`.
 
 #### Notes
 
@@ -939,27 +940,107 @@ and you can customize this if another choice of delimiter is more appropriate.
 
 *  <a name="flatten-serde"></a> `serde` (optional additional attributes)
 
-   example: `#[conf(serde(rename = "foo"))]`
+   example: `#[conf(flatten, serde(...)))]`
 
    Configuration specific to the serde integration.
 
    * <a name="flatten-serde-rename"></a> `rename` (string argument)
 
-     example: `#[conf(serde(rename = "foo"))]`
+     example: `#[conf(flatten, serde(rename = "foo"))]`
 
-     Similar to `#[serde(rename)]`, changes the name used in serialization, which by default is the field name.
+     Similar to [`#[serde(rename)]`](https://serde.rs/field-attrs.html#rename), changes the name used in serialization, which by default is the field name.
 
    * <a name="flatten-serde-alias"></a> `alias` (string argument, repeating)
 
-     example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
+     example: `#[conf(flatten, serde(alias = "old_name"))]`, `#[conf(flatten, serde(alias = "old_name", alias = "older_name"))]`
 
-     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
+     Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents. The `alias` attribute can be specified multiple times to add multiple alternative names. See [flag serde alias](#flag-serde-alias) for more details.
 
    * <a name="flatten-serde-skip"></a> `skip` (no arguments)
 
-     example: `#[conf(serde(skip))]`
+     example: `#[conf(flatten, serde(skip))]`
 
-     Similar to `#[serde(skip)]`, this substructure won't be read from the serde value source.
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this substructure won't be read from the serde value source.
+
+   * <a name="flatten-serde-flatten"></a> `flatten` (no arguments)
+
+     example: `#[conf(flatten, serde(flatten))]`
+
+     Similar to [`#[serde(flatten)]`](https://serde.rs/attr-flatten.html), the fields of the child struct are inlined into the parent during serde deserialization.
+     Without this attribute, the child struct is expected to appear as a nested object in the serde document.
+     With this attribute, all fields from the child appear at the same level as the parent's fields.
+     
+     **Note**: `conf`'s implementation of `serde(flatten)` doesn't have the same limitations as stock `serde(flatten)` --
+     `deny-unknown-fields` works fine (and is on by default), there is no ["internal buffering"](https://github.com/serde-rs/serde/issues/2186#issue-1163413259),
+     and it works with any number of flattened or nested flattened fields.
+
+     **Example without `serde(flatten)`**:
+     ```rust
+     # use conf::Conf;
+     # #[cfg(feature = "serde")]
+     # {
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct DatabaseConfig {
+         #[arg(long, env)]
+         pub host: String,
+         #[arg(long, env)]
+         pub port: u16,
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct AppConfig {
+         #[arg(long, env)]
+         pub name: String,
+         #[conf(flatten)]
+         pub database: DatabaseConfig,
+     }
+     # }
+     ```
+     Expected JSON structure (nested):
+     ```json
+     {
+       "name": "myapp",
+       "database": {
+         "host": "localhost",
+         "port": 5432
+       }
+     }
+     ```
+
+     **Example with `serde(flatten)`**:
+     ```rust
+     # use conf::Conf;
+     # #[cfg(feature = "serde")]
+     # {
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct DatabaseConfig {
+         #[arg(long, env)]
+         pub host: String,
+         #[arg(long, env)]
+         pub port: u16,
+     }
+
+     #[derive(Conf)]
+     #[conf(serde)]
+     pub struct AppConfig {
+         #[arg(long, env)]
+         pub name: String,
+         #[conf(flatten, serde(flatten))]
+         pub database: DatabaseConfig,
+     }
+     # }
+     ```
+     Expected JSON structure (flattened):
+     ```json
+     {
+       "name": "myapp",
+       "host": "localhost",
+       "port": 5432
+     }
+     ```
 
 #### Notes
 
@@ -998,6 +1079,8 @@ See also the [`Subcommands`] trait and proc-macro documentation.
    * <a name="subcommands-serde-skip"></a> `skip` (no arguments)
 
      example: `#[conf(serde(skip))]`
+
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip).
 
      These subcommands won't support reading anything from the serde value source, and not need have `#[serde(conf)]`
      when derived.
@@ -1057,7 +1140,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    * <a name="struct-serde-allow-unknown-fields"></a> `allow_unknown_fields` (no arguments)
 
-     Similar to `#[serde(deny_unknown_fields)]`, except that the default is reversed here, to avoid configuration mistakes.
+     Similar to [`#[serde(deny_unknown_fields)]`](https://serde.rs/container-attrs.html#deny_unknown_fields), except that the default is reversed here, to avoid configuration mistakes.
 
 *  <a name="struct-one-of-fields"></a> `one_of_fields` (parenthesized identifier list)
 
@@ -1126,8 +1209,8 @@ works on that struct. Attributes that are not "top-level only" will still have a
 [^compat-note-1]: In `clap`, `repeat` parameters are inferred by setting the type to `Vec<T>`, and this is the only way to specify a repeat parameter. It also changes the meaning of `value_parser` in a subtle way.
 However, this can become confusing and so `conf` deviates from `clap` here. Instead, in `conf` the only way to specify a repeat parameter is to use the `repeat` attribute.
 
-[^compat-note-2]: Our `value_parser` feature is very similar to `clap-derive`, but it seems to work a little better in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
-while at `clap` version 4.5.8 it doesn't work. The reason seems to be that in clap v4, the `value_parser!` macro was introduced, and it uses auto-ref specialization to try to detect
+[^compat-note-2]: Our `value_parser` feature is very similar to `clap-derive`, but it's a little easier to use in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
+while at `clap` version 4.5.8 it fails with type inference errors. The reason seems to be that in clap v4, the `value_parser!` macro was introduced, and it uses auto-ref specialization to try to detect
 features of the value parser type at build time and handle special cases. However, this adds more layers of complexity and prevents the compiler from inferring things like lifetime parameters, afaict, so it makes the
-UX of the `derive` API somewhat worse. Our criteria for how to implement `value_parser` are also a bit different because we don't have a need for the solution to work with the `clap_builder` API as well.
+UX of the `derive` API somewhat worse. Our criteria for the `value_parser` feature are also a bit different because we don't need the solution to work with the `clap_builder` API as well.
 
