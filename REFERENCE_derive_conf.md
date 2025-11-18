@@ -73,6 +73,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [try_from](#flatten-serde-try-from)
       * [skip](#flatten-serde-skip)
       * [flatten](#flatten-serde-flatten)
+        * [prefix](#flatten-serde-flatten-prefix)
   * [Subcommands](#subcommands)
     * [serde](#subcommands-serde)
       * [skip](#subcommands-serde-skip)
@@ -1099,7 +1100,7 @@ and you can customize this if another choice of delimiter is more appropriate.
 
      Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this substructure won't be read from the serde value source.
 
-   * <a name="flatten-serde-flatten"></a> `flatten` (no arguments)
+   * <a name="flatten-serde-flatten"></a> `flatten` (takes optional parenthetical)
 
      example: `#[conf(flatten, serde(flatten))]`
 
@@ -1178,6 +1179,87 @@ and you can customize this if another choice of delimiter is more appropriate.
        "port": 5432
      }
      ```
+
+     * <a name="flatten-serde-flatten-prefix"></a> `prefix` (optional string argument)
+
+       example: `#[conf(flatten, serde(flatten(prefix)))]`, `#[conf(flatten, serde(flatten(prefix = "db.")))]`
+
+       Specifies that all flattened fields should have a common prefix in the serde document.
+
+       - `serde(flatten(prefix))` - Uses the field name in snake_case followed by an underscore as the prefix. For example, if the field is named `database`, the prefix would be `database_`.
+       - `serde(flatten(prefix = "custom_"))` - Uses a custom prefix string. This allows using any separator (like `.` for hierarchical keys).
+
+       When using `prefix`, all keys from the child struct must include the prefix in the serde document. The prefix is stripped before matching against the child struct's fields.
+
+       **Example with auto-generated prefix**:
+       ```rust
+       # use conf::Conf;
+       # #[cfg(feature = "serde")]
+       # {
+       #[derive(Conf)]
+       #[conf(serde)]
+       pub struct DatabaseConfig {
+           #[arg(long, env)]
+           pub host: String,
+           #[arg(long, env)]
+           pub port: u16,
+       }
+
+       #[derive(Conf)]
+       #[conf(serde)]
+       pub struct AppConfig {
+           #[arg(long, env)]
+           pub name: String,
+           #[conf(flatten, serde(flatten(prefix)))]
+           pub database: DatabaseConfig,
+       }
+       # }
+       ```
+       Expected JSON structure (with `database_` prefix):
+       ```json
+       {
+         "name": "myapp",
+         "database_host": "localhost",
+         "database_port": 5432
+       }
+       ```
+
+       **Example with custom prefix**:
+       ```rust
+       # use conf::Conf;
+       # #[cfg(feature = "serde")]
+       # {
+       #[derive(Conf)]
+       #[conf(serde)]
+       pub struct DatabaseConfig {
+           #[arg(long, env)]
+           pub host: String,
+           #[arg(long, env)]
+           pub port: u16,
+       }
+
+       #[derive(Conf)]
+       #[conf(serde)]
+       pub struct AppConfig {
+           #[arg(long, env)]
+           pub name: String,
+           #[conf(flatten, serde(flatten(prefix = "db.")))]
+           pub database: DatabaseConfig,
+       }
+       # }
+       ```
+       Expected JSON structure (with `db.` prefix):
+       ```json
+       {
+         "name": "myapp",
+         "db.host": "localhost",
+         "db.port": 5432
+       }
+       ```
+
+       **Nested prefixes**: When you have multiple levels of flattening with prefixes, the prefixes are concatenated. For example, if `A` flattens `B` with prefix `b_`, and `B` flattens `C` with prefix `c_`, then `C`'s fields appear with prefix `b_c_` in the top-level serde document.
+
+       **Note**: The `prefix` option only affects serde deserialization. CLI arguments and environment variables continue to use their own prefixing scheme controlled by `conf(flatten, prefix)`, `long_prefix`, and `env_prefix`.
 
 #### Notes
 
