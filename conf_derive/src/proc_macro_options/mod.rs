@@ -336,7 +336,7 @@ impl GenConfStruct {
         let expecting_str = format!("Object with schema {struct_ident}");
 
         let machine_ident = Ident::new("__MACHINE__", Span::call_site());
-        let machine = self.gen_machine(&machine_ident, generics)?;
+        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics)?;
 
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -353,6 +353,8 @@ impl GenConfStruct {
                     type ISM = #machine_ident #ty_generics;
 
                     const STRUCT_NAME: &str = #struct_ident_str;
+                    const STRUCT_KEYS: Option<&[&str]> = #struct_keys;
+
                     fn expecting(f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                         write!(f, #expecting_str)
                     }
@@ -389,11 +391,14 @@ impl GenConfStruct {
     ///   non-serde route. This is done using .unwrap_or_else, so the type becomes Option<T>. The "fallback initializers"
     ///   perform this task.
     /// * Finally we call gather_and_validate, simliar to the non-serde route.
+    ///
+    /// The first token stream contains the machine definition and impls.
+    /// The second token stream is the value for STRUCT_KEYS for this struct.
     fn gen_machine(
         &self,
         machine_ident: &Ident,
         generics: &Generics,
-    ) -> Result<TokenStream, Error> {
+    ) -> Result<(TokenStream, TokenStream), Error> {
         let struct_ident = &self.struct_item.struct_ident;
         let struct_ident_str = struct_ident.to_string();
         let serde_opts = self.struct_item.serde.as_ref().unwrap();
@@ -432,18 +437,27 @@ impl GenConfStruct {
             .map(|s| &s.state_machine_type)
             .collect();
 
-        // These match arms are used to implement `next`
-        let field_match_arms: Vec<&TokenStream> =
-            serde_strategies.iter().map(|s| &s.match_arm).collect();
+        // These match arms are used to implement `wants_key`
+        let field_match_patterns: Vec<TokenStream> = serde_strategies
+            .iter()
+            .filter_map(|s| s.serde_keys.gen_match_pattern())
+            .collect();
 
-        // This is the catch-all arm in the match statement
+        // These match arms are used to implement `next`
+        let field_match_arms: Vec<TokenStream> = serde_strategies
+            .iter()
+            .filter_map(|s| {
+                let match_pattern = s.serde_keys.gen_match_pattern()?;
+                let match_expr = &s.match_expr;
+                Some(quote! { #match_pattern => #match_expr })
+            })
+            .collect();
+
+        // This is the catch-all expr in the match statement
         let handle_unknown_field = if !serde_opts.allow_unknown_fields {
             let serde_help_names = serde_strategies
                 .iter()
-                .flat_map(|s| match &s.serde_help_keys {
-                    SerdeKeys::Lit(v) => v.iter(),
-                    SerdeKeys::Expr(_) => [].iter(),
-                })
+                .filter_map(|s| s.serde_keys.help_key())
                 .collect::<Vec<&LitStr>>();
             Some(quote! {
                 #errors_ident.push(
@@ -456,40 +470,6 @@ impl GenConfStruct {
             })
         } else {
             None
-        };
-
-        // This is the implementation of the keys function which *MUST* match the patterns declared
-        // in the field match arms.
-        let serde_keys: Vec<&SerdeKeys> = serde_strategies.iter().map(|s| &s.serde_keys).collect();
-        let keys_fn_body = if serde_keys.iter().any(|sk| matches!(sk, SerdeKeys::Expr(_))) {
-            let tokens: Vec<TokenStream> = serde_keys
-                .iter()
-                .map(|sk| match sk {
-                    SerdeKeys::Lit(v) => quote! { [#(#v,)*].iter() },
-                    SerdeKeys::Expr(x) => quote! { #x },
-                })
-                .collect();
-
-            quote! {
-              static KEYS: ::std::sync::OnceLock<Vec<&'static str>> = ::std::sync::OnceLock::new();
-              KEYS.get_or_init(|| {
-                let mut result = vec![];
-                #(result.extend(#tokens);)*
-                result
-              })
-            }
-        } else {
-            let lit_keys = serde_keys
-                .iter()
-                .flat_map(|sk| match sk {
-                    SerdeKeys::Lit(v) => v.iter(),
-                    SerdeKeys::Expr(_) => [].iter(),
-                })
-                .collect::<Vec<&LitStr>>();
-
-            quote! {
-              &[ #(#lit_keys,)* ]
-            }
         };
 
         // Pick out the names of fields that need a call to finalizer to finalize their state machine,
@@ -525,7 +505,7 @@ impl GenConfStruct {
 
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
-        Ok(quote! {
+        let machine = quote! {
             pub struct #machine_ident #ty_generics {
                 #errors_ident: Vec<InnerError>,
                 #(#field_names: Option<#field_machine_types>),*
@@ -546,8 +526,11 @@ impl GenConfStruct {
                 type Value = #struct_ident #ty_generics;
                 type Context<#ct> = ConfSerdeContext<#ct>;
 
-                fn keys() -> &'static[&'static str] {
-                    #keys_fn_body
+                fn wants_key(__key__: &str) -> bool {
+                    match __key__ {
+                        #(#field_match_patterns => true,)*
+                        _ => false,
+                    }
                 }
 
                 fn next<#ct, #nvp_type_ident>(self, __key__: &str, #nvp_ident: #nvp_type_ident, #conf_serde_context_ident: &Self::Context<#ct>) -> Self
@@ -591,7 +574,17 @@ impl GenConfStruct {
                     #gather_and_validate
                 }
             }
-        })
+        };
+
+        let struct_keys = if let Some(all_keys) =
+            SerdeKeys::all_literal_keys(serde_strategies.iter().map(|s| &s.serde_keys))
+        {
+            quote! { Some(&[ #(#all_keys),* ]) }
+        } else {
+            quote! { None }
+        };
+
+        Ok((machine, struct_keys))
     }
 
     /// Generate Conf::debug_asserts implementation

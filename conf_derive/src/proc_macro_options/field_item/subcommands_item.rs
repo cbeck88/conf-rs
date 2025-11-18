@@ -2,9 +2,7 @@ use super::{SerdeKeys, SerdeStrategy, StructItem};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{
-    Error, Expr, Field, Ident, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
-};
+use syn::{Error, Field, Ident, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token};
 
 /// #[conf(serde(...))] options listed on a field of Subcommands kind
 pub struct SubcommandsSerdeItem {
@@ -188,6 +186,7 @@ impl SubcommandsItem {
         errors_ident: &Ident,
     ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
+        let field_type = self.get_field_type();
 
         let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
 
@@ -209,8 +208,11 @@ impl SubcommandsItem {
         // * Check if the conf context has a subcommand name, and if that matches any of these
         //   commands. If not, then we ignore this serde value.
         // * Otherwise, we are attempting to recurse into the subcommand.
-        let match_arm = quote! {
-          key__ if <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().any(|(_c, s)| *s == key__) => {
+        let match_pattern = quote! {
+            key__ if <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().any(|(_c, s)| *s == key__)
+        };
+        let match_expr = quote! {
+          {
             // Get the active subcommand from context, or skip if none
             let Some((command_name, conf_context_serde)) = #ctxt.for_subcommand() else { break 'match_statement };
 
@@ -242,15 +244,10 @@ impl SubcommandsItem {
         };
         // We don't know the SERDE_NAMES as string literals in this proc_macro, they are only in the
         // proc_macro invocation for the enum.
-        let field_type = self.get_field_type();
-        let all_names_expr: Expr = parse_quote! {
-            <#inner_type as SubcommandsSerde>::SERDE_NAMES.iter().map(|(_c, s)| s)
-        };
         Ok(SerdeStrategy {
             state_machine_type: parse_quote! { Option<#field_type> },
-            match_arm,
-            serde_keys: SerdeKeys::Expr(all_names_expr.clone()),
-            serde_help_keys: SerdeKeys::Expr(all_names_expr),
+            serde_keys: SerdeKeys::Expr(match_pattern),
+            match_expr,
             finalizer_context: None,
         })
     }

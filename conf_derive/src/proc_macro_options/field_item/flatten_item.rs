@@ -5,8 +5,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::fmt::Display;
 use syn::{
-    Error, Expr, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned,
-    token,
+    Error, Field, Ident, LitStr, Type, meta::ParseNestedMeta, parse_quote, spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -453,23 +452,24 @@ impl FlattenItem {
         };
 
         if self.serde.as_ref().map(|s| s.flatten).unwrap_or(false) {
-            let state_machine_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM };
-            let keys_expr: Expr =
-                parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::keys().iter().copied() };
+            let key = Ident::new("key__", Span::call_site());
 
-            let match_arm = quote! {
-                key__ if <#inner_type as ::conf::ConfSerde>::ISM::keys().contains(&key__) => {
+            let state_machine_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM };
+            let keys_expr: TokenStream =
+                quote! { #key if <#inner_type as ::conf::ConfSerde>::ISM::wants_key(#key) };
+
+            let match_expr = quote! {
+                {
                     let __m__ = #field_name.take().unwrap_or_default();
                     // Pass a context scoped to this flattened field so child can look up options correctly
-                    #field_name = Some(__m__.next(key__, #nvp, &#ctxt.for_flattened(#id_prefix)));
+                    #field_name = Some(__m__.next(#key, #nvp, &#ctxt.for_flattened(#id_prefix)));
                 },
             };
 
             Ok(SerdeStrategy {
                 state_machine_type,
-                match_arm,
-                serde_keys: SerdeKeys::Expr(keys_expr.clone()),
-                serde_help_keys: SerdeKeys::Expr(keys_expr.clone()),
+                match_expr,
+                serde_keys: SerdeKeys::Expr(keys_expr),
                 // Scoped context for finalize so child can look up options with correct prefix
                 finalizer_context: Some(quote! { &#ctxt.for_flattened(#id_prefix) }),
             })
@@ -479,15 +479,8 @@ impl FlattenItem {
             // But it's possible that the MapAccess will fail before even getting to that point,
             // and then it could return a singular D::Error. So we should not unwrap such errors.
 
-            // Build match pattern: "name" | "alias1" | "alias2" => { ... }
-            let match_pattern = if serde_aliases.is_empty() {
-                quote! { #serde_name_str }
-            } else {
-                quote! { #serde_name_str | #(#serde_aliases)|* }
-            };
-
-            let match_arm = quote! {
-              #match_pattern => {
+            let match_expr = quote! {
+              {
                 if #field_name.is_some() {
                   #errors_ident.push(
                     InnerError::serde(
@@ -529,9 +522,8 @@ impl FlattenItem {
 
             Ok(SerdeStrategy {
                 state_machine_type: parse_quote! { Option<#field_type> },
-                match_arm,
+                match_expr,
                 serde_keys: SerdeKeys::Lit(all_names),
-                serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
                 finalizer_context: None,
             })
         }

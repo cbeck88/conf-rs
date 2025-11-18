@@ -80,12 +80,10 @@ pub enum ExprRequest {
 pub struct SerdeStrategy {
     /// The state machine type. Typically just Option<#field_type>, even for serde(skip).
     pub state_machine_type: Type,
-    /// The match arm to use
-    pub match_arm: TokenStream,
-    /// The serde keys. This MUST match the values matched in the match arm.
+    /// The match expr to use
+    pub match_expr: TokenStream,
+    /// The serde keys. This is used to generate the match pattern.
     pub serde_keys: SerdeKeys,
-    /// Serde keys to advertise in help messages. Doesn't include aliases.
-    pub serde_help_keys: SerdeKeys,
     /// Context expression to use when calling `InitializationStateMachine::finalize`.
     /// If Some, finalize will be called with this context. If None, no finalize call is made.
     pub finalizer_context: Option<TokenStream>,
@@ -97,18 +95,73 @@ impl SerdeStrategy {
         let ty = field.get_field_type();
         Self {
             state_machine_type: parse_quote! { Option<#ty> },
-            match_arm: quote! {},
-            serde_keys: SerdeKeys::Lit(vec![]),
-            serde_help_keys: SerdeKeys::Lit(vec![]),
+            match_expr: quote! {},
+            serde_keys: SerdeKeys::default(),
             finalizer_context: None,
         }
     }
 }
 
+/// Represents the serde keys that a field "subscribes" to.
+/// These keys (or expression) are used in the match expression when new serde data comes in.
 #[derive(Clone)]
 pub enum SerdeKeys {
+    /// Literal strings (primary key and aliases) that match to this field
     Lit(Vec<LitStr>),
-    Expr(Expr),
+    /// An arbitrary run-time expression to use for the match pattern
+    Expr(TokenStream),
+}
+
+impl Default for SerdeKeys {
+    fn default() -> Self {
+        Self::Lit(Default::default())
+    }
+}
+
+impl SerdeKeys {
+    // Generate match pattern
+    pub fn gen_match_pattern(&self) -> Option<TokenStream> {
+        match self {
+            Self::Lit(v) => {
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(quote! { #(#v)|* })
+                }
+            }
+            Self::Expr(e) => Some(quote! { #e }),
+        }
+    }
+
+    // Get the (primary) key to use in help messages, if any is available
+    pub fn help_key(&self) -> Option<&LitStr> {
+        match self {
+            Self::Lit(v) => v.first(),
+            Self::Expr(_) => None,
+        }
+    }
+
+    // Check if every SerdeKeys instance is SerdeKeys::Lit.
+    // If they are then flat-map the whole iterator together.
+    // If any are not, then return None.
+    pub fn all_literal_keys<'a>(
+        mut iter: impl Iterator<Item = &'a SerdeKeys>,
+    ) -> Option<Vec<&'a LitStr>> {
+        iter.try_fold(
+            vec![],
+            |mut vec, serde_keys| -> Option<Vec<&LitStr>> {
+                match serde_keys {
+                    SerdeKeys::Lit(v) => {
+                        vec.extend(v);
+                    }
+                    SerdeKeys::Expr(_) => {
+                        return None;
+                    }
+                }
+                Some(vec)
+            },
+        )
+    }
 }
 
 /// #[conf(...)] options listed in a field of a struct which has `#[derive(Conf)]`
@@ -466,13 +519,6 @@ impl FieldItem {
             errors_ident,
         )?;
 
-        // Build match pattern: "name" | "alias1" | "alias2" => { ... }
-        let match_pattern = if serde_aliases.is_empty() {
-            quote! { #serde_name_str }
-        } else {
-            quote! { #serde_name_str | #(#serde_aliases)|* }
-        };
-
         // Generate the deserialization call - either using deserialize_with or the default Deserialize impl
         let deserialize_call = if let Some(deserialize_with_path) = deserialize_with {
             quote! {
@@ -496,8 +542,8 @@ impl FieldItem {
             }
         };
 
-        let match_arm = quote! {
-          #match_pattern => {
+        let match_expr = quote! {
+          {
             if #field_name.is_some() {
               #errors_ident.push(
                 InnerError::serde(
@@ -529,15 +575,14 @@ impl FieldItem {
         };
 
         // Return all names for error messages
-        let mut all_names = vec![serde_name_str.clone()];
+        let mut all_names = vec![serde_name_str];
         all_names.extend(serde_aliases);
 
         let field_type = self.get_field_type();
         Ok(SerdeStrategy {
             state_machine_type: parse_quote! { Option<#field_type> },
-            match_arm,
+            match_expr,
             serde_keys: SerdeKeys::Lit(all_names),
-            serde_help_keys: SerdeKeys::Lit(vec![serde_name_str]),
             finalizer_context: None,
         })
     }

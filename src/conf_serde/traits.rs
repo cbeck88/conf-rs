@@ -38,6 +38,11 @@ pub trait ConfSerde: Conf + Sized {
     #[doc(hidden)]
     const STRUCT_NAME: &str;
 
+    /// Struct keys used with serde (exhaustive, including aliases)
+    /// None if they aren't known at build-time due to e.g. flatten
+    #[doc(hidden)]
+    const STRUCT_KEYS: Option<&[&str]>;
+
     /// Expecting text used with serde
     #[doc(hidden)]
     fn expecting(f: &mut core::fmt::Formatter) -> core::fmt::Result;

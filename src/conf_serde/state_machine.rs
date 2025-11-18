@@ -71,7 +71,7 @@ pub trait InitializationStateMachine<'de>: Sized {
     type Value;
     type Context<'c>;
 
-    fn keys() -> &'static [&'static str];
+    fn wants_key(key: &str) -> bool;
     fn next<'c, NVP>(
         self,
         key: &str,
@@ -162,11 +162,15 @@ where
             expecting_fn,
         };
 
-        Ok(
-            match deserializer.deserialize_struct(struct_name, V::ISM::keys(), visitor) {
-                Ok(result) => result,
-                Err(err) => Err(vec![InnerError::serde(doc_name, struct_name, err)]),
-            },
-        )
+        let deserialize_result = if let Some(keys) = V::STRUCT_KEYS {
+            deserializer.deserialize_struct(struct_name, keys, visitor)
+        } else {
+            deserializer.deserialize_map(visitor)
+        };
+
+        Ok(match deserialize_result {
+            Ok(result) => result,
+            Err(err) => Err(vec![InnerError::serde(doc_name, struct_name, err)]),
+        })
     }
 }
