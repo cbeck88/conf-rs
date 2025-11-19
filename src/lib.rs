@@ -20,6 +20,7 @@ mod program_option;
 mod str_to_bool;
 mod styles;
 mod traits;
+mod tree;
 
 // These are not needed by users or by generated code
 use conf_context::FlattenedOptionalDebugInfo;
@@ -33,6 +34,7 @@ pub use error::Error;
 pub use find_parameter::find_parameter;
 pub use styles::Styles;
 pub use traits::{Conf, Subcommands};
+pub use tree::LazyBuf;
 
 // Re-export anstyle for users to create Style objects
 pub use anstyle;
