@@ -338,22 +338,18 @@ fn test_repeats_short_parsing() {
     assert_eq!(result.extras, vec![10, 20]);
 
     // Short flag with = syntax
-    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
-        vec![".", "-i=foo", "-i=bar"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        TestRepeatsShort::try_parse_from::<&str, &str, &str>(vec![".", "-i=foo", "-i=bar"], vec![])
+            .unwrap();
     assert_eq!(result.items, vec_str(["foo", "bar"]));
 }
 
 #[test]
 fn test_repeats_short_with_env() {
     // Env should work when short is defined
-    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
-        vec!["."],
-        vec![("ITEMS", "x,y,z")],
-    )
-    .unwrap();
+    let result =
+        TestRepeatsShort::try_parse_from::<&str, &str, &str>(vec!["."], vec![("ITEMS", "x,y,z")])
+            .unwrap();
     assert_eq!(result.items, vec_str(["x", "y", "z"]));
 
     // CLI short should shadow env
