@@ -383,6 +383,14 @@ impl RepeatItem {
         self.serde.is_some() && !self.get_serde_skip()
     }
 
+    /// Returns true if this field has a CLI or env source (registered with clap)
+    pub fn has_cli_or_env_source(&self) -> bool {
+        self.short_switch.is_some()
+            || self.long_switch.is_some()
+            || self.env_name.is_some()
+            || self.is_positional
+    }
+
     /// Generate a routine that pushes a ::conf::ProgramOption corresponding to
     /// this field, onto a mut Vec<ProgramOption> that is in scope.
     ///
@@ -627,6 +635,22 @@ impl RepeatItem {
         &self,
         conf_context_ident: &Ident,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        // If there's no CLI or env source, this repeat wasn't registered with clap,
+        // so we just return the default value (empty Vec)
+        if !self.has_cli_or_env_source() {
+            let field_type = &self.field_type;
+            return Ok((
+                quote! {
+                    {
+                        let _ = #conf_context_ident;
+                        let result: #field_type = Default::default();
+                        Ok(result)
+                    }
+                },
+                false,
+            ));
+        }
+
         self.gen_initializer_helper(conf_context_ident, None)
     }
 
@@ -641,6 +665,52 @@ impl RepeatItem {
         doc_name: &Ident,
         doc_val: &Ident,
     ) -> Result<(TokenStream, bool), Error> {
+        // If there's no CLI or env source, this repeat wasn't registered with clap,
+        // so we just use the serde value directly
+        if !self.has_cli_or_env_source() {
+            let try_from = self.get_serde_try_from();
+
+            if let Some(_try_from_type) = try_from {
+                // Convert each element via TryFrom
+                let field_name_str = self.field_name.to_string();
+                let inner_type = type_is_vec(&self.field_type)?
+                    .ok_or_else(|| Error::new(self.field_type.span(), "Expected Vec<T> type"))?;
+
+                return Ok((
+                    quote! {
+                        {
+                            let _ = #conf_context_ident;
+                            let mut __result__ = Vec::with_capacity(#doc_val.len());
+                            for __item__ in #doc_val {
+                                match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
+                                    Ok(__converted__) => __result__.push(__converted__),
+                                    Err(__err__) => {
+                                        return Err(vec![::conf::InnerError::serde(
+                                            #doc_name,
+                                            #field_name_str,
+                                            __err__
+                                        )]);
+                                    }
+                                }
+                            }
+                            Ok(__result__)
+                        }
+                    },
+                    false,
+                ));
+            } else {
+                return Ok((
+                    quote! {
+                        {
+                            let _ = #conf_context_ident;
+                            Ok(#doc_val)
+                        }
+                    },
+                    false,
+                ));
+            }
+        }
+
         let use_value_parser = self
             .serde
             .as_ref()

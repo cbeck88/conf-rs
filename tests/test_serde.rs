@@ -1194,3 +1194,336 @@ fn test_serde_only_parameter() {
     assert!(!err_str.contains("serde-only-field"));
     assert!(!err_str.contains("serde_only_field"));
 }
+
+/// Test serde-only flags (flags that can be set via serde but default to false)
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct SerdeOnlyFlagConfig {
+    #[arg(long)]
+    pub cli_flag: bool,
+
+    /// A flag that can only be set via serde (defaults to false otherwise)
+    #[arg(serde)]
+    pub serde_only_flag: bool,
+}
+
+#[test]
+fn test_serde_only_flag() {
+    // Test default behavior (flag is false when not provided)
+    let result = SerdeOnlyFlagConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert!(!result.cli_flag);
+    assert!(!result.serde_only_flag);
+
+    // Test that serde can set the flag to true
+    let result = SerdeOnlyFlagConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"serde_only_flag": true}))
+        .try_parse()
+        .unwrap();
+
+    assert!(!result.cli_flag);
+    assert!(result.serde_only_flag);
+
+    // Test that CLI flag still works
+    let result = SerdeOnlyFlagConfig::conf_builder()
+        .args([".", "--cli-flag"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"serde_only_flag": true}))
+        .try_parse()
+        .unwrap();
+
+    assert!(result.cli_flag);
+    assert!(result.serde_only_flag);
+
+    // Test that serde_only_flag doesn't appear in help
+    let help_result = SerdeOnlyFlagConfig::conf_builder()
+        .args([".", "--help"])
+        .env::<&str, &str>([])
+        .try_parse();
+    assert!(help_result.is_err());
+    let err_str = help_result.unwrap_err().to_string();
+    assert!(err_str.contains("--cli-flag"));
+    assert!(!err_str.contains("serde-only-flag"));
+    assert!(!err_str.contains("serde_only_flag"));
+}
+
+/// Test repeat fields with serde support (must have CLI source, serde can provide values)
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct RepeatWithSerdeConfig {
+    #[arg(repeat, long, serde)]
+    pub items: Vec<String>,
+}
+
+#[test]
+fn test_repeat_with_serde() {
+    // Test default behavior (empty vec when not provided)
+    let result = RepeatWithSerdeConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert!(result.items.is_empty());
+
+    // Test that serde can populate the vec
+    let result = RepeatWithSerdeConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"items": ["a", "b", "c"]}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.items, vec!["a", "b", "c"]);
+
+    // Test that CLI items override serde
+    let result = RepeatWithSerdeConfig::conf_builder()
+        .args([".", "--items=x", "--items=y"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"items": ["a", "b", "c"]}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.items, vec!["x", "y"]);
+}
+
+/// Test serde-only repeat fields (no CLI source, only serde can provide values)
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct SerdeOnlyRepeatConfig {
+    #[arg(long)]
+    pub cli_field: String,
+
+    /// A repeat field that can only be set via serde (defaults to empty Vec otherwise)
+    #[arg(repeat, serde)]
+    pub serde_only_items: Vec<String>,
+}
+
+#[test]
+fn test_serde_only_repeat() {
+    // Test default behavior (empty vec when not provided)
+    let result = SerdeOnlyRepeatConfig::conf_builder()
+        .args([".", "--cli-field=test"])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.cli_field, "test");
+    assert!(result.serde_only_items.is_empty());
+
+    // Test that serde can populate the vec
+    let result = SerdeOnlyRepeatConfig::conf_builder()
+        .args([".", "--cli-field=test"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"serde_only_items": ["a", "b", "c"]}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.cli_field, "test");
+    assert_eq!(result.serde_only_items, vec!["a", "b", "c"]);
+
+    // Test that serde_only_items doesn't appear in help
+    let help_result = SerdeOnlyRepeatConfig::conf_builder()
+        .args([".", "--help"])
+        .env::<&str, &str>([])
+        .try_parse();
+    assert!(help_result.is_err());
+    let err_str = help_result.unwrap_err().to_string();
+    assert!(err_str.contains("--cli-field"));
+    assert!(!err_str.contains("serde-only-items"));
+    assert!(!err_str.contains("serde_only_items"));
+}
+
+/// Test flattened structs with serde-only fields
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct InnerSerdeOnly {
+    #[arg(long)]
+    pub inner_cli: String,
+
+    #[arg(serde)]
+    pub inner_serde_only: i32,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct OuterWithFlattenedSerdeOnly {
+    #[arg(long)]
+    pub outer_field: String,
+
+    #[conf(flatten, serde(flatten))]
+    pub inner: InnerSerdeOnly,
+}
+
+#[test]
+fn test_flattened_serde_only_fields() {
+    // Test that flattened serde-only fields work
+    let result = OuterWithFlattenedSerdeOnly::conf_builder()
+        .args([".", "--outer-field=outer", "--inner-cli=inner"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"inner_serde_only": 42}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_field, "outer");
+    assert_eq!(result.inner.inner_cli, "inner");
+    assert_eq!(result.inner.inner_serde_only, 42);
+
+    // Test that missing required serde-only field in flattened struct produces error
+    assert_error_contains_text!(
+        OuterWithFlattenedSerdeOnly::conf_builder()
+            .args([".", "--outer-field=outer", "--inner-cli=inner"])
+            .env::<&str, &str>([])
+            .try_parse(),
+        [
+            "'inner.inner_serde_only' in config file",
+            "must be provided"
+        ]
+    );
+
+    // Test that serde can provide all values including flattened ones
+    let result = OuterWithFlattenedSerdeOnly::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "outer_field": "from_serde",
+                "inner_cli": "also_from_serde",
+                "inner_serde_only": 100
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_field, "from_serde");
+    assert_eq!(result.inner.inner_cli, "also_from_serde");
+    assert_eq!(result.inner.inner_serde_only, 100);
+
+    // Test that help doesn't show serde-only fields from flattened structs
+    let help_result = OuterWithFlattenedSerdeOnly::conf_builder()
+        .args([".", "--help"])
+        .env::<&str, &str>([])
+        .try_parse();
+    assert!(help_result.is_err());
+    let err_str = help_result.unwrap_err().to_string();
+    assert!(err_str.contains("--outer-field"));
+    assert!(err_str.contains("--inner-cli"));
+    assert!(!err_str.contains("inner-serde-only"));
+    assert!(!err_str.contains("inner_serde_only"));
+}
+
+/// Test that a serde-skipped required field without other sources fails at compile time.
+/// This is a compile-fail test - if uncommented, it should fail to compile.
+#[test]
+fn test_serde_skipped_required_field_compile_error() {
+    // The following should fail to compile because:
+    // - The field is required (not Option<T>)
+    // - It has no CLI source (no short/long)
+    // - It has no env source
+    // - It has no default value
+    // - It has serde(skip), so it can't come from serde either
+    //
+    // Uncomment to verify compile error:
+    //
+    // #[derive(Conf, Debug)]
+    // #[conf(serde)]
+    // pub struct BadSerdeSkippedConfig {
+    //     #[arg(long)]
+    //     pub good_field: String,
+    //
+    //     #[arg(serde(skip))]
+    //     pub bad_field: String,  // No way to provide this value!
+    // }
+    //
+    // Expected error: "There is no way for the user to give this parameter a value..."
+}
+
+/// Test optional field with serde(skip) and no other source - defaults to None
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct OptionalSerdeSkippedConfig {
+    #[arg(long)]
+    pub required_field: String,
+
+    /// Optional field with serde(skip) - no CLI, no env, defaults to None
+    #[arg(serde(skip))]
+    pub optional_skipped: Option<String>,
+}
+
+#[test]
+fn test_optional_serde_skipped_field() {
+    // Optional fields with serde(skip) should work - they default to None
+    let result = OptionalSerdeSkippedConfig::conf_builder()
+        .args([".", "--required-field=hello"])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.required_field, "hello");
+    assert_eq!(result.optional_skipped, None);
+
+    // Providing the value in serde should be ignored due to skip
+    let result = OptionalSerdeSkippedConfig::conf_builder()
+        .args([".", "--required-field=hello"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"optional_skipped": "ignored"}))
+        .try_parse();
+
+    // This should error because optional_skipped is unknown (it's skipped)
+    assert!(result.is_err());
+    let err_str = result.unwrap_err().to_string();
+    assert!(err_str.contains("optional_skipped") || err_str.contains("unknown field"));
+}
+
+/// Test field with both CLI and serde(skip) - CLI works, serde ignores
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct CliWithSerdeSkippedConfig {
+    #[arg(long)]
+    pub required_field: String,
+
+    #[arg(long, serde(skip))]
+    pub cli_only: Option<String>,
+}
+
+#[test]
+fn test_cli_with_serde_skip() {
+    // CLI-only field should work
+    let result = CliWithSerdeSkippedConfig::conf_builder()
+        .args([".", "--required-field=hello", "--cli-only=value"])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.required_field, "hello");
+    assert_eq!(result.cli_only, Some("value".to_string()));
+
+    // Without CLI value, defaults to None
+    let result = CliWithSerdeSkippedConfig::conf_builder()
+        .args([".", "--required-field=hello"])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.required_field, "hello");
+    assert_eq!(result.cli_only, None);
+
+    // Providing the value in serde should be ignored due to skip
+    let result = CliWithSerdeSkippedConfig::conf_builder()
+        .args([".", "--required-field=hello"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({"cli_only": "ignored"}))
+        .try_parse();
+
+    // This should error because cli_only is unknown in serde (it's skipped)
+    assert!(result.is_err());
+    let err_str = result.unwrap_err().to_string();
+    assert!(err_str.contains("cli_only") || err_str.contains("unknown field"));
+}

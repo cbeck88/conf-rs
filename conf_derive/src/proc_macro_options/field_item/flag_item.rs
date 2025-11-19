@@ -239,6 +239,11 @@ impl FlagItem {
         self.serde.is_some() && !self.get_serde_skip()
     }
 
+    /// Returns true if this field has a CLI or env source (registered with clap)
+    pub fn has_cli_or_env_source(&self) -> bool {
+        self.short_switch.is_some() || self.long_switch.is_some() || self.env_name.is_some()
+    }
+
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -289,6 +294,18 @@ impl FlagItem {
     ) -> Result<(TokenStream, bool), Error> {
         let id = self.field_name.to_string();
 
+        // If there's no CLI or env source, this flag wasn't registered with clap,
+        // so we just return the default value (false)
+        if !self.has_cli_or_env_source() {
+            return Ok((
+                quote! {
+                    let _ = #conf_context_ident;
+                    Ok(false)
+                },
+                false,
+            ));
+        }
+
         Ok((
             quote! {
                 let (_src, val) = #conf_context_ident.get_boolean_opt(#id)?;
@@ -308,6 +325,34 @@ impl FlagItem {
         let field_name_str = self.field_name.to_string();
 
         let try_from = self.get_serde_try_from();
+
+        // If there's no CLI or env source, this flag wasn't registered with clap,
+        // so we just use the serde value directly
+        if !self.has_cli_or_env_source() {
+            let _ = id; // suppress unused warning
+            if let Some(_try_from_type) = try_from {
+                return Ok((
+                    quote! {
+                        let _ = #conf_context_ident;
+                        <bool as ::core::convert::TryFrom<_>>::try_from(#doc_val)
+                            .map_err(|err| ::conf::InnerError::serde(
+                                #doc_name,
+                                #field_name_str,
+                                err
+                            ))
+                    },
+                    false,
+                ));
+            } else {
+                return Ok((
+                    quote! {
+                        let _ = #conf_context_ident;
+                        Ok(#doc_val)
+                    },
+                    false,
+                ));
+            }
+        }
 
         if let Some(_try_from_type) = try_from {
             // When try_from is set, #doc_val has type #try_from_type.

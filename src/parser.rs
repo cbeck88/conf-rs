@@ -335,9 +335,12 @@ impl<'a> Parser<'a> {
                 let mut buf = String::new();
                 option.print(&mut buf, Some(env))?;
                 Ok(MaybeArg::EnvOnly(buf))
-            } else if option.default_value.is_some() || option.has_serde_source {
+            } else if option.default_value.is_some()
+                || option.has_serde_source
+                || !option.is_required
+            {
                 // This option is not visible in CLI help since it can only come from
-                // default values or serde deserialization
+                // default values, serde deserialization, or is optional (defaults to None)
                 Ok(MaybeArg::NotArgsOrEnv)
             } else {
                 panic!(
