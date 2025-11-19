@@ -1,3 +1,5 @@
+#![cfg(feature = "serde")]
+
 //! Tests for serde(try_from = "T") feature
 //!
 //! This feature allows deserializing an intermediate type T and then converting
