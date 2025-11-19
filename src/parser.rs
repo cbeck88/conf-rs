@@ -58,7 +58,7 @@ impl<'a> ParsedArgs<'a> {
 }
 
 /// Top-level parser config
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ParserConfig {
     /// An optional top-level specified about string
     pub about: Option<&'static str>,
@@ -70,28 +70,11 @@ pub struct ParserConfig {
     pub styles: Option<crate::Styles>,
 }
 
-impl Default for ParserConfig {
-    fn default() -> Self {
-        Self {
-            about: None,
-            name: "",
-            no_help_flag: false,
-            styles: None,
-        }
-    }
-}
-
 /// A parser which tries to parse args, matching them to a list of ProgramOptions.
 #[derive(Clone)]
 pub struct Parser<'a> {
-    #[allow(unused)]
-    parser_config: ParserConfig,
-    #[allow(unused)]
-    options: Vec<&'a ProgramOption>,
     id_to_option: HashMap<&'a str, &'a ProgramOption>,
     subcommands: Vec<Parser<'a>>,
-    #[allow(unused)]
-    env: &'a ParsedEnv,
     command: Command,
 }
 
@@ -104,11 +87,10 @@ impl<'a> Parser<'a> {
         subcommands: impl AsRef<[Parser<'a>]>,
         env: &'a ParsedEnv,
     ) -> Result<Self, Error> {
-        let options = options.iter().collect::<Vec<&'a ProgramOption>>();
         let subcommands = subcommands.as_ref();
         let id_to_option = options
             .iter()
-            .map(|opt| (&*opt.id, *opt))
+            .map(|opt| (&*opt.id, opt))
             .collect::<HashMap<&'a str, &'a ProgramOption>>();
 
         // Build a clap command
@@ -198,11 +180,8 @@ impl<'a> Parser<'a> {
         command.build();
 
         Ok(Self {
-            parser_config,
-            options,
             id_to_option,
             subcommands: subcommands.to_vec(),
-            env,
             command,
         })
     }
