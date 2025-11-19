@@ -378,6 +378,11 @@ impl RepeatItem {
             .and_then(|serde| serde.deserialize_with.clone())
     }
 
+    /// Returns true if this field can receive a value from serde deserialization
+    pub fn has_serde_source(&self) -> bool {
+        self.serde.is_some() && !self.get_serde_skip()
+    }
+
     /// Generate a routine that pushes a ::conf::ProgramOption corresponding to
     /// this field, onto a mut Vec<ProgramOption> that is in scope.
     ///
@@ -400,6 +405,7 @@ impl RepeatItem {
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
+        let has_serde_source = self.has_serde_source();
 
         Ok(quote! {
             #program_options_ident.push(::conf::ProgramOption {
@@ -416,6 +422,7 @@ impl RepeatItem {
               allow_hyphen_values: #allow_hyphen_values,
               secret: #secret,
               is_positional: #is_positional,
+              has_serde_source: #has_serde_source,
             });
         })
     }

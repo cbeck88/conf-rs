@@ -61,6 +61,8 @@ pub struct ProgramOption {
     pub secret: Option<bool>,
     /// Whether this is a positional argument (has no short/long form, accepts value by position)
     pub is_positional: bool,
+    /// Whether this option can be populated from serde deserialization
+    pub has_serde_source: bool,
 }
 
 impl ProgramOption {
@@ -89,6 +91,7 @@ impl ProgramOption {
             allow_hyphen_values,
             secret,
             is_positional,
+            has_serde_source,
         } = self;
 
         id.to_mut().insert_str(0, id_prefix);
@@ -155,6 +158,7 @@ impl ProgramOption {
             allow_hyphen_values,
             secret,
             is_positional,
+            has_serde_source,
         }
     }
 

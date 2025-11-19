@@ -234,6 +234,11 @@ impl FlagItem {
             .and_then(|serde| serde.deserialize_with.clone())
     }
 
+    /// Returns true if this field can receive a value from serde deserialization
+    pub fn has_serde_source(&self) -> bool {
+        self.serde.is_some() && !self.get_serde_skip()
+    }
+
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -248,6 +253,7 @@ impl FlagItem {
             .env_aliases
             .as_ref()
             .map(LitStrArray::quote_elements_into);
+        let has_serde_source = self.has_serde_source();
 
         Ok(quote! {
             #program_options_ident.push(::conf::ProgramOption {
@@ -264,6 +270,7 @@ impl FlagItem {
                 allow_hyphen_values: false,
                 secret: Some(false),
                 is_positional: false,
+                has_serde_source: #has_serde_source,
             });
         })
     }

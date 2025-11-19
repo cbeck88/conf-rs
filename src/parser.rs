@@ -182,8 +182,8 @@ impl<'a> Parser<'a> {
                 MaybeArg::EnvOnly(text) => {
                     env_only_help_text.push(text);
                 }
-                MaybeArg::DefaultOnly => {
-                    // We don't bother documenting these since the user can't adjust them
+                MaybeArg::NotArgsOrEnv => {
+                    // We don't document these since the user can't adjust them via CLI or env
                 }
             }
         }
@@ -335,8 +335,10 @@ impl<'a> Parser<'a> {
                 let mut buf = String::new();
                 option.print(&mut buf, Some(env))?;
                 Ok(MaybeArg::EnvOnly(buf))
-            } else if option.default_value.is_some() {
-                Ok(MaybeArg::DefaultOnly)
+            } else if option.default_value.is_some() || option.has_serde_source {
+                // This option is not visible in CLI help since it can only come from
+                // default values or serde deserialization
+                Ok(MaybeArg::NotArgsOrEnv)
             } else {
                 panic!(
                     "Program option {option:#?} has no way to receive a value, this is an internal error."
@@ -442,5 +444,6 @@ impl<'a> Parser<'a> {
 enum MaybeArg {
     Arg(Arg),
     EnvOnly(String),
-    DefaultOnly,
+    /// Option has no CLI or env source, only default value or serde deserialization
+    NotArgsOrEnv,
 }

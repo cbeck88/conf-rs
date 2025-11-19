@@ -405,6 +405,11 @@ impl ParameterItem {
             .and_then(|serde| serde.deserialize_with.clone())
     }
 
+    /// Returns true if this field can receive a value from serde deserialization
+    pub fn has_serde_source(&self) -> bool {
+        self.serde.is_some() && !self.get_serde_skip()
+    }
+
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -424,6 +429,7 @@ impl ParameterItem {
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
+        let has_serde_source = self.has_serde_source();
 
         Ok(quote! {
             #program_options_ident.push(::conf::ProgramOption {
@@ -440,6 +446,7 @@ impl ParameterItem {
                 allow_hyphen_values: #allow_hyphen_values,
                 secret: #secret,
                 is_positional: #is_positional,
+                has_serde_source: #has_serde_source,
             });
         })
     }

@@ -541,15 +541,24 @@ fn print_opt_requirements(
         (Some(switch), None) => writeln!(stream, "  '{switch}' {trailing_text}")?,
         (None, Some(name)) => writeln!(stream, "  env '{name}' {trailing_text}")?,
         (None, None) => {
-            debug_assert!(
-                false,
-                "This should be unreachable, we should not be printing opt requirements for an option with no way to specify it"
-            );
-            writeln!(
-                stream,
-                "  There is no way to provide this value, this is an internal error ({id})",
-                id = opt.id
-            )?;
+            // This can happen for serde-only options
+            if opt.has_serde_source {
+                writeln!(
+                    stream,
+                    "  '{id}' in config file {trailing_text}",
+                    id = opt.id
+                )?;
+            } else {
+                debug_assert!(
+                    false,
+                    "This should be unreachable, we should not be printing opt requirements for an option with no way to specify it"
+                );
+                writeln!(
+                    stream,
+                    "  There is no way to provide this value, this is an internal error ({id})",
+                    id = opt.id
+                )?;
+            }
         }
     };
     Ok(())

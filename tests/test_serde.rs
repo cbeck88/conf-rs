@@ -1116,3 +1116,81 @@ fn test_serde_deserialize_with_mutual_exclusivity() {
     // would be "deserialize_with and use_value_parser are mutually exclusive"
     // This is tested by the proc macro compilation tests
 }
+
+/// Test that a field can have only serde as its value source (no CLI, no env, no default).
+/// This tests that the parser doesn't panic when encountering such a field.
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct SerdeOnlyConfig {
+    /// This field has CLI and env sources
+    #[arg(long, env)]
+    pub normal_field: String,
+
+    /// This field can only come from serde - no short, long, env, or default
+    #[arg(serde)]
+    pub serde_only_field: i32,
+
+    /// An optional serde-only field
+    #[arg(serde)]
+    pub optional_serde_only: Option<String>,
+}
+
+#[test]
+fn test_serde_only_parameter() {
+    // Test that serde-only fields work when provided in document
+    let result = SerdeOnlyConfig::conf_builder()
+        .args(["."])
+        .env([("NORMAL_FIELD", "hello")])
+        .doc(
+            "config.json",
+            json!({
+                "serde_only_field": 42,
+                "optional_serde_only": "world"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.normal_field, "hello");
+    assert_eq!(result.serde_only_field, 42);
+    assert_eq!(result.optional_serde_only, Some("world".to_string()));
+
+    // Test with optional serde-only field missing
+    let result = SerdeOnlyConfig::conf_builder()
+        .args(["."])
+        .env([("NORMAL_FIELD", "hello")])
+        .doc(
+            "config.json",
+            json!({
+                "serde_only_field": 100
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.normal_field, "hello");
+    assert_eq!(result.serde_only_field, 100);
+    assert_eq!(result.optional_serde_only, None);
+
+    // Test that required serde-only field causes error when missing
+    assert_error_contains_text!(
+        SerdeOnlyConfig::conf_builder()
+            .args(["."])
+            .env([("NORMAL_FIELD", "hello")])
+            .try_parse(),
+        ["'serde_only_field' in config file", "must be provided"]
+    );
+
+    // Test that help doesn't panic (serde-only fields should not appear in help)
+    let help_result = SerdeOnlyConfig::conf_builder()
+        .args([".", "--help"])
+        .env::<&str, &str>([])
+        .try_parse();
+    assert!(help_result.is_err());
+    let err_str = help_result.unwrap_err().to_string();
+    // normal_field should appear in help
+    assert!(err_str.contains("--normal-field"));
+    // serde_only_field should NOT appear in help (no CLI source)
+    assert!(!err_str.contains("serde-only-field"));
+    assert!(!err_str.contains("serde_only_field"));
+}
