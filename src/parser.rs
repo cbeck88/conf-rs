@@ -78,6 +78,38 @@ pub struct Parser<'a> {
     command: Command,
 }
 
+// Build help text for a ProgramOption, including env vars, defaults, and secret tags.
+// The description (if any) comes first, followed by env vars, default value, and secret tag.
+fn build_help_text(option: &ProgramOption, env: &ParsedEnv) -> String {
+    let mut help_text = option
+        .description
+        .as_deref()
+        .unwrap_or_default()
+        .to_string();
+
+    // Add env var info
+    if let Some(env_form) = option.env_form.as_deref() {
+        let cur_val = env.get_lossy_or_default(env_form);
+        help_text += &format!("\n[env {env_form}={cur_val}]");
+    }
+    for env_alias in option.env_aliases.iter() {
+        let cur_val = env.get_lossy_or_default(env_alias);
+        help_text += &format!("\n[env {env_alias}={cur_val}]");
+    }
+
+    // Add default value
+    if let Some(def) = option.default_value.as_ref() {
+        help_text += &format!("\n[default: {def}]");
+    }
+
+    // Add secret tag
+    if option.is_secret() {
+        help_text += "\n[secret]";
+    }
+
+    help_text
+}
+
 impl<'a> Parser<'a> {
     /// Create a parser from top-level parser config and a list of program options
     /// This parser doesn't consider env at all when parsing, but does use env when rendering help.
@@ -286,30 +318,7 @@ impl<'a> Parser<'a> {
             }
 
             // Build help text (env is allowed for positional args!)
-            let mut help_text = String::new();
-
-            if let Some(env_form) = option.env_form.as_deref() {
-                let cur_val = env.get_lossy_or_default(env_form);
-                help_text += &format!("\n[env {env_form}={cur_val}]");
-            }
-            for env_alias in option.env_aliases.iter() {
-                let cur_val = env.get_lossy_or_default(env_alias);
-                help_text += &format!("\n[env {env_alias}={cur_val}]");
-            }
-
-            if let Some(def) = option.default_value.as_ref() {
-                help_text += &format!("\n[default: {def}]");
-            }
-
-            if option.is_secret() {
-                help_text += "\n[secret]";
-            }
-
-            // Prepend description
-            if let Some(desc) = option.description.as_deref() {
-                help_text.insert_str(0, desc);
-            }
-
+            let help_text = build_help_text(option, env);
             if !help_text.is_empty() {
                 arg = arg.help(help_text);
             }
@@ -370,30 +379,8 @@ impl<'a> Parser<'a> {
             );
         }
 
-        // Set the help text if either description or env_form is present, in that order
-        let mut help_text = option
-            .env_form
-            .as_deref()
-            .map(|env_form| {
-                let cur_val = env.get_lossy_or_default(env_form);
-                format!("\n[env {env_form}={cur_val}]")
-            })
-            .unwrap_or_default();
-        // Append any env aliases to the help text
-        for env_alias in option.env_aliases.iter() {
-            let cur_val = env.get_lossy_or_default(env_alias);
-            help_text += &format!("\n[env {env_alias}={cur_val}]");
-        }
-        // Append any default value to the help text
-        if let Some(def) = option.default_value.as_ref() {
-            help_text += &format!("\n[default: {def}]");
-        }
-        // Append secret tag if the option is a secret
-        if option.is_secret() {
-            help_text += "\n[secret]";
-        }
-        // Prepend the user's description to the help_text if present
-        help_text.insert_str(0, option.description.as_deref().unwrap_or_default());
+        // Set the help text
+        let help_text = build_help_text(option, env);
         if !help_text.is_empty() {
             arg = arg.help(help_text);
         }
