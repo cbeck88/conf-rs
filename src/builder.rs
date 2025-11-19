@@ -1,27 +1,31 @@
-use crate::{Conf, ConfContext, Error, InnerError, ParsedArgs, ParsedEnv, parse_env};
-use std::{ffi::OsString, marker::PhantomData};
+use crate::{Conf, ConfContext, ConfigEvent, Error, InnerError, ParsedArgs, ParsedEnv, parse_env};
+use std::{cell::RefCell, ffi::OsString, marker::PhantomData};
 
 /// A builder which collects config value sources for the parse.
 ///
 /// Use any of [`ConfBuilder::args`], [`ConfBuilder::env`], [`ConfBuilder::doc`] to set sources,
+/// if desired use `ConfBuilder::config_logger` to set a callback,
 /// and then call one of [`ConfBuilder::parse`] or [`ConfBuilder::try_parse`].
 ///
 /// If `args` is not called, the default source is `std::env::args_os`.
 /// If `env` is not called, the default source is `std::env::vars_os`.
-pub struct ConfBuilder<S>
+pub struct ConfBuilder<S, F = fn(&dyn ConfigEvent)>
 where
     S: Conf,
+    F: FnMut(&dyn ConfigEvent),
 {
     collected_env: ParsedEnv,
     inited_env: bool,
     collected_args: Vec<OsString>,
     inited_args: bool,
+    config_logger: Option<F>,
     _marker: PhantomData<fn() -> S>,
 }
 
-impl<S> Default for ConfBuilder<S>
+impl<S, F> Default for ConfBuilder<S, F>
 where
     S: Conf,
+    F: FnMut(&dyn ConfigEvent),
 {
     fn default() -> Self {
         Self {
@@ -29,14 +33,16 @@ where
             inited_env: false,
             collected_args: Default::default(),
             inited_args: false,
+            config_logger: None,
             _marker: Default::default(),
         }
     }
 }
 
-impl<S> ConfBuilder<S>
+impl<S, F> ConfBuilder<S, F>
 where
     S: Conf,
+    F: FnMut(&dyn ConfigEvent),
 {
     /// Set the CLI args used in this parse
     pub fn args(mut self, args: impl IntoIterator<Item: Into<OsString>>) -> Self {
@@ -58,6 +64,16 @@ where
         self
     }
 
+    /// Set the config logger used in this parse
+    pub fn config_logger(mut self, f: F) -> Self {
+        assert!(
+            self.config_logger.is_none(),
+            "Cannot set config_logger twice"
+        );
+        self.config_logger = Some(f);
+        self
+    }
+
     /// Parse based on supplied sources (or falling back to defaults), and exiting the program
     /// with errors logged to stderr if parsing fails.
     pub fn parse(self) -> S {
@@ -70,19 +86,23 @@ where
     /// Try to parse an instance based on supplied sources (or falling back to defaults),
     /// returning an error if parsing fails.
     pub fn try_parse(self) -> Result<S, Error> {
-        let (parsed_env, args) = self.into_tuple();
+        let (parsed_env, args, mut config_logger) = self.into_tuple();
+        let config_logger_refcell = config_logger
+            .as_mut()
+            .map(|cb| RefCell::new(&mut *cb as &mut dyn FnMut(&dyn ConfigEvent)));
+        let config_logger = config_logger_refcell.as_ref();
 
         let mut parser = S::get_parser(&parsed_env)?;
         let arg_matches = parser.parse(args)?;
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
-        let conf_context = ConfContext::new(parsed_args, &parsed_env);
+        let conf_context = ConfContext::new(parsed_args, &parsed_env, config_logger);
         S::from_conf_context(conf_context)
             .map_err(|errs| InnerError::vec_to_clap_error(errs, parser.get_command()))
     }
 
     /// Convert self into an args, env tuple, after setting defaults from std::env::* and such
     /// if anything was not inited
-    pub(crate) fn into_tuple(mut self) -> (ParsedEnv, Vec<OsString>) {
+    pub(crate) fn into_tuple(mut self) -> (ParsedEnv, Vec<OsString>, Option<F>) {
         if !self.inited_args {
             self = self.args(std::env::args_os());
         }
@@ -90,6 +110,6 @@ where
             self = self.env(std::env::vars_os());
         }
 
-        (self.collected_env, self.collected_args)
+        (self.collected_env, self.collected_args, self.config_logger)
     }
 }

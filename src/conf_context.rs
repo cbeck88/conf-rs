@@ -1,7 +1,12 @@
-use crate::{InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption, str_to_bool};
+use crate::{
+    ConfigLogger, InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption, str_to_bool,
+};
 use clap::parser::ValueSource;
 use core::fmt::Debug;
-use std::ffi::{OsStr, OsString};
+use std::{
+    cell::RefCell,
+    ffi::{OsStr, OsString},
+};
 
 // Data about the source of a value returned by ConfContext functions
 // This is mainly used to render help if something fails in the value parser later
@@ -72,15 +77,21 @@ pub struct ConfContext<'a> {
     env: &'a ParsedEnv,
     id_prefix: String,
     flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'a>>,
+    config_logger: Option<&'a RefCell<ConfigLogger<'a>>>,
 }
 
 impl<'a> ConfContext<'a> {
-    pub(crate) fn new(args: ParsedArgs<'a>, env: &'a ParsedEnv) -> Self {
+    pub(crate) fn new(
+        args: ParsedArgs<'a>,
+        env: &'a ParsedEnv,
+        config_logger: Option<&'a RefCell<ConfigLogger<'a>>>,
+    ) -> Self {
         Self {
             args,
             env,
             id_prefix: String::default(),
             flattened_optional_debug_info: None,
+            config_logger,
         }
     }
 
@@ -445,6 +456,7 @@ impl<'a> ConfContext<'a> {
             env: self.env,
             id_prefix: self.id_prefix.clone() + sub_id_prefix,
             flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
+            config_logger: self.config_logger.clone(),
         }
     }
 
@@ -481,6 +493,7 @@ impl<'a> ConfContext<'a> {
             env: self.env,
             id_prefix,
             flattened_optional_debug_info,
+            config_logger: self.config_logger.clone(),
         }
     }
 
@@ -495,6 +508,7 @@ impl<'a> ConfContext<'a> {
                     env: self.env,
                     id_prefix: self.id_prefix.clone(),
                     flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
+                    config_logger: self.config_logger.clone(),
                 },
             )
         })

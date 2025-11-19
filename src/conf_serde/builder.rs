@@ -1,13 +1,14 @@
 use crate::{
-    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, ConfSerdeSeed, Error, InnerError,
-    ParsedArgs,
+    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, ConfSerdeSeed, ConfigEvent, Error,
+    InnerError, ParsedArgs,
 };
 use serde::de::{DeserializeSeed, Deserializer};
-use std::{ffi::OsString, marker::PhantomData};
+use std::{cell::RefCell, ffi::OsString, marker::PhantomData};
 
-impl<S> ConfBuilder<S>
+impl<S, F> ConfBuilder<S, F>
 where
     S: ConfSerde,
+    F: FnMut(&dyn ConfigEvent),
 {
     /// Set the document used in this parse.
     ///
@@ -21,7 +22,7 @@ where
         self,
         document_name: impl Into<String>,
         deserializer: D,
-    ) -> ConfSerdeBuilder<'de, S, D> {
+    ) -> ConfSerdeBuilder<'de, D, S, F> {
         ConfSerdeBuilder {
             inner: self,
             document_name: document_name.into(),
@@ -34,20 +35,22 @@ where
 /// A ConfBuilder which additionally has serde-document content installed.
 ///
 /// This is only allowed when the target struct supports serde, i.e. has `#[conf(serde)]` attribute.
-pub struct ConfSerdeBuilder<'de, S, D>
+pub struct ConfSerdeBuilder<'de, D, S, F>
 where
     S: ConfSerde,
+    F: FnMut(&dyn ConfigEvent),
     D: Deserializer<'de>,
 {
-    inner: ConfBuilder<S>,
+    inner: ConfBuilder<S, F>,
     document_name: String,
     document: D,
     _marker: PhantomData<&'de u8>,
 }
 
-impl<'de, S, D> ConfSerdeBuilder<'de, S, D>
+impl<'de, D, S, F> ConfSerdeBuilder<'de, D, S, F>
 where
     S: ConfSerde,
+    F: FnMut(&dyn ConfigEvent),
     D: Deserializer<'de>,
 {
     /// Set the env vars used in this parse
@@ -82,14 +85,18 @@ where
             inner,
             document,
             document_name,
-            _marker,
+            ..
         } = self;
-        let (parsed_env, args) = inner.into_tuple();
+        let (parsed_env, args, mut config_logger) = inner.into_tuple();
+        let config_logger_refcell = config_logger
+            .as_mut()
+            .map(|cb| RefCell::new(&mut *cb as &mut dyn FnMut(&dyn ConfigEvent)));
+        let config_logger = config_logger_refcell.as_ref();
 
         let mut parser = <S as Conf>::get_parser(&parsed_env)?;
         let arg_matches = parser.parse(args)?;
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
-        let conf_context = ConfContext::new(parsed_args, &parsed_env);
+        let conf_context = ConfContext::new(parsed_args, &parsed_env, config_logger);
         let conf_serde_context = ConfSerdeContext::new(conf_context, document_name.as_str());
         let seed = ConfSerdeSeed::<S>::from(conf_serde_context);
         // Code gen should produce:
