@@ -43,6 +43,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [test](#parameter-test)
       * [skip_default_value](#parameter-test-skip-default-value)
   * [Repeat](#repeat)
+    * [short](#repeat-short)
     * [long](#repeat-long)
     * [pos](#repeat-pos)
     * [env](#repeat-env)
@@ -62,9 +63,9 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [skip](#repeat-serde-skip)
       * [use_value_parser](#repeat-serde-use-value-parser)
   * [Flatten](#flatten)
-    * [prefix](#flatten-prefix)
-    * [long_prefix](#flatten-long-prefix)
     * [env_prefix](#flatten-env-prefix)
+    * [long_prefix](#flatten-long-prefix)
+    * [prefix](#flatten-prefix)
     * [help_prefix](#flatten-help-prefix)
     * [skip_short](#flatten-skip-short)
     * [serde](#flatten-serde)
@@ -242,8 +243,8 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
      #[derive(Conf)]
      #[conf(serde)]
      pub struct Config {
-         #[conf(long, serde(rename = "new_name", alias = "old_name", alias = "legacy_name"))]
-         pub field: String,
+         #[arg(long, env, serde(rename = "new_name", alias = "old_name", alias = "legacy_name"))]
+         pub enabled: bool,
      }
      # }
      ```
@@ -410,7 +411,7 @@ A parameter represents a single value that can be parsed from a string.
 
 *  <a name="parameter-aliases"></a> `aliases` (string array argument)
 
-   Specifies alternate long switches that should be an alias for this parmeter.
+   Specifies alternate long switches that should be an alias for this parameter.
    This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
 
    example: `#[arg(aliases=["old-param-name", "older-param-name"])]`
@@ -497,7 +498,7 @@ A parameter represents a single value that can be parsed from a string.
 
    `allow_hyphen_values` is automatically set when the field value has a built-in type `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, since it is more likely in these cases that you intend to pass a negative number.
 
-   This corresponds to [`clap::Arg::allow_hypen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
 
 *  <a name="parameter-secret"></a> `secret` (optional bool argument)
 
@@ -670,6 +671,17 @@ A repeat field is similar to a parameter, except that it may appear multiple tim
 *Note*: A repeat option produces one `T` for each time the option appears in the CLI arguments, and unlike a parameter the option can appear multiple times. If it does not appear, and an `env` variable is specified, then that variable
 is read and split on a delimiter character which defaults to `','`, to produce a series of `T` values.
 
+*  <a name="repeat-short"></a> `short` (optional char argument)
+
+   Specifies a short (one-dash) switch associated to this repeat option.
+   If argument is omitted, defaults to the first letter of the field name.
+
+   example: `#[arg(repeat, short)]`, `#[arg(repeat, short = 'p')]`
+
+   example command-line: `./my_prog -p peer1 -p peer2`
+
+   *Note*: This behavior is the same as in `clap-derive`.
+
 *  <a name="repeat-long"></a> `long` (optional string argument)
 
    Specifies a long (two-dash) switch associated to this option.
@@ -833,7 +845,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    example command-line: `PEERS=peer1|peer2 ./my_prog`
 
-   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like `value_delimieter`.
+   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like `value_delimiter`.
 
 *  <a name="repeat-no-env-delimiter"></a> `no_env_delimiter` (no argument)
 
@@ -853,7 +865,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    `allow_hyphen_values` is automatically set when the field value has a built-in type `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, since it is more likely in these cases that you intend to pass a negative number.
 
-   This corresponds to [`clap::Arg::allow_hypen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
 
 *  <a name="repeat-secret"></a> `secret` (optional bool argument)
 
@@ -1399,7 +1411,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
    Creates a validation constraint that must be satisfied after parsing this struct succeeds, from a user-defined function.
    The function should have signature `fn(&T) -> Result<(), impl Display>`.
 
-   The `validation_prediate = ...` attribute is allowed to repeat multiple times, to set multiple validation prediates.
+   The `validation_predicate = ...` attribute is allowed to repeat multiple times, to set multiple validation predicates.
 
 *  <a name="struct-test"></a> `test` (no arguments)
 

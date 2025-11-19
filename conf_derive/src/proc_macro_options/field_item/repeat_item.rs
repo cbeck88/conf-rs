@@ -104,6 +104,7 @@ pub struct RepeatItem {
     field_type: Type, // This is needed to help with type inference in code gen
     allow_hyphen_values: bool,
     secret: Option<LitBool>,
+    short_switch: Option<LitChar>,
     long_switch: Option<LitStr>,
     aliases: Option<LitStrArray>,
     env_name: Option<LitStr>,
@@ -138,6 +139,7 @@ impl RepeatItem {
             field_type,
             allow_hyphen_values,
             secret: None,
+            short_switch: None,
             long_switch: None,
             aliases: None,
             env_name: None,
@@ -158,6 +160,13 @@ impl RepeatItem {
                     let path = meta.path.clone();
                     if path.is_ident("repeat") {
                         Ok(())
+                    } else if path.is_ident("short") {
+                        set_once(
+                            &path,
+                            &mut result.short_switch,
+                            parse_optional_value::<LitChar>(meta)?
+                                .or(make_short(&result.field_name, path.span())),
+                        )
                     } else if path.is_ident("long") {
                         set_once(
                             &path,
@@ -274,6 +283,13 @@ impl RepeatItem {
             ));
         }
 
+        if result.is_positional && result.short_switch.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "#[conf(pos)] cannot be used with #[conf(short)]",
+            ));
+        }
+
         if result.long_switch.is_none()
             && !result
                 .aliases
@@ -373,6 +389,7 @@ impl RepeatItem {
     ) -> Result<TokenStream, syn::Error> {
         let id = self.field_name.to_string();
         let description = quote_opt_into(&self.description);
+        let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_into(&self.long_switch);
         let aliases = self.aliases.as_ref().map(LitStrArray::quote_elements_into);
         let env_form = quote_opt_into(&self.env_name);
@@ -389,7 +406,7 @@ impl RepeatItem {
               id: #id.into(),
               parse_type: ::conf::ParseType::Repeat,
               description: #description,
-              short_form: None,
+              short_form: #short_form,
               long_form: #long_form,
               aliases: vec![#aliases],
               env_form: #env_form,

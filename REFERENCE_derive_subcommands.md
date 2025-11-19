@@ -12,6 +12,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [serde](#enum-serde)
 * [Variant-level attributes](#variant-level-attributes)
     * [name](#variant-name)
+    * [alias](#variant-alias)
     * [serde](#variant-serde)
       * [rename](#variant-serde-rename)
       * [alias](#variant-serde-alias)
@@ -46,14 +47,14 @@ pub enum MySubcommands {
     // This is also a variant-level attribute
     #[conf(name = "validate")]
     RunValidation(ValidateConfig),
-    // This is also a variant-level attribute
+    // This variant has no associated config (zero fields)
     #[conf(name = "stat")]
     Stat,
 }
 # }
 ```
 
-Each enum variant must have zero or one unnamed fields, which if present is a `struct` type which implements [`Conf`] [^compat-note-1].
+Each enum variant must have zero or one unnamed fields. If a field is present, it must be a `struct` type which implements [`Conf`] [^compat-note-1]. If no field is present (as with `Stat` above), the subcommand takes no additional arguments beyond those defined in the parent struct.
 
 ## Enum-level attributes
 
@@ -101,7 +102,37 @@ Each enum variant must have zero or one unnamed fields, which if present is a `s
 
    Set the name of this subcommand, which is used to activate the subcommand and is documented in the help.
 
-   If this attribute is not present, the name is the lower snake-case of the variant name.
+   If this attribute is not present, the name is the kebab-case of the variant name.
+
+*  <a name="variant-alias"></a> `alias` (string argument, repeating)
+
+   example: `#[conf(alias = "mig")]`, `#[conf(alias = "mig", alias = "m")]`
+
+   Adds alternative names that can be used to invoke this subcommand on the command line.
+   This is useful for providing shorter or alternative names for frequently used subcommands.
+
+   The `alias` attribute can be specified multiple times to add multiple alternative names.
+
+   **Example**:
+   ```rust
+   # use conf::Subcommands;
+   # use conf::Conf;
+   # #[cfg(feature = "serde")]
+   # {
+   # #[derive(Conf)]
+   # #[conf(serde)]
+   # pub struct MigrateConfig {}
+
+   #[derive(Subcommands)]
+   #[conf(serde)]
+   pub enum Command {
+       #[conf(name = "migrate", alias = "mig", alias = "m")]
+       Migrate(MigrateConfig),
+   }
+   # }
+   ```
+
+   In this example, the subcommand can be invoked as `./my_prog migrate`, `./my_prog mig`, or `./my_prog m`.
 
 *  <a name="variant-serde"></a> `serde` (optional additional attributes)
 

@@ -272,3 +272,95 @@ fn test_repeats2_parsing() {
 
     assert_eq!(result.my_list, vec_str(["foo,bar"]));
 }
+
+#[derive(Conf)]
+struct TestRepeatsShort {
+    /// This is a repeat option with short and long
+    #[conf(repeat, short, long, env)]
+    items: Vec<String>,
+
+    /// This is a repeat option with explicit short char
+    #[conf(repeat, short = 'x', long)]
+    extras: Vec<i32>,
+}
+
+#[test]
+fn test_repeats_short_get_program_options() {
+    let opts = TestRepeatsShort::get_program_options().unwrap();
+
+    assert_eq!(opts.len(), 2);
+
+    assert_eq!(opts[0].parse_type, ParseType::Repeat);
+    assert_eq!(opts[0].short_form, Some('i'));
+    assert_eq!(opts[0].long_form.as_deref(), Some("items"));
+    assert_eq!(opts[0].env_form.as_deref(), Some("ITEMS"));
+
+    assert_eq!(opts[1].parse_type, ParseType::Repeat);
+    assert_eq!(opts[1].short_form, Some('x'));
+    assert_eq!(opts[1].long_form.as_deref(), Some("extras"));
+    assert_eq!(opts[1].env_form, None);
+}
+
+#[test]
+fn test_repeats_short_parsing() {
+    // Using short flags
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-i", "foo", "-i", "bar"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["foo", "bar"]));
+    assert_eq!(result.extras, Vec::<i32>::new());
+
+    // Mixing short and long flags
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-i", "foo", "--items", "bar", "-i", "baz"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["foo", "bar", "baz"]));
+
+    // Using explicit short char
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-x", "1", "-x", "2", "-x", "3"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.extras, vec![1, 2, 3]);
+
+    // Mixing both repeat fields with short flags
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-i", "a", "-x", "10", "-i", "b", "-x", "20"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["a", "b"]));
+    assert_eq!(result.extras, vec![10, 20]);
+
+    // Short flag with = syntax
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-i=foo", "-i=bar"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["foo", "bar"]));
+}
+
+#[test]
+fn test_repeats_short_with_env() {
+    // Env should work when short is defined
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS", "x,y,z")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["x", "y", "z"]));
+
+    // CLI short should shadow env
+    let result = TestRepeatsShort::try_parse_from::<&str, &str, &str>(
+        vec![".", "-i", "cli"],
+        vec![("ITEMS", "env1,env2")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec_str(["cli"]));
+}
