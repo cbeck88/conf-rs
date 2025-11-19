@@ -250,6 +250,7 @@ impl<'a> Parser<'a> {
     // For similar reasons, we can't let clap perform default values for env-only arguments, since
     // it won't run for those arguments. It's simpler to just let not clap perform default
     // values at all.
+    #[inline]
     fn make_arg(
         _parser_config: &ParserConfig,
         env: &ParsedEnv,
