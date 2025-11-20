@@ -141,7 +141,9 @@ struct BadA3 {
 }
 
 #[test]
-#[should_panic(expected = "When flattening B at b2, these short options were not found: ['c', 'd']")]
+#[should_panic(
+    expected = "When flattening B at b2, these short options were not found: ['c', 'd']"
+)]
 fn test_skip_short_flags_program_options_unknown_skip_error2() {
     BadA3::get_program_options();
 }

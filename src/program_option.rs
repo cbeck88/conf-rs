@@ -262,11 +262,8 @@ impl ProgramOptionMeta for ProgramOption {
         &self.id
     }
 
-    fn description(&self) -> &dyn fmt::Display {
-        self.description
-            .as_ref()
-            .map(|d| d as &dyn fmt::Display)
-            .unwrap_or(&"")
+    fn description(&self) -> Option<&dyn fmt::Display> {
+        self.description.as_ref().map(|d| d as &dyn fmt::Display)
     }
 
     fn short_form(&self) -> Option<char> {

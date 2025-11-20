@@ -1,6 +1,6 @@
 use crate::{
     ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, ParsedEnv, Parser, ParserConfig,
-    ProgramOption,
+    ProgramOption, introspection,
 };
 use std::ffi::OsString;
 
@@ -67,6 +67,54 @@ pub trait Conf: Sized {
     /// The builder API is needed if you want to use advanced features.
     fn conf_builder() -> ConfBuilder<Self> {
         Default::default()
+    }
+
+    /// Iterate over the program options declared in this Conf structure.
+    /// This can be used for tasks such as generating an .env template.
+    ///
+    /// ```rust
+    /// use conf::{Conf, introspection::ProgramOptionMeta};
+    /// use std::net::SocketAddr;
+    /// use std::time::Duration;
+    ///
+    /// #[derive(Conf)]
+    /// pub struct Config {
+    ///   /// Socket addr to listen to for HTTP
+    ///   #[conf(long, env, default_value = "0.0.0.0:6666")]
+    ///   pub http_listen_addr: SocketAddr,
+    ///   /// Upstream service URL to connect to
+    ///   #[conf(long, env, default_value = "http://upstream.com")]
+    ///   pub upstream_service_url: String,
+    ///   /// HTTP timeout for upstream connections (seconds)
+    ///   #[conf(long, env, default_value = "5")]
+    ///   pub http_timeout: u32,
+    /// }
+    ///
+    /// let env_template = Config::program_options().filter_map(|opt| {
+    ///     if let Some(env_form) = opt.env_form() {
+    ///         let text = if let Some(desc) = opt.description() {
+    ///             format!("# {desc}\n{env_form}=")
+    ///         } else {
+    ///             format!("{env_form}=")
+    ///         };
+    ///         Some(text)
+    ///     } else {
+    ///         None
+    ///     }
+    /// }).collect::<Vec<String>>().join("\n");
+    ///
+    /// let expected_output = r##"
+    /// \# Socket addr to listen to for HTTP
+    /// HTTP_LISTEN_ADDR=
+    /// \# Upstream service URL to connect to
+    /// UPSTREAM_SERVICE_URL=
+    /// \# HTTP timeout for upstream connections (seconds)
+    /// HTTP_TIMEOUT="##
+    ///    .trim().replace(r"\#", "#"); // <- work around rustdoc handling of #
+    ///
+    /// assert_eq!(env_template, expected_output);
+    fn program_options() -> impl Iterator<Item: introspection::ProgramOptionMeta> {
+        Self::get_program_options().iter().cloned()
     }
 
     /// Run clap's debug assertions on the parser configuration for this struct.

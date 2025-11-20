@@ -1023,6 +1023,14 @@ fn test_config_logger_deeply_nested_with_serde() {
     // Verify all the deeply nested IDs are correct
     assert!(logged.iter().any(|e| e.id == "name"));
     assert!(logged.iter().any(|e| e.id == "database.url"));
-    assert!(logged.iter().any(|e| e.id == "database.credentials.username"));
-    assert!(logged.iter().any(|e| e.id == "database.credentials.password"));
+    assert!(
+        logged
+            .iter()
+            .any(|e| e.id == "database.credentials.username")
+    );
+    assert!(
+        logged
+            .iter()
+            .any(|e| e.id == "database.credentials.password")
+    );
 }

@@ -7,7 +7,7 @@ pub trait ProgramOptionMeta {
     fn id(&self) -> &dyn Display;
     /// The description of the program option. This is generally its doc string, plus any prefixing.
     /// This is also displayed in the help text for the program option.
-    fn description(&self) -> &dyn Display;
+    fn description(&self) -> Option<&dyn Display>;
     /// The short-form switch (-f, -h) of the option, if any.
     fn short_form(&self) -> Option<char>;
     /// The long-form switch (--file, --help) of the option, if any.
