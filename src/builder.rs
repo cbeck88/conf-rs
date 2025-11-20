@@ -1,4 +1,7 @@
-use crate::{Conf, ConfContext, ConfigEvent, Error, InnerError, ParsedArgs, ParsedEnv, parse_env};
+use crate::{
+    Conf, ConfContext, Error, InnerError, ParsedArgs, ParsedEnv, introspection::ConfigEvent,
+    parse_env,
+};
 use std::{cell::RefCell, ffi::OsString, marker::PhantomData};
 
 /// A builder which collects config value sources for the parse.

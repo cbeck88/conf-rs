@@ -1,6 +1,6 @@
 use crate::{
-    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, ConfSerdeSeed, ConfigEvent, Error,
-    InnerError, ParsedArgs,
+    Conf, ConfBuilder, ConfContext, ConfSerde, ConfSerdeContext, ConfSerdeSeed, Error, InnerError,
+    ParsedArgs, introspection::ConfigEvent,
 };
 use serde::de::{DeserializeSeed, Deserializer};
 use std::{cell::RefCell, ffi::OsString, marker::PhantomData};

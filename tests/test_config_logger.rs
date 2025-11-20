@@ -1,6 +1,9 @@
 //! Tests for the config logger introspection feature
 
-use conf::{Conf, ConfigEvent, ValueSource};
+use conf::{
+    Conf,
+    introspection::{ConfigEvent, ValueSource},
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -613,7 +616,10 @@ fn test_config_logger_repeat_with_serde() {
     let result = RepeatSerdeConfig::conf_builder()
         .args(["."])
         .env::<&str, &str>([])
-        .doc("config.json", json!({"tags": ["x", "y", "z"], "items": ["p", "q"]}))
+        .doc(
+            "config.json",
+            json!({"tags": ["x", "y", "z"], "items": ["p", "q"]}),
+        )
         .config_logger(logger)
         .try_parse()
         .unwrap();
@@ -624,7 +630,12 @@ fn test_config_logger_repeat_with_serde() {
     let logged = events.borrow();
 
     // Should have exactly 2 events (one per field)
-    assert_eq!(logged.len(), 2, "Expected 2 logged events, got {}", logged.len());
+    assert_eq!(
+        logged.len(),
+        2,
+        "Expected 2 logged events, got {}",
+        logged.len()
+    );
 
     // Check tags from document
     let tags_event = logged.iter().find(|e| e.id == "tags").expect("tags event");
@@ -632,7 +643,10 @@ fn test_config_logger_repeat_with_serde() {
     assert_eq!(tags_event.source_detail, Some("config.json".to_string()));
 
     // Check items from document
-    let items_event = logged.iter().find(|e| e.id == "items").expect("items event");
+    let items_event = logged
+        .iter()
+        .find(|e| e.id == "items")
+        .expect("items event");
     assert_eq!(items_event.source_type, "Document");
     assert_eq!(items_event.source_detail, Some("config.json".to_string()));
 }

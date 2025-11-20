@@ -1,4 +1,4 @@
-use crate::{CowStr, ParsedEnv, ProgramOptionMeta};
+use crate::{CowStr, ParsedEnv, introspection::ProgramOptionMeta};
 use std::fmt;
 
 /// This is a property of every program option, and dictates what form of data we expect to collect

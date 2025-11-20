@@ -1,6 +1,7 @@
 use crate::{
-    ConfigLogger, InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption,
-    introspection::ValueSource as PublicValueSource, str_to_bool,
+    InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption,
+    introspection::{ConfigLogger, ValueSource as PublicValueSource},
+    str_to_bool,
 };
 use clap::parser::ValueSource;
 use core::fmt::Debug;
@@ -642,8 +643,8 @@ impl<'a> ConfContext<'a> {
                 value_source: ConfValueSource<&'a str>,
             }
 
-            impl<'a> crate::ConfigEvent for ConfigEventImpl<'a> {
-                fn program_option(&self) -> &dyn crate::ProgramOptionMeta {
+            impl<'a> crate::introspection::ConfigEvent for ConfigEventImpl<'a> {
+                fn program_option(&self) -> &dyn crate::introspection::ProgramOptionMeta {
                     self.option
                 }
 

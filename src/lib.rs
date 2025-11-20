@@ -13,7 +13,7 @@ mod builder;
 mod conf_context;
 mod error;
 mod find_parameter;
-mod introspection;
+pub mod introspection;
 mod parse_env;
 mod parser;
 mod program_option;
@@ -31,7 +31,6 @@ use str_to_bool::str_to_bool;
 pub use builder::ConfBuilder;
 pub use error::Error;
 pub use find_parameter::find_parameter;
-pub use introspection::{ConfigEvent, ConfigLogger, ProgramOptionMeta, ValueSource};
 pub use styles::Styles;
 pub use traits::{Conf, Subcommands};
 
