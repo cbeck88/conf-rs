@@ -650,3 +650,379 @@ fn test_config_logger_repeat_with_serde() {
     assert_eq!(items_event.source_type, "Document");
     assert_eq!(items_event.source_detail, Some("config.json".to_string()));
 }
+
+#[test]
+fn test_config_logger_flatten_with_prefix() {
+    #[derive(Conf, Debug)]
+    pub struct ServerConfig {
+        #[arg(long, env)]
+        pub host: String,
+
+        #[arg(long, env)]
+        pub port: u16,
+    }
+
+    #[derive(Conf, Debug)]
+    pub struct AppConfig {
+        #[arg(long)]
+        pub name: String,
+
+        #[conf(flatten, prefix)]
+        pub server: ServerConfig,
+    }
+
+    let events = RefCell::new(Vec::new());
+
+    let logger = |event: &dyn ConfigEvent| {
+        let id = event.program_option().id().to_string();
+        let (source_type, source_detail) = match event.value_source() {
+            ValueSource::Args { .. } => ("Args".to_string(), None),
+            ValueSource::Env { var, .. } => ("Env".to_string(), Some(var.to_string())),
+            ValueSource::Default { .. } => ("Default".to_string(), None),
+            _ => panic!("Unexpected value source"),
+        };
+
+        events.borrow_mut().push(LoggedEvent {
+            id,
+            source_type,
+            source_detail,
+        });
+    };
+
+    let result = AppConfig::conf_builder()
+        .args([".", "--name=myapp", "--server-host=localhost"])
+        .env([("SERVER_PORT", "8080")])
+        .config_logger(logger)
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert_eq!(result.server.host, "localhost");
+    assert_eq!(result.server.port, 8080);
+
+    let logged = events.borrow();
+
+    assert_eq!(logged.len(), 3);
+
+    // Check name
+    let name_event = logged.iter().find(|e| e.id == "name").expect("name event");
+    assert_eq!(name_event.source_type, "Args");
+
+    // Check server.host with prefix
+    let host_event = logged
+        .iter()
+        .find(|e| e.id == "server.host")
+        .expect("server.host event");
+    assert_eq!(host_event.source_type, "Args");
+
+    // Check server.port from env with prefix
+    let port_event = logged
+        .iter()
+        .find(|e| e.id == "server.port")
+        .expect("server.port event");
+    assert_eq!(port_event.source_type, "Env");
+    assert_eq!(port_event.source_detail, Some("SERVER_PORT".to_string()));
+}
+
+#[test]
+fn test_config_logger_nested_flatten() {
+    #[derive(Conf, Debug)]
+    pub struct AuthConfig {
+        #[arg(long)]
+        pub token: String,
+    }
+
+    #[derive(Conf, Debug)]
+    pub struct ServerConfig {
+        #[arg(long, env)]
+        pub host: String,
+
+        #[conf(flatten, prefix)]
+        pub auth: AuthConfig,
+    }
+
+    #[derive(Conf, Debug)]
+    pub struct AppConfig {
+        #[arg(long)]
+        pub name: String,
+
+        #[conf(flatten, prefix)]
+        pub server: ServerConfig,
+    }
+
+    let events = RefCell::new(Vec::new());
+
+    let logger = |event: &dyn ConfigEvent| {
+        events.borrow_mut().push(LoggedEvent {
+            id: event.program_option().id().to_string(),
+            source_type: match event.value_source() {
+                ValueSource::Args { .. } => "Args".to_string(),
+                ValueSource::Env { .. } => "Env".to_string(),
+                _ => "Other".to_string(),
+            },
+            source_detail: None,
+        });
+    };
+
+    let result = AppConfig::conf_builder()
+        .args([
+            ".",
+            "--name=myapp",
+            "--server-host=localhost",
+            "--server-auth-token=secret",
+        ])
+        .env::<&str, &str>([])
+        .config_logger(logger)
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert_eq!(result.server.host, "localhost");
+    assert_eq!(result.server.auth.token, "secret");
+
+    let logged = events.borrow();
+
+    assert_eq!(logged.len(), 3);
+
+    // Check name
+    assert!(logged.iter().any(|e| e.id == "name"));
+
+    // Check nested flatten - server.host
+    assert!(logged.iter().any(|e| e.id == "server.host"));
+
+    // Check doubly nested - server.auth.token
+    assert!(logged.iter().any(|e| e.id == "server.auth.token"));
+}
+
+#[test]
+fn test_config_logger_flatten_optional() {
+    #[derive(Conf, Debug)]
+    pub struct OptionalConfig {
+        #[arg(long, env)]
+        pub enabled: bool,
+
+        #[arg(long, env)]
+        pub value: String,
+    }
+
+    #[derive(Conf, Debug)]
+    pub struct AppConfig {
+        #[arg(long)]
+        pub name: String,
+
+        #[conf(flatten)]
+        pub optional: Option<OptionalConfig>,
+    }
+
+    let events = RefCell::new(Vec::new());
+
+    let logger = |event: &dyn ConfigEvent| {
+        events.borrow_mut().push(LoggedEvent {
+            id: event.program_option().id().to_string(),
+            source_type: match event.value_source() {
+                ValueSource::Args { .. } => "Args".to_string(),
+                ValueSource::Env { var, .. } => format!("Env({})", var),
+                ValueSource::Default { .. } => "Default".to_string(),
+                _ => "Other".to_string(),
+            },
+            source_detail: None,
+        });
+    };
+
+    // Test when optional flatten is provided
+    let result = AppConfig::conf_builder()
+        .args([".", "--name=myapp", "--enabled"])
+        .env([("VALUE", "test-value")])
+        .config_logger(logger)
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert!(result.optional.is_some());
+    assert!(result.optional.as_ref().unwrap().enabled);
+    assert_eq!(result.optional.as_ref().unwrap().value, "test-value");
+
+    let logged = events.borrow();
+
+    assert_eq!(logged.len(), 3);
+
+    // Check name
+    assert!(logged.iter().any(|e| e.id == "name"));
+
+    // Check optional.enabled
+    let enabled_event = logged
+        .iter()
+        .find(|e| e.id == "optional.enabled")
+        .expect("optional.enabled event");
+    assert_eq!(enabled_event.source_type, "Args");
+
+    // Check optional.value from env
+    let value_event = logged
+        .iter()
+        .find(|e| e.id == "optional.value")
+        .expect("optional.value event");
+    assert_eq!(value_event.source_type, "Env(VALUE)");
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn test_config_logger_flatten_with_serde() {
+    use serde_json::json;
+
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    pub struct DatabaseConfig {
+        #[arg(long, env, serde)]
+        pub url: String,
+
+        #[arg(long, env, serde, default_value = "10")]
+        pub pool_size: u32,
+    }
+
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    pub struct AppConfig {
+        #[arg(long, serde)]
+        pub name: String,
+
+        #[conf(flatten, prefix, serde(flatten))]
+        pub db: DatabaseConfig,
+    }
+
+    let events = RefCell::new(Vec::new());
+
+    let logger = |event: &dyn ConfigEvent| {
+        let id = event.program_option().id().to_string();
+        let (source_type, source_detail) = match event.value_source() {
+            ValueSource::Args { .. } => ("Args".to_string(), None),
+            ValueSource::Env { var, .. } => ("Env".to_string(), Some(var.to_string())),
+            ValueSource::Document { name, .. } => ("Document".to_string(), Some(name.to_string())),
+            ValueSource::Default { .. } => ("Default".to_string(), None),
+            _ => panic!("Unexpected value source"),
+        };
+
+        events.borrow_mut().push(LoggedEvent {
+            id,
+            source_type,
+            source_detail,
+        });
+    };
+
+    // Test with mixed sources: args, env, and document
+    let result = AppConfig::conf_builder()
+        .args([".", "--name=myapp"])
+        .env([("DB_POOL_SIZE", "20")])
+        .doc("config.json", json!({"url": "postgres://localhost/db"}))
+        .config_logger(logger)
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert_eq!(result.db.url, "postgres://localhost/db");
+    assert_eq!(result.db.pool_size, 20);
+
+    let logged = events.borrow();
+
+    assert_eq!(logged.len(), 3);
+
+    // Check name from args
+    let name_event = logged.iter().find(|e| e.id == "name").expect("name event");
+    assert_eq!(name_event.source_type, "Args");
+
+    // Check db.url from document (flattened with prefix)
+    let url_event = logged
+        .iter()
+        .find(|e| e.id == "db.url")
+        .expect("db.url event");
+    assert_eq!(url_event.source_type, "Document");
+    assert_eq!(url_event.source_detail, Some("config.json".to_string()));
+
+    // Check db.pool_size from env (flattened with prefix)
+    let pool_event = logged
+        .iter()
+        .find(|e| e.id == "db.pool_size")
+        .expect("db.pool_size event");
+    assert_eq!(pool_event.source_type, "Env");
+    assert_eq!(pool_event.source_detail, Some("DB_POOL_SIZE".to_string()));
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn test_config_logger_deeply_nested_with_serde() {
+    use serde_json::json;
+
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    pub struct CredentialsConfig {
+        #[arg(long, serde)]
+        pub username: String,
+
+        #[arg(long, serde)]
+        pub password: String,
+    }
+
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    pub struct DatabaseConfig {
+        #[arg(long, serde)]
+        pub url: String,
+
+        #[conf(flatten, prefix, serde(flatten))]
+        pub credentials: CredentialsConfig,
+    }
+
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    pub struct AppConfig {
+        #[arg(long, serde)]
+        pub name: String,
+
+        #[conf(flatten, prefix, serde(flatten))]
+        pub database: DatabaseConfig,
+    }
+
+    let events = RefCell::new(Vec::new());
+
+    let logger = |event: &dyn ConfigEvent| {
+        events.borrow_mut().push(LoggedEvent {
+            id: event.program_option().id().to_string(),
+            source_type: match event.value_source() {
+                ValueSource::Document { .. } => "Document".to_string(),
+                _ => "Other".to_string(),
+            },
+            source_detail: None,
+        });
+    };
+
+    let result = AppConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "name": "myapp",
+                "url": "postgres://localhost/db",
+                "username": "admin",
+                "password": "secret"
+            }),
+        )
+        .config_logger(logger)
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "myapp");
+    assert_eq!(result.database.url, "postgres://localhost/db");
+    assert_eq!(result.database.credentials.username, "admin");
+    assert_eq!(result.database.credentials.password, "secret");
+
+    let logged = events.borrow();
+
+    // All 4 fields should be logged
+    assert_eq!(logged.len(), 4);
+
+    // Verify all the deeply nested IDs are correct
+    assert!(logged.iter().any(|e| e.id == "name"));
+    assert!(logged.iter().any(|e| e.id == "database.url"));
+    assert!(logged.iter().any(|e| e.id == "database.credentials.username"));
+    assert!(logged.iter().any(|e| e.id == "database.credentials.password"));
+}
