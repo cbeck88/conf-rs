@@ -87,6 +87,7 @@ pub(crate) struct FlattenedOptionalDebugInfo<'a> {
 pub struct ConfContext<'a> {
     args: ParsedArgs<'a>,
     env: &'a ParsedEnv,
+    program_options: &'a [ProgramOption],
     id_prefix: String,
     flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'a>>,
     config_logger: Option<&'a RefCell<ConfigLogger<'a>>>,
@@ -97,11 +98,13 @@ impl<'a> ConfContext<'a> {
     pub(crate) fn new(
         args: ParsedArgs<'a>,
         env: &'a ParsedEnv,
+        program_options: &'a [ProgramOption],
         config_logger: Option<&'a RefCell<ConfigLogger<'a>>>,
     ) -> Self {
         Self {
             args,
             env,
+            program_options,
             id_prefix: String::default(),
             flattened_optional_debug_info: None,
             config_logger,
@@ -421,6 +424,7 @@ impl<'a> ConfContext<'a> {
     }
 
     /// Check if a given option appears in cli args or env (not defaulted)
+    /// The id should be relative to this context's prefix.
     /// This is used to implement any_program_options_appeared which supports flatten-optional
     pub fn option_appears(&self, id: &str) -> Result<Option<ConfValueSource<&'a str>>, InnerError> {
         if let Some(value_source) = self.get_value_source(id)? {
@@ -475,6 +479,7 @@ impl<'a> ConfContext<'a> {
         ConfContext {
             args: self.args.clone(),
             env: self.env,
+            program_options: self.program_options,
             id_prefix: self.id_prefix.clone() + sub_id_prefix,
             flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
             config_logger: self.config_logger,
@@ -494,14 +499,13 @@ impl<'a> ConfContext<'a> {
         option_appeared_result: (&str, ConfValueSource<&'a str>),
     ) -> ConfContext<'a> {
         let id_prefix = self.id_prefix.clone() + sub_id_prefix;
-        let (option_appeared_relative_id, value_source) = option_appeared_result;
-        let prefixed_id = id_prefix.clone() + option_appeared_relative_id;
+        let (option_appeared_absolute_id, value_source) = option_appeared_result;
 
         let option_appeared = *self
             .args
             .id_to_option()
-            .get(prefixed_id.as_str())
-            .unwrap_or_else(|| panic!("Option not found by id ({prefixed_id}), option_appeared_relative_id = {option_appeared_relative_id}, this is an internal_error: {:?}", self.args.id_to_option()));
+            .get(option_appeared_absolute_id)
+            .unwrap_or_else(|| panic!("Option not found by id ({option_appeared_absolute_id}), this is an internal_error: {:?}", self.args.id_to_option()));
 
         let flattened_optional_debug_info = Some(FlattenedOptionalDebugInfo {
             struct_name,
@@ -513,6 +517,7 @@ impl<'a> ConfContext<'a> {
         ConfContext {
             args: self.args.clone(),
             env: self.env,
+            program_options: self.program_options,
             id_prefix,
             flattened_optional_debug_info,
             config_logger: self.config_logger,
@@ -529,6 +534,7 @@ impl<'a> ConfContext<'a> {
                 ConfContext {
                     args,
                     env: self.env,
+                    program_options: self.program_options,
                     id_prefix: self.id_prefix.clone(),
                     flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
                     config_logger: self.config_logger,
@@ -541,6 +547,19 @@ impl<'a> ConfContext<'a> {
     /// Get the id prefix of this conf context
     pub fn get_id_prefix(&self) -> &str {
         &self.id_prefix
+    }
+
+    /// Get all program options that are relevant to this context (i.e., whose id starts with the current prefix)
+    /// Returns tuples of (relative_id, program_option) where relative_id has the prefix stripped
+    pub fn get_relevant_program_options(
+        &self,
+    ) -> impl Iterator<Item = (&'a str, &'a ProgramOption)> {
+        let prefix = &self.id_prefix;
+        self.program_options.iter().filter_map(move |opt| {
+            opt.id
+                .strip_prefix(prefix)
+                .map(|relative_id| (relative_id, opt))
+        })
     }
 
     /// Generate a "missing_required_parameter" error
@@ -619,12 +638,11 @@ impl<'a> ConfContext<'a> {
         }).collect::<Vec<(&ProgramOption, ConfValueSource<&'a str>)>>();
 
         let flattened_options = constraint_flattened_ids.into_iter().filter_map(|(flattened_field, maybe_appearing_option)| {
-            maybe_appearing_option.map(|(id, value_source)| {
-                let absolute_id = self.id_prefix.clone() + flattened_field + "." + id;
+            maybe_appearing_option.map(|(absolute_id, value_source)| {
                 let opt = self
                     .args
                     .id_to_option()
-                    .get(absolute_id.as_str())
+                    .get(absolute_id)
                     .unwrap_or_else(|| panic!("Option not found by id ({absolute_id}), this is an internal_error: {:?}", self.args.id_to_option()));
                 (flattened_field, *opt, value_source)
             })

@@ -103,10 +103,12 @@ where
             .map(|cb| RefCell::new(&mut *cb as &mut dyn FnMut(&dyn ConfigEvent)));
         let config_logger = config_logger_refcell.as_ref();
 
+        let program_options = S::get_program_options();
         let mut parser = S::get_parser(&parsed_env)?;
         let arg_matches = parser.parse(args)?;
         let parsed_args = ParsedArgs::new(&arg_matches, &parser);
-        let conf_context = ConfContext::new(parsed_args, &parsed_env, config_logger);
+        let conf_context =
+            ConfContext::new(parsed_args, &parsed_env, program_options, config_logger);
         S::from_conf_context(conf_context)
             .map_err(|errs| InnerError::vec_to_clap_error(errs, parser.get_command()))
     }

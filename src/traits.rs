@@ -172,9 +172,8 @@ pub trait Conf: Sized {
     fn from_conf_context(conf_context: ConfContext<'_>) -> Result<Self, Vec<InnerError>>;
     // Check if any program options from this Conf appeared in given conf context, before attempting
     // to parse it. Here "appeared" means that it has a value, and the value was not a default
-    // value. Returns an id (and value source) that can be used with conf_context to get the
-    // program option that appeared Note that this id is a relative id relative to thsi object
-    // and this conf context, not an absolute id.
+    // value. Returns an id (and value source) that can be used to look up the program option
+    // that appeared. The returned id is an absolute id (fully prefixed).
     //
     // This is used to implement flatten-optional, and also to get error details when a one-of
     // constraint fails Users generally can't call this, because ConfContext is not
@@ -183,9 +182,8 @@ pub trait Conf: Sized {
     fn any_program_options_appeared<'a>(
         conf_context: &ConfContext<'a>,
     ) -> Result<Option<(&'a str, ConfValueSource<&'a str>)>, InnerError> {
-        let program_options = Self::get_program_options();
-        for opt in program_options {
-            if let Some(value_source) = conf_context.option_appears(&opt.id)? {
+        for (relative_id, opt) in conf_context.get_relevant_program_options() {
+            if let Some(value_source) = conf_context.option_appears(relative_id)? {
                 return Ok(Some((&opt.id, value_source)));
             }
         }
