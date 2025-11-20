@@ -163,7 +163,7 @@ checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
 name = "conf"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "anstyle",
  "assert_matches",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "conf_derive"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "heck",
  "proc-macro2",
