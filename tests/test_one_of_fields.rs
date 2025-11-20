@@ -70,6 +70,7 @@ fn test_one_of_fields_parsing() {
 }
 
 #[derive(Conf, Debug, PartialEq, Eq)]
+#[allow(clippy::duplicated_attributes)]
 #[conf(one_of_fields(a, b), one_of_fields(b, c))]
 struct TwoOneOfFields {
     #[arg(short)]

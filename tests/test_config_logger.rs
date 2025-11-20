@@ -448,18 +448,18 @@ fn test_config_logger_program_option_metadata() {
     assert_eq!(verbose.1, None); // no short form
     assert_eq!(verbose.2, Some("verbose".to_string())); // long form
     assert_eq!(verbose.3, None); // no env
-    assert_eq!(verbose.4, false); // not positional
-    assert_eq!(verbose.5, false); // no serde source
-    assert_eq!(verbose.6, false); // not required
+    assert!(!verbose.4); // not positional
+    assert!(!verbose.5); // no serde source
+    assert!(!verbose.6); // not required
 
     // Verify metadata for name parameter
     let name = logged.iter().find(|(id, ..)| id == "name").expect("name");
     assert_eq!(name.1, None); // no short form
     assert_eq!(name.2, Some("name".to_string())); // long form
     assert_eq!(name.3, Some("NAME".to_string())); // has env
-    assert_eq!(name.4, false); // not positional
-    assert_eq!(name.5, false); // no serde source
-    assert_eq!(name.6, true); // required
+    assert!(!name.4); // not positional
+    assert!(!name.5); // no serde source
+    assert!(name.6); // required
 }
 
 #[test]

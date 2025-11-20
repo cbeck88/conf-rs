@@ -849,7 +849,6 @@ fn test_error_message_in_three_level_nesting() {
 }
 
 /// Edge case tests for flatten
-
 /// Flatten with default values
 #[derive(Conf, Debug)]
 #[conf(serde)]

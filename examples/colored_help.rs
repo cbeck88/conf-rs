@@ -5,7 +5,6 @@ use conf::anstyle::AnsiColor;
 ///
 /// Run with `cargo run --example colored_help -- --help` to see styled help text
 /// or `cargo run --example colored_help -- --name Alice --count 42` to run normally
-
 // Define custom color scheme for help text
 const HELP_STYLES: conf::Styles = conf::Styles::styled()
     .header(AnsiColor::Blue.on_default().bold())
