@@ -18,6 +18,12 @@ impl fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
 impl Error {
     /// Print formatted and colored error text to stderr or stdout as appropriate (as clap does)
     pub fn print(&self) -> Result<(), std::io::Error> {
