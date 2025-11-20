@@ -107,6 +107,13 @@ impl<'a> ConfContext<'a> {
         }
     }
 
+    /// Get a program option by its ID (will prepend the context's id_prefix)
+    #[doc(hidden)]
+    pub fn get_program_option_by_id(&self, id: &str) -> Option<&ProgramOption> {
+        let full_id = self.id_prefix.clone() + id;
+        self.args.id_to_option().get(full_id.as_str()).copied()
+    }
+
     fn get_env_os(&self, env_name: &'a str) -> Option<&'a OsStr> {
         self.env
             .get(env_name)

@@ -410,6 +410,14 @@ impl ParameterItem {
         self.serde.is_some() && !self.get_serde_skip()
     }
 
+    /// Returns true if this field has a CLI or env source (not just serde)
+    pub fn has_cli_or_env_source(&self) -> bool {
+        self.short_switch.is_some()
+            || self.long_switch.is_some()
+            || self.env_name.is_some()
+            || self.is_positional
+    }
+
     pub fn gen_push_program_options(
         &self,
         program_options_ident: &Ident,
@@ -631,6 +639,58 @@ impl ParameterItem {
         &self,
         conf_context_ident: &Ident,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        // If there's no CLI or env source, this parameter wasn't registered with clap,
+        // so we handle it specially
+        if !self.has_cli_or_env_source() {
+            // Check for default value first, before checking if optional
+            // This ensures that optional fields with defaults get Some(default) not None
+            if let Some(default_value) = &self.default_value {
+                // Serde-only field with default: use gen_initializer_helper with callbacks
+                // that provide the default value instead of reading from conf_context
+                let default_value_str = default_value.value();
+
+                let if_no_conf_context_val = |req: ExprRequest| -> TokenStream {
+                    match req {
+                        ExprRequest::Str => quote! {
+                            (::conf::ConfValueSource::Default, #default_value_str)
+                        },
+                        ExprRequest::OsStr => quote! {
+                            (::conf::ConfValueSource::Default, ::std::ffi::OsStr::new(#default_value_str))
+                        },
+                    }
+                };
+
+                return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val, None);
+            } else if self.is_optional_type.is_some() {
+                // Serde-only optional field without default: return None
+                return Ok((
+                    quote! {
+                        {
+                            let _ = #conf_context_ident;
+                            Ok(None)
+                        }
+                    },
+                    false,
+                ));
+            } else {
+                // Serde-only required field with no default: this is an error
+                // This field can only be satisfied from a serde document, and it's not optional,
+                // so if we're here it means either no document was provided or the field was missing
+                let id = self.field_name.to_string();
+                return Ok((
+                    quote! {
+                        {
+                            // Get the program option for this field to use in the error
+                            let opt = #conf_context_ident.get_program_option_by_id(#id)
+                                .expect("internal error: program option should exist for this field");
+                            Err(#conf_context_ident.missing_required_parameter_error(opt))
+                        }
+                    },
+                    false,
+                ));
+            }
+        }
+
         // Default behavior when no conf context value is found
         let if_no_conf_context_val = |_req: ExprRequest| {
             if self.is_optional_type.is_some() {
@@ -656,6 +716,25 @@ impl ParameterItem {
         doc_name: &Ident,
         doc_val: &Ident,
     ) -> Result<(TokenStream, bool), Error> {
+        // If there's no CLI or env source, this parameter wasn't registered with clap,
+        // so we just return the doc value directly
+        if !self.has_cli_or_env_source() {
+            let id = self.field_name.to_string();
+            return Ok((
+                quote! {
+                    {
+                        let _ = #conf_context_ident;
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
+                        Ok(#doc_val)
+                    }
+                },
+                false,
+            ));
+        }
+
         let use_value_parser = self
             .serde
             .as_ref()
