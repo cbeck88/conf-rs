@@ -20,7 +20,7 @@ struct TestPositional {
 
 #[test]
 fn test_positional_get_program_options() {
-    let opts = TestPositional::get_program_options();
+    let opts = TestPositional::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert_eq!(opts.len(), 3);
 
@@ -105,7 +105,7 @@ fn test_positional_with_env() {
         input: String,
     }
 
-    let opts = TestPosWithEnv::get_program_options();
+    let opts = TestPosWithEnv::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
     assert_eq!(opts.len(), 1);
     assert!(opts[0].is_positional);
     assert_eq!(opts[0].env_form.as_deref(), Some("INPUT"));

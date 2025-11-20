@@ -260,18 +260,13 @@ impl FlattenItem {
             .and_then(|serde| serde.flatten_prefix.as_deref())
     }
 
-    // Body of a routine which extends #program_options_ident to hold any program options associated
-    // to this field.
-    pub fn gen_push_program_options(
-        &self,
-        program_options_ident: &Ident,
-    ) -> Result<TokenStream, syn::Error> {
-        // Generated code gets all program options for the struct we are flattening, then calls
-        // flatten on each one and adds all that to program_options_ident.
-        let field_name = self.field_name.to_string();
-        let field_type = &self.field_type;
+    /// Generate a Node::Branch for this flatten field.
+    /// This creates a branch that references the flattened type's PROGRAM_OPTIONS
+    /// with a composed transform function that applies flatten prefixes (id, long, env, description)
+    /// and handles skip_short. For Option<T> flattens, also makes all options optional.
+    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
+        let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
         let id_prefix = self.get_id_prefix();
-
         let long_prefix = self
             .long_prefix
             .as_ref()
@@ -283,92 +278,48 @@ impl FlattenItem {
             .map(LitStr::value)
             .unwrap_or_default();
         let description_prefix = self.description_prefix.as_deref().unwrap_or_default();
-        let skip_short = self.skip_short.as_ref().map(|array| &array.elements);
-        let skip_short_len = self
-            .skip_short
-            .as_ref()
-            .map(|array| array.elements.len())
-            .unwrap_or(0);
 
-        // Identifier for was_skipped variable, used with skip_short_forms sanity checks.
-        // This is an array of bools, one for each skip-short parameter.
-        let was_skipped_ident = Ident::new("__was_skipped__", Span::call_site());
-
-        // Common modifications we have to make to program options whether the flatten is optional
-        // or required
-        let common_program_option_modifications = quote! {
-          .apply_flatten_prefixes(#id_prefix, #long_prefix, #env_prefix, #description_prefix)
-          .skip_short_forms(&[#skip_short], &mut #was_skipped_ident[..])
-        };
-
-        // When using flatten optional, we have to make all program options optional
-        // before passing them on to lower layers. If not, there are no additional mods needed.
-        let modify_program_option = if self.is_optional_type.is_some() {
+        // Generate skip_short code
+        let skip_short_code = if let Some(skip_short) = self.skip_short.as_ref() {
+            let chars = skip_short.elements.iter();
             quote! {
-              #common_program_option_modifications
-              .make_optional()
-            }
-        } else {
-            common_program_option_modifications
-        };
-
-        // For flatten-optional with Option<T>, inner_type is T and implements Conf.
-        // For regular flaten, inner_type is simply the field type and implements Conf.
-        let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
-
-        // The initializer simply gets all program options, modifies as needed,
-        // and then checks for a skip-short error.
-        let positional_check = if self.is_optional_type.is_some() {
-            quote! {
-              // Check for positional args in flatten optional
-              for opt in __inner_options__ {
-                  if opt.is_positional {
-                      panic!(
-                          "{}",
-                          ::conf::Error::positional_in_flatten_optional(
-                              #field_name,
-                              <#inner_type as ::conf::Conf>::get_name(),
-                              &opt.id
-                          )
-                      );
-                  }
-              }
+                #(
+                    if opt.short_form == Some(#chars) {
+                        opt.short_form = None;
+                    }
+                )*
             }
         } else {
             quote! {}
         };
 
-        let push_expr = quote! {
-          let mut #was_skipped_ident = [false; #skip_short_len];
-          let __inner_options__ = <#inner_type as ::conf::Conf>::get_program_options();
-          #positional_check
-          #program_options_ident.extend(
-            __inner_options__.iter().cloned().map(
-              |program_option|
-                program_option
-                  #modify_program_option
-            )
-          );
-          if #was_skipped_ident.iter().any(|x| !x) {
-            let not_skipped: Vec<char> =
-              [#skip_short]
-                .into_iter()
-                .zip(#was_skipped_ident.into_iter())
-                .filter_map(
-                  |(short_form, was_skipped)| if was_skipped { None } else { Some(short_form) }
-                ).collect();
-            panic!(
-              "{}",
-              ::conf::Error::skip_short_not_found(
-                not_skipped,
-                #field_name,
-                <#inner_type as ::conf::Conf>::get_name()
-              )
-            );
-          }
+        // For Option<T> flattens, also make options optional
+        let maybe_make_optional = if self.is_optional_type.is_some() {
+            quote! { .make_optional() }
+        } else {
+            quote! {}
         };
 
-        Ok(push_expr)
+        // Generate the composed transform function
+        let transform_fn = quote! {
+            |opt: &::conf::ProgramOption| {
+                // First apply the inner type's transform
+                let mut opt = (<#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.transform)(opt);
+                // Then apply flatten prefixes
+                opt = opt.apply_flatten_prefixes(#id_prefix, #long_prefix, #env_prefix, #description_prefix)
+                         #maybe_make_optional;
+                // Apply skip_short
+                #skip_short_code
+                opt
+            }
+        };
+
+        Ok(Some(quote! {
+            ::conf::Node::Branch(::conf::LazyBuf {
+                buffer: <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.buffer,
+                transform: #transform_fn,
+            })
+        }))
     }
 
     // Flatten fields don't add subcommands to the conf structure, because we don't support that
@@ -675,8 +626,8 @@ impl FlattenItem {
         }
     }
 
-    /// Generate debug assertions for this flatten field
-    /// Recursively call debug_asserts on the flattened type
+    /// Generate debug assertions for this flatten field.
+    /// Recursively calls debug_asserts on the flattened type and validates skip_short.
     pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
         let inner_type = if let Some(opt_type) = &self.is_optional_type {
             opt_type.clone()
@@ -684,8 +635,75 @@ impl FlattenItem {
             self.field_type.clone()
         };
 
+        // Check for positional args in flatten optional
+        let positional_check = if self.is_optional_type.is_some() {
+            let field_name = self.field_name.to_string();
+            quote! {
+                // Check for positional args in flatten optional
+                for opt in <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.iter() {
+                    if opt.is_positional {
+                        panic!(
+                            "{}",
+                            ::conf::Error::positional_in_flatten_optional(
+                                #field_name,
+                                <#inner_type as ::conf::Conf>::get_name(),
+                                &opt.id
+                            )
+                        );
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        // Generate skip_short validation
+        let skip_short_validation = if let Some(skip_short) = &self.skip_short {
+            let chars = skip_short.elements.iter().collect::<Vec<_>>();
+            let field_name = self.field_name.to_string();
+            let type_name = quote! { stringify!(#inner_type) };
+
+            quote! {
+                // Validate skip_short references actual short forms
+                {
+                    let skip_shorts = vec![#(#chars),*];
+                    let mut found = vec![false; skip_shorts.len()];
+
+                    for opt in <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.iter() {
+                        if let Some(short) = opt.short_form {
+                            for (idx, skip_short) in skip_shorts.iter().enumerate() {
+                                if short == *skip_short {
+                                    found[idx] = true;
+                                }
+                            }
+                        }
+                    }
+
+                    let not_found: Vec<char> = skip_shorts.iter()
+                        .zip(found.iter())
+                        .filter_map(|(c, f)| if !*f { Some(*c) } else { None })
+                        .collect();
+
+                    if !not_found.is_empty() {
+                        panic!(
+                            "{}",
+                            ::conf::Error::skip_short_not_found(
+                                not_found,
+                                #field_name,
+                                #type_name
+                            )
+                        );
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         Ok(quote! {
             <#inner_type as ::conf::Conf>::debug_asserts();
+            #positional_check
+            #skip_short_validation
         })
     }
 }

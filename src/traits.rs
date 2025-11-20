@@ -1,6 +1,6 @@
 use crate::{
-    ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, ParsedEnv, Parser, ParserConfig,
-    ProgramOption, introspection,
+    ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, LazyBuf, ParsedEnv, Parser,
+    ParserConfig, ProgramOption, introspection,
 };
 use std::ffi::OsString;
 
@@ -114,7 +114,7 @@ pub trait Conf: Sized {
     ///
     /// assert_eq!(env_template, expected_output);
     fn program_options() -> impl Iterator<Item: introspection::ProgramOptionMeta> {
-        Self::get_program_options().iter().cloned()
+        Self::PROGRAM_OPTIONS.iter()
     }
 
     /// Run clap's debug assertions on the parser configuration for this struct.
@@ -122,7 +122,9 @@ pub trait Conf: Sized {
     #[doc(hidden)]
     fn parser_debug_asserts() {
         let parsed_env = ParsedEnv::default();
-        let parser = Self::get_parser(&parsed_env).expect("Failed to create parser");
+        let program_options = Self::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
+        let parser =
+            Self::get_parser(&parsed_env, &program_options).expect("Failed to create parser");
         parser.into_command().debug_assert();
     }
 
@@ -136,9 +138,11 @@ pub trait Conf: Sized {
     // This Parser may be used in Conf::try_parse_from, or may be used to implement
     // Subcommands::get_commands.
     #[doc(hidden)]
-    fn get_parser(parsed_env: &ParsedEnv) -> Result<Parser<'_>, Error> {
+    fn get_parser<'a>(
+        parsed_env: &'a ParsedEnv,
+        program_options: &'a [ProgramOption],
+    ) -> Result<Parser<'a>, Error> {
         let parser_config = Self::get_parser_config()?;
-        let program_options = Self::get_program_options();
         let subcommands = Self::get_subcommands(parsed_env)?;
         Parser::new(parser_config, program_options, subcommands, parsed_env)
     }
@@ -151,12 +155,13 @@ pub trait Conf: Sized {
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
     fn get_parser_config() -> Result<ParserConfig, Error>;
-    // Get the program options this Conf declares, and associated help info etc, including flattened
-    // fields. This is implemented using the derive macros.
+
+    // Program options this Conf declares (and recursive sources), without allocating.
+    // Constructed by derive macros.
     // Users shouldn't generally call this, because the returned data is implementation details,
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
-    fn get_program_options() -> &'static [ProgramOption];
+    const PROGRAM_OPTIONS: LazyBuf<ProgramOption>;
     // Get the subcommands that are declared on this Conf.
     //
     // These come from `conf(subcommand)` being used on a field, and `derive(Subcommand)` being used

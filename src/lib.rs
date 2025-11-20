@@ -34,7 +34,7 @@ pub use error::Error;
 pub use find_parameter::find_parameter;
 pub use styles::Styles;
 pub use traits::{Conf, Subcommands};
-pub use tree::LazyBuf;
+pub use tree::{LazyBuf, Node};
 
 // Re-export anstyle for users to create Style objects
 pub use anstyle;

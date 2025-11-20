@@ -28,7 +28,9 @@ struct TestFlattenOptional {
 
 #[test]
 fn test_flatten_optional_get_program_options() {
-    let opts = TestFlattenOptional::get_program_options();
+    let opts = TestFlattenOptional::PROGRAM_OPTIONS
+        .iter()
+        .collect::<Vec<_>>();
 
     let mut iter = opts.iter();
 

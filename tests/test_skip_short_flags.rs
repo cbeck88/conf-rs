@@ -20,7 +20,7 @@ struct B {
 
 #[test]
 fn test_skip_short_a_get_program_options() {
-    let opts = A::get_program_options();
+    let opts = A::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let mut iter = opts.iter();
 
@@ -47,7 +47,7 @@ fn test_skip_short_a_get_program_options() {
 
 #[test]
 fn test_skip_short_b_get_program_options() {
-    let opts = B::get_program_options();
+    let opts = B::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let mut iter = opts.iter();
 
@@ -124,7 +124,7 @@ struct BadA2 {
 #[test]
 #[should_panic(expected = "When flattening B at b1, these short options were not found: ['a']")]
 fn test_skip_short_flags_program_options_unknown_skip_error() {
-    BadA2::get_program_options();
+    BadA2::debug_asserts();
 }
 
 #[derive(Conf, Debug)]
@@ -145,5 +145,5 @@ struct BadA3 {
     expected = "When flattening B at b2, these short options were not found: ['c', 'd']"
 )]
 fn test_skip_short_flags_program_options_unknown_skip_error2() {
-    BadA3::get_program_options();
+    BadA3::debug_asserts();
 }

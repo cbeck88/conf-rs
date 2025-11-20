@@ -71,7 +71,7 @@ impl GenSubcommandsEnum {
         let variants_push_parsers: Vec<TokenStream> = self
             .variants
             .iter()
-            .map(|var| var.gen_push_parsers(&parsers_ident, &parsed_env_ident))
+            .map(|var| var.gen_push_parser(&parsers_ident, &parsed_env_ident))
             .collect::<Result<Vec<_>, syn::Error>>()?;
 
         Ok(quote! {

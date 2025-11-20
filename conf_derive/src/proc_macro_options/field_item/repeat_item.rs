@@ -394,45 +394,46 @@ impl RepeatItem {
     /// Generate a routine that pushes a ::conf::ProgramOption corresponding to
     /// this field, onto a mut Vec<ProgramOption> that is in scope.
     ///
-    /// Arguments:
-    /// * program_options_ident is the ident of this buffer of ProgramOption to push to.
-    pub fn gen_push_program_options(
-        &self,
-        program_options_ident: &Ident,
-    ) -> Result<TokenStream, syn::Error> {
+    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
         let id = self.field_name.to_string();
-        let description = quote_opt_into(&self.description);
+        let description = quote_opt_cow(&self.description);
         let short_form = quote_opt(&self.short_switch);
-        let long_form = quote_opt_into(&self.long_switch);
-        let aliases = self.aliases.as_ref().map(LitStrArray::quote_elements_into);
-        let env_form = quote_opt_into(&self.env_name);
-        let env_aliases = self
-            .env_aliases
-            .as_ref()
-            .map(LitStrArray::quote_elements_into);
+        let long_form = quote_opt_cow(&self.long_switch);
+        let env_form = quote_opt_cow(&self.env_name);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
         let has_serde_source = self.has_serde_source();
 
-        Ok(quote! {
-            #program_options_ident.push(::conf::ProgramOption {
-              id: #id.into(),
+        let aliases = self
+            .aliases
+            .as_ref()
+            .map(|x| x.quote_elements_cow())
+            .unwrap_or_default();
+        let env_aliases = self
+            .env_aliases
+            .as_ref()
+            .map(|x| x.quote_elements_cow())
+            .unwrap_or_default();
+
+        Ok(Some(quote! {
+            ::conf::Node::Leaf(::conf::ProgramOption {
+              id: ::std::borrow::Cow::Borrowed(#id),
               parse_type: ::conf::ParseType::Repeat,
               description: #description,
               short_form: #short_form,
               long_form: #long_form,
-              aliases: vec![#aliases],
+              aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),
               env_form: #env_form,
-              env_aliases: vec![#env_aliases],
+              env_aliases: ::std::borrow::Cow::Borrowed(&[#env_aliases]),
               default_value: None,
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
               secret: #secret,
               is_positional: #is_positional,
               has_serde_source: #has_serde_source,
-            });
-        })
+            })
+        }))
     }
 
     pub fn gen_push_subcommands(

@@ -3,7 +3,7 @@
 #[doc(hidden)]
 #[derive(Copy, Debug)]
 pub struct LazyBuf<T: 'static> {
-    pub buffer: &'static[Node<T>],
+    pub buffer: &'static [Node<T>],
     pub transform: fn(&T) -> T,
 }
 
@@ -27,8 +27,7 @@ impl<T> LazyBuf<T> {
 
 #[doc(hidden)]
 #[derive(Debug)]
-pub enum Node<T: 'static>
-{
+pub enum Node<T: 'static> {
     Leaf(T),
     Branch(LazyBuf<T>),
 }
@@ -48,15 +47,14 @@ impl<T> From<T> for Node<T> {
     }
 }
 
-struct LazyBufIter<T: 'static>
-{
+struct LazyBufIter<T: 'static> {
     stack: Vec<(LazyBuf<T>, usize)>,
 }
 
 impl<T: 'static> From<LazyBuf<T>> for LazyBufIter<T> {
     fn from(src: LazyBuf<T>) -> Self {
         Self {
-            stack: vec![(src, 0)]
+            stack: vec![(src, 0)],
         }
     }
 }
@@ -71,7 +69,7 @@ impl<T: 'static> Iterator for LazyBufIter<T> {
                 continue;
             };
             *idx += 1;
-            
+
             match node {
                 Node::Leaf(t) => {
                     let mut result = (lb.transform)(t);
@@ -91,7 +89,10 @@ impl<T: 'static> Iterator for LazyBufIter<T> {
 
 impl<T: 'static> ExactSizeIterator for LazyBufIter<T> {
     fn len(&self) -> usize {
-        self.stack.iter().map(|(lb, idx)| count(&lb.buffer[*idx..])).sum()
+        self.stack
+            .iter()
+            .map(|(lb, idx)| count(&lb.buffer[*idx..]))
+            .sum()
     }
 }
 

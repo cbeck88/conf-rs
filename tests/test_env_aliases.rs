@@ -14,7 +14,7 @@ struct TestEnvAliases {
 
 #[test]
 fn test_env_aliases_get_program_options() {
-    let opts = TestEnvAliases::get_program_options();
+    let opts = TestEnvAliases::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let mut iter = opts.iter();
     let opt = iter.next().unwrap();
@@ -96,7 +96,7 @@ struct TestEnvAliases2 {
 
 #[test]
 fn test_env_aliases2_get_program_options() {
-    let opts = TestEnvAliases2::get_program_options();
+    let opts = TestEnvAliases2::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let mut iter = opts.iter();
     let opt = iter.next().unwrap();

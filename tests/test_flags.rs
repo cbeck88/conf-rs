@@ -17,7 +17,7 @@ struct TestFlags {
 #[test]
 fn test_flags_get_program_options() {
     let parser_config = TestFlags::get_parser_config().unwrap();
-    let opts = TestFlags::get_program_options();
+    let opts = TestFlags::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());

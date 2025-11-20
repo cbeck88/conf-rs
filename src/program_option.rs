@@ -1,4 +1,5 @@
 use crate::{CowStr, ParsedEnv, introspection::ProgramOptionMeta};
+use std::borrow::Cow;
 use std::fmt;
 
 /// This is a property of every program option, and dictates what form of data we expect to collect
@@ -44,11 +45,11 @@ pub struct ProgramOption {
     /// The long-form switch (--) associated to this option, if any
     pub long_form: Option<CowStr>,
     /// Any long-form switch aliases
-    pub aliases: Vec<CowStr>,
+    pub aliases: Cow<'static, [CowStr]>,
     /// The env-form associated to this option, if any
     pub env_form: Option<CowStr>,
     /// Any env aliases
-    pub env_aliases: Vec<CowStr>,
+    pub env_aliases: Cow<'static, [CowStr]>,
     /// The default-value, if any. This is used in help text and actually parsed when we use the default.
     pub default_value: Option<CowStr>,
     /// Whether this option is considered required to appear. Affects help generation & semantics
@@ -101,8 +102,8 @@ impl ProgramOption {
                 long_form.to_mut().insert_str(0, long_prefix);
             }
         }
-        for alias in aliases.iter_mut() {
-            if !long_prefix.is_empty() {
+        if !long_prefix.is_empty() {
+            for alias in aliases.to_mut().iter_mut() {
                 alias.to_mut().insert_str(0, long_prefix);
             }
         }
@@ -111,8 +112,8 @@ impl ProgramOption {
                 env_form.to_mut().insert_str(0, env_prefix);
             }
         }
-        for env_alias in env_aliases.iter_mut() {
-            if !env_prefix.is_empty() {
+        if !env_prefix.is_empty() {
+            for env_alias in env_aliases.to_mut().iter_mut() {
                 env_alias.to_mut().insert_str(0, env_prefix);
             }
         }
@@ -238,7 +239,7 @@ impl ProgramOption {
             }
         }
 
-        for name in &self.env_aliases {
+        for name in self.env_aliases.iter() {
             if let Some(env) = env.filter(|_| !self.is_secret()) {
                 let cur_val = env.get_lossy_or_default(name);
                 writeln!(stream, "          [env: {name}={cur_val}]")?;

@@ -237,18 +237,15 @@ impl FieldItem {
         }
     }
 
-    /// Generate code that constructs (one or more) ProgramOption as needed and pushes them onto
-    /// program_options_ident
-    pub fn gen_push_program_options(
-        &self,
-        program_options_ident: &Ident,
-    ) -> Result<TokenStream, Error> {
+    /// Generate a Node<ProgramOption> expression for this field.
+    /// Returns None if this field type doesn't contribute to program options (e.g., Subcommands).
+    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
         match self {
-            Self::Flag(item) => item.gen_push_program_options(program_options_ident),
-            Self::Parameter(item) => item.gen_push_program_options(program_options_ident),
-            Self::Repeat(item) => item.gen_push_program_options(program_options_ident),
-            Self::Flatten(item) => item.gen_push_program_options(program_options_ident),
-            Self::Subcommands(item) => item.gen_push_program_options(program_options_ident),
+            Self::Flag(item) => item.gen_program_option_node(),
+            Self::Parameter(item) => item.gen_program_option_node(),
+            Self::Repeat(item) => item.gen_program_option_node(),
+            Self::Flatten(item) => item.gen_program_option_node(),
+            Self::Subcommands(item) => item.gen_program_option_node(),
         }
     }
 

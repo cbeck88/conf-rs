@@ -25,7 +25,7 @@ struct TestParams {
 #[test]
 fn test_params_get_program_options() {
     let parser_config = TestParams::get_parser_config().unwrap();
-    let opts = TestParams::get_program_options();
+    let opts = TestParams::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());

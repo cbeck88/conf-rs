@@ -103,12 +103,10 @@ impl SubcommandsItem {
         self.serde.as_ref().map(|serde| serde.skip).unwrap_or(false)
     }
 
-    // Subcommands fields don't add any program options to the conf structure.
-    pub fn gen_push_program_options(
-        &self,
-        _program_options_ident: &Ident,
-    ) -> Result<TokenStream, syn::Error> {
-        Ok(quote! {})
+    // Subcommands fields don't contribute nodes to PROGRAM_OPTIONS.
+    // They are filtered out via returning None here.
+    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
+        Ok(None)
     }
 
     // Subcommands fields add subcommand parsers to the conf structure.

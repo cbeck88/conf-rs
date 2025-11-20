@@ -418,45 +418,48 @@ impl ParameterItem {
             || self.is_positional
     }
 
-    pub fn gen_push_program_options(
-        &self,
-        program_options_ident: &Ident,
-    ) -> Result<TokenStream, syn::Error> {
+    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
         let is_required = self.is_optional_type.is_none() && self.default_value.is_none();
         let id = self.field_name.to_string();
-        let description = quote_opt_into(&self.doc_string);
+        let description = quote_opt_cow(&self.doc_string);
         let short_form = quote_opt(&self.short_switch);
-        let long_form = quote_opt_into(&self.long_switch);
-        let aliases = self.aliases.as_ref().map(LitStrArray::quote_elements_into);
-        let env_form = quote_opt_into(&self.env_name);
-        let env_aliases = self
-            .env_aliases
-            .as_ref()
-            .map(LitStrArray::quote_elements_into);
-        let default_value = quote_opt_into(&self.default_value);
+        let long_form = quote_opt_cow(&self.long_switch);
+        let env_form = quote_opt_cow(&self.env_name);
+        let default_value = quote_opt_cow(&self.default_value);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
         let has_serde_source = self.has_serde_source();
 
-        Ok(quote! {
-            #program_options_ident.push(::conf::ProgramOption {
-                id: #id.into(),
+        let aliases = self
+            .aliases
+            .as_ref()
+            .map(|x| x.quote_elements_cow())
+            .unwrap_or_default();
+        let env_aliases = self
+            .env_aliases
+            .as_ref()
+            .map(|x| x.quote_elements_cow())
+            .unwrap_or_default();
+
+        Ok(Some(quote! {
+            ::conf::Node::Leaf(::conf::ProgramOption {
+                id: ::std::borrow::Cow::Borrowed(#id),
                 parse_type: ::conf::ParseType::Parameter,
                 description: #description,
                 short_form: #short_form,
                 long_form: #long_form,
-                aliases: vec![#aliases],
+                aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),
                 env_form: #env_form,
-                env_aliases: vec![#env_aliases],
+                env_aliases: ::std::borrow::Cow::Borrowed(&[#env_aliases]),
                 default_value: #default_value,
                 is_required: #is_required,
                 allow_hyphen_values: #allow_hyphen_values,
                 secret: #secret,
                 is_positional: #is_positional,
                 has_serde_source: #has_serde_source,
-            });
-        })
+            })
+        }))
     }
 
     pub fn gen_push_subcommands(

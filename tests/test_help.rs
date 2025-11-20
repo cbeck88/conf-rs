@@ -23,10 +23,10 @@ struct SubsystemOptions {
 #[test]
 fn test_subsystem_options_help() {
     let parser_config = SubsystemOptions::get_parser_config().unwrap();
-    let opts = SubsystemOptions::get_program_options();
+    let opts = SubsystemOptions::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, opts, &[], &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"
@@ -66,10 +66,12 @@ struct OtherSubsystemOptions {
 #[test]
 fn test_other_subsystem_options_help() {
     let parser_config = OtherSubsystemOptions::get_parser_config().unwrap();
-    let opts = OtherSubsystemOptions::get_program_options();
+    let opts = OtherSubsystemOptions::PROGRAM_OPTIONS
+        .iter()
+        .collect::<Vec<_>>();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, opts, &[], &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"
@@ -128,10 +130,10 @@ struct SystemOptions {
 #[test]
 fn test_system_options_help() {
     let parser_config = SystemOptions::get_parser_config().unwrap();
-    let opts = SystemOptions::get_program_options();
+    let opts = SystemOptions::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     let env = Default::default();
-    let parser = Parser::new(parser_config, opts, &[], &env).unwrap();
+    let parser = Parser::new(parser_config, &opts, &[], &env).unwrap();
 
     let clap_help = parser.render_clap_help();
     let expected = &"

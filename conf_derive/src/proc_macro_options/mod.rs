@@ -95,44 +95,33 @@ impl GenConfStruct {
         })
     }
 
-    /// Generate Conf::get_program_options implementation
+    /// Generate Conf::PROGRAM_OPTIONS implementation
     fn get_program_options_impl(&self) -> Result<TokenStream, Error> {
-        // To implement Conf::get_program_options, we need to
-        // get all the program options for our constituents. To do this, we create
-        // an ident for the list of program options, which is going to be Vec<ProgramOption>.
-        // Then we pass that ident to every constitutent field, and aggregate all their code gen.
-        let program_options_ident = Ident::new("__program_options__", Span::call_site());
-        let fields_push_program_options: Vec<TokenStream> = self
+        // Generate Node<ProgramOption> for each field
+        // Field types that don't contribute (e.g., Subcommands) return None and are filtered out
+        let field_nodes: Vec<TokenStream> = self
             .fields
             .iter()
-            .map(|field| field.gen_push_program_options(&program_options_ident))
-            .collect::<Result<Vec<_>, Error>>()?;
+            .map(|field| field.gen_program_option_node())
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .flatten()
+            .collect();
 
-        // To implement #[conf(env_prefix="ACME_")] on a struct (rather than on a flattened field),
-        // the code gen associated to the struct needs to be able to add its own prefixing during
-        // get_program_options and during from_conf_context.
-        // To do this, we allow the struct_item to "post-process" the Vec<ProgramOption>, (to add a
-        // prefix to them all) and to "pre-process" the ConfContext (to add a matching prefix to
-        // that before it is used) Note: The preprocessing no longer does anything since we switched
-        // to using id's like clap does.
-        let struct_post_process_program_options = self
-            .struct_item
-            .gen_post_process_program_options(&program_options_ident)?;
+        // Get the transform function for struct-level prefixing if needed
+        let struct_transform = self.struct_item.gen_program_options_transform()?;
 
         Ok(quote! {
-            fn get_program_options() -> &'static [::conf::ProgramOption] {
-                static CACHED: ::std::sync::OnceLock<Vec<::conf::ProgramOption>> = ::std::sync::OnceLock::new();
+            const PROGRAM_OPTIONS: ::conf::LazyBuf<::conf::ProgramOption> = {
+                static NODES: &[::conf::Node<::conf::ProgramOption>] = &[
+                    #(#field_nodes),*
+                ];
 
-                CACHED.get_or_init(|| {
-                    let mut #program_options_ident = vec![];
-
-                    #(#fields_push_program_options)*
-
-                    #struct_post_process_program_options
-
-                    #program_options_ident
-                }).as_ref()
-            }
+                ::conf::LazyBuf {
+                    buffer: NODES,
+                    transform: #struct_transform,
+                }
+            };
         })
     }
 
@@ -626,6 +615,24 @@ impl GenConfStruct {
 
         Ok(quote! {
             fn debug_asserts() {
+                // Check for short-form conflicts at this level
+                {
+                    let mut short_forms = ::std::collections::HashMap::<char, String>::new();
+                    for opt in Self::PROGRAM_OPTIONS.iter() {
+                        if let Some(short) = opt.short_form {
+                            if let Some(existing_id) = short_forms.insert(short, opt.id.to_string()) {
+                                panic!(
+                                    "Short option '{}' is used by both '{}' and '{}' in {}",
+                                    short,
+                                    existing_id,
+                                    opt.id,
+                                    stringify!(Self)
+                                );
+                            }
+                        }
+                    }
+                }
+
                 #(#assertions)*
             }
         })

@@ -218,27 +218,22 @@ impl StructItem {
         })
     }
 
-    /// Generate an (optional) program options post-processing step.
-    /// If we have an env_prefix at struct-level, apply it here.
-    pub fn gen_post_process_program_options(
-        &self,
-        program_options_ident: &Ident,
-    ) -> Result<Option<TokenStream>, Error> {
-        if self.env_prefix.is_none() {
-            return Ok(None);
+    /// Generate the transform function for PROGRAM_OPTIONS.
+    /// Applies struct-level prefixes (currently only env_prefix).
+    pub fn gen_program_options_transform(&self) -> Result<TokenStream, Error> {
+        if let Some(env_prefix) = &self.env_prefix {
+            // Apply env_prefix at struct level
+            Ok(quote! {
+                |opt: &::conf::ProgramOption| {
+                    opt.clone().apply_flatten_prefixes("", "", #env_prefix, "")
+                }
+            })
+        } else {
+            // Identity function - no transformation at the struct level
+            Ok(quote! {
+                |opt: &::conf::ProgramOption| opt.clone()
+            })
         }
-
-        let apply_flatten_prefixes = self
-            .env_prefix
-            .as_ref()
-            .map(|env_prefix| quote! { .apply_flatten_prefixes("", "", #env_prefix, "") });
-
-        Ok(Some(quote! {
-            #program_options_ident = #program_options_ident.into_iter().map(
-              |opt| opt
-                #apply_flatten_prefixes
-            ).collect();
-        }))
     }
 
     /// Generate tokens that apply any validations to an instance

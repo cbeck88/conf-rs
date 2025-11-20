@@ -30,7 +30,7 @@ struct TestClientConfig {
 #[test]
 fn test_client_config_program_options() {
     let parser_config = TestClientConfig::get_parser_config().unwrap();
-    let opts = TestClientConfig::get_program_options();
+    let opts = TestClientConfig::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -135,7 +135,7 @@ struct TestDbToolConfig {
 #[test]
 fn test_db_tool_config_program_options() {
     let parser_config = TestDbToolConfig::get_parser_config().unwrap();
-    let opts = TestDbToolConfig::get_program_options();
+    let opts = TestDbToolConfig::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -265,7 +265,9 @@ struct TestServiceConfig {
 #[test]
 fn test_service_config_program_options() {
     let parser_config = TestServiceConfig::get_parser_config().unwrap();
-    let opts = TestServiceConfig::get_program_options();
+    let opts = TestServiceConfig::PROGRAM_OPTIONS
+        .iter()
+        .collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -512,7 +514,7 @@ struct FrobConfig {
 #[test]
 fn frob_config_program_options() {
     let parser_config = FrobConfig::get_parser_config().unwrap();
-    let opts = FrobConfig::get_program_options();
+    let opts = FrobConfig::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
@@ -845,7 +847,7 @@ struct FrobConfig2 {
 #[test]
 fn frob_config2_program_options() {
     let parser_config = FrobConfig2::get_parser_config().unwrap();
-    let opts = FrobConfig2::get_program_options();
+    let opts = FrobConfig2::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
     assert!(!parser_config.no_help_flag);
     assert!(parser_config.about.is_none());
