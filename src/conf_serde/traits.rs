@@ -109,7 +109,9 @@ pub struct ConfSerdeContext<'a> {
 
 impl<'a> ConfSerdeContext<'a> {
     /// Create `ConfSerdeContext` from `ConfContext` and document name
-    pub(crate) fn new(conf_context: ConfContext<'a>, document_name: &'a str) -> Self {
+    pub(crate) fn new(mut conf_context: ConfContext<'a>, document_name: &'a str) -> Self {
+        // Mark that a serde source is present
+        conf_context.serde_source_is_present = true;
         Self {
             conf_context,
             document_name,

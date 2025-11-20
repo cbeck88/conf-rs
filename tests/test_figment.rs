@@ -17,7 +17,7 @@ fn test_figment_example_no_args() {
     let expected = &"
 error: A required value was not provided
   env 'DB_RETRIES', or '--db-retries', must be provided
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 "[1..];
 
     assert_multiline_eq!(from_utf8(&output.stderr).unwrap(), &expected);
@@ -35,7 +35,7 @@ fn test_figment_example_one_file_expected_failure() {
 
     let expected = &"
 error: A required value was not provided
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 
 Help:
       --db-url <db.url>

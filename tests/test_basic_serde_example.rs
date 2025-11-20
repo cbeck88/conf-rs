@@ -353,7 +353,7 @@ fn test_serde_basic_example_args_env_and_file_with_missing_and_invalid() {
 
     let expected = &r#"
 error: A required value was not provided
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 error: Invalid value
   when parsing '--auth-url' value 'asdf:/': invalid format
   when parsing env 'AUTH_RETRIES' value 'xxx': invalid digit found in string
@@ -386,7 +386,7 @@ fn test_serde_basic_example_args_env_and_file_with_missing_and_invalid2() {
     let expected = &format!(
         r#"
 error: A required value was not provided
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 error: Invalid value
   when parsing '--auth-url' value 'asdf:/': invalid format
   when parsing env 'AUTH_RETRIES' value 'xxx': invalid digit found in string
@@ -770,9 +770,9 @@ fn test_serde_basic_example_subcommand_args_and_env_file_missing_and_invalid() {
 
     let expected = &"
 error: A required value was not provided
-  env 'AUTH_URL', or '--auth-url', must be provided
+  env 'AUTH_URL', or '--auth-url', or 'auth.url' in config file, must be provided
     because env 'AUTH_RETRIES' was provided (enabling argument group HttpClientConfig @ .auth)
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 error: Invalid value
   when parsing env 'AUTH_RETRIES' value 'xxx': invalid digit found in string
 "[1..];
@@ -805,9 +805,9 @@ fn test_serde_basic_example_subcommand_args_and_env_file_missing_and_invalid2() 
     let expected = &format!(
         "
 error: A required value was not provided
-  env 'AUTH_URL', or '--auth-url', must be provided
+  env 'AUTH_URL', or '--auth-url', or 'auth.url' in config file, must be provided
     because env 'AUTH_RETRIES' was provided (enabling argument group HttpClientConfig @ .auth)
-  env 'DB_URL', or '--db-url', must be provided
+  env 'DB_URL', or '--db-url', or 'db.url' in config file, must be provided
 error: Invalid value
   when parsing env 'AUTH_RETRIES' value 'yyy': invalid digit found in string
 error: Parsing document

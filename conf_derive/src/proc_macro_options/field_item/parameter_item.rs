@@ -660,7 +660,11 @@ impl ParameterItem {
                     }
                 };
 
-                return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val, None);
+                return self.gen_initializer_helper(
+                    conf_context_ident,
+                    &if_no_conf_context_val,
+                    None,
+                );
             } else if self.is_optional_type.is_some() {
                 // Serde-only optional field without default: return None
                 return Ok((

@@ -90,6 +90,7 @@ pub struct ConfContext<'a> {
     id_prefix: String,
     flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'a>>,
     config_logger: Option<&'a RefCell<ConfigLogger<'a>>>,
+    pub(crate) serde_source_is_present: bool,
 }
 
 impl<'a> ConfContext<'a> {
@@ -104,6 +105,7 @@ impl<'a> ConfContext<'a> {
             id_prefix: String::default(),
             flattened_optional_debug_info: None,
             config_logger,
+            serde_source_is_present: false,
         }
     }
 
@@ -476,6 +478,7 @@ impl<'a> ConfContext<'a> {
             id_prefix: self.id_prefix.clone() + sub_id_prefix,
             flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
             config_logger: self.config_logger,
+            serde_source_is_present: self.serde_source_is_present,
         }
     }
 
@@ -513,6 +516,7 @@ impl<'a> ConfContext<'a> {
             id_prefix,
             flattened_optional_debug_info,
             config_logger: self.config_logger,
+            serde_source_is_present: self.serde_source_is_present,
         }
     }
 
@@ -528,6 +532,7 @@ impl<'a> ConfContext<'a> {
                     id_prefix: self.id_prefix.clone(),
                     flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
                     config_logger: self.config_logger,
+                    serde_source_is_present: self.serde_source_is_present,
                 },
             )
         })
@@ -542,7 +547,11 @@ impl<'a> ConfContext<'a> {
     ///
     /// This error includes context if we are within a flattened optional group
     pub fn missing_required_parameter_error(&self, opt: &ProgramOption) -> InnerError {
-        InnerError::missing_required_parameter(opt, self.flattened_optional_debug_info.clone())
+        InnerError::missing_required_parameter(
+            opt,
+            self.flattened_optional_debug_info.clone(),
+            self.serde_source_is_present,
+        )
     }
 
     /// Generate a "too_few_arguments" error
@@ -570,6 +579,7 @@ impl<'a> ConfContext<'a> {
             single_options,
             constraint_flattened_ids,
             self.flattened_optional_debug_info.clone(),
+            self.serde_source_is_present,
         )
     }
 

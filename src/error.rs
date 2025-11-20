@@ -80,23 +80,25 @@ impl From<fmt::Error> for Error {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum InnerError {
     /// Missing a required parameter
-    // (missing program option, optional reason it is required)
+    // (missing program option, optional reason it is required, serde source is present)
     MissingRequiredParameter(
         Box<ProgramOption>,
         Option<Box<OwnedFlattenedOptionalDebugInfo>>,
+        bool,
     ),
     /// Invalid parameter value
     // (source, value string, program option, error message)
     InvalidParameterValue(ConfValueSource<String>, String, Box<ProgramOption>, String),
     /// Too Few Arguments
     // (struct name, instance id prefix, single options, flattened fields, optional reason this is
-    // required)
+    // required, serde source is present)
     TooFewArguments(
         String,
         String,
         Vec<ProgramOption>,
         Vec<String>,
         Option<Box<OwnedFlattenedOptionalDebugInfo>>,
+        bool,
     ),
     /// Too many arguments
     // (struct name, instance id prefix, single options, flattened fields (field name, option which
@@ -158,10 +160,12 @@ impl InnerError {
     pub(crate) fn missing_required_parameter(
         opt: &ProgramOption,
         flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'_>>,
+        serde_source_is_present: bool,
     ) -> Self {
         Self::MissingRequiredParameter(
             Box::new(opt.clone()),
             flattened_optional_debug_info.map(Into::into).map(Box::new),
+            serde_source_is_present,
         )
     }
 
@@ -172,6 +176,7 @@ impl InnerError {
         constraint_single_options: impl AsRef<[&'a ProgramOption]>,
         constraint_flattened_ids: impl AsRef<[&'a str]>,
         flattened_optional_debug_info: Option<FlattenedOptionalDebugInfo<'a>>,
+        serde_source_is_present: bool,
     ) -> Self {
         let constraint_single_options = constraint_single_options
             .as_ref()
@@ -191,6 +196,7 @@ impl InnerError {
             constraint_single_options,
             constraint_flattened_ids,
             flattened_optional_debug_info,
+            serde_source_is_present,
         )
     }
 
@@ -367,8 +373,12 @@ impl InnerError {
                     invalid.render_reset()
                 )?;
             }
-            Self::MissingRequiredParameter(opt, maybe_flatten_optional_debug_info) => {
-                print_opt_requirements(stream, opt, "must be provided")?;
+            Self::MissingRequiredParameter(
+                opt,
+                maybe_flatten_optional_debug_info,
+                serde_source_is_present,
+            ) => {
+                print_opt_requirements(stream, opt, "must be provided", *serde_source_is_present)?;
                 if let Some(flatten_optional) = maybe_flatten_optional_debug_info.as_ref() {
                     // Indent 4 spaces
                     write!(stream, "    ")?;
@@ -403,6 +413,7 @@ impl InnerError {
                 single_opts,
                 flattened_opts,
                 maybe_flatten_optional_debug_info,
+                serde_source_is_present,
             ) => {
                 let mut instance_id_prefix = instance_id_prefix.to_owned();
                 if !instance_id_prefix.is_empty() {
@@ -415,7 +426,7 @@ impl InnerError {
                 )?;
                 for opt in single_opts {
                     write!(stream, "  ")?;
-                    print_opt_requirements(stream, opt, "")?;
+                    print_opt_requirements(stream, opt, "", *serde_source_is_present)?;
                 }
                 for field_name in flattened_opts {
                     writeln!(stream, "    Argument group '{field_name}'")?;
@@ -504,63 +515,51 @@ impl InnerError {
     }
 }
 
-// Print one line describing a missing required option, possibly with some additional context
-// This is indented two spaces
+// Print one line describing a missing required option, showing all the ways it can be provided
+// The line is indented two spaces
 fn print_opt_requirements(
     stream: &mut impl std::fmt::Write,
     opt: &ProgramOption,
     trailing_text: &str,
+    serde_source_is_present: bool,
 ) -> fmt::Result {
-    // Handle positional arguments
-    if opt.is_positional {
-        let pos_name = format!("<{}>", opt.id);
-        match opt.env_form.as_deref() {
-            Some(name) => {
-                let trailing_text = if trailing_text.is_empty() {
-                    "".to_owned()
-                } else {
-                    ", ".to_owned() + trailing_text
-                };
-                writeln!(stream, "  env '{name}', or '{pos_name}'{trailing_text}")?
-            }
-            None => writeln!(stream, "  '{pos_name}' {trailing_text}")?,
-        }
-        return Ok(());
+    let mut ways_to_provide = vec![];
+
+    // Check for env form
+    if let Some(name) = opt.env_form.as_deref() {
+        ways_to_provide.push(format!("env '{name}'"));
     }
 
-    let maybe_switch = render_help_switch(opt);
-    match (maybe_switch, opt.env_form.as_deref()) {
-        (Some(switch), Some(name)) => {
-            let trailing_text = if trailing_text.is_empty() {
-                "".to_owned()
-            } else {
-                ", ".to_owned() + trailing_text
-            };
-            writeln!(stream, "  env '{name}', or '{switch}'{trailing_text}")?
+    // Check for positional argument
+    if opt.is_positional {
+        let pos_name = format!("<{}>", opt.id);
+        ways_to_provide.push(format!("'{pos_name}'"));
+    }
+    // Check for switch (if not positional)
+    else if let Some(switch) = render_help_switch(opt) {
+        ways_to_provide.push(format!("'{switch}'"));
+    }
+
+    // Check for serde source
+    if opt.has_serde_source && serde_source_is_present {
+        ways_to_provide.push(format!("'{}' in config file", opt.id));
+    }
+
+    // Build the final line
+    if ways_to_provide.is_empty() {
+        writeln!(stream, "  Required value '{}' cannot be provided", opt.id)?;
+    } else {
+        let joined = ways_to_provide.join(", or ");
+        if trailing_text.is_empty() {
+            writeln!(stream, "  {joined}")?;
+        } else if ways_to_provide.len() == 1 {
+            // When there's only one way to provide, don't add a comma before trailing text
+            writeln!(stream, "  {joined} {trailing_text}")?;
+        } else {
+            writeln!(stream, "  {joined}, {trailing_text}")?;
         }
-        (Some(switch), None) => writeln!(stream, "  '{switch}' {trailing_text}")?,
-        (None, Some(name)) => writeln!(stream, "  env '{name}' {trailing_text}")?,
-        (None, None) => {
-            // This can happen for serde-only options
-            if opt.has_serde_source {
-                writeln!(
-                    stream,
-                    "  '{id}' in config file {trailing_text}",
-                    id = opt.id
-                )?;
-            } else {
-                debug_assert!(
-                    false,
-                    "This should be unreachable, we should not be printing opt requirements for an option with no way to specify it"
-                );
-                writeln!(
-                    stream,
-                    "  There is no way to provide this value, this is an internal error ({id})",
-                    id = opt.id
-                )?;
-            }
-        }
-    };
+    }
+
     Ok(())
 }
 

@@ -1172,11 +1172,22 @@ fn test_serde_only_parameter() {
     assert_eq!(result.serde_only_field, 100);
     assert_eq!(result.optional_serde_only, None);
 
-    // Test that required serde-only field causes error when missing
+    // Test that required serde-only field causes error when missing (no document provided)
+    // Should report that the value cannot be provided since no document is being consumed
     assert_error_contains_text!(
         SerdeOnlyConfig::conf_builder()
             .args(["."])
             .env([("NORMAL_FIELD", "hello")])
+            .try_parse(),
+        ["Required value 'serde_only_field' cannot be provided"]
+    );
+
+    // Test that when a document IS provided but missing the field, error DOES mention "config file"
+    assert_error_contains_text!(
+        SerdeOnlyConfig::conf_builder()
+            .args(["."])
+            .env([("NORMAL_FIELD", "hello")])
+            .doc("config.json", json!({}))
             .try_parse(),
         ["'serde_only_field' in config file", "must be provided"]
     );
@@ -1376,10 +1387,21 @@ fn test_flattened_serde_only_fields() {
     assert_eq!(result.inner.inner_serde_only, 42);
 
     // Test that missing required serde-only field in flattened struct produces error
+    // Should report that the value cannot be provided since no document is being consumed
     assert_error_contains_text!(
         OuterWithFlattenedSerdeOnly::conf_builder()
             .args([".", "--outer-field=outer", "--inner-cli=inner"])
             .env::<&str, &str>([])
+            .try_parse(),
+        ["Required value 'inner.inner_serde_only' cannot be provided"]
+    );
+
+    // Test that when a document IS provided but missing the field, error DOES mention "config file"
+    assert_error_contains_text!(
+        OuterWithFlattenedSerdeOnly::conf_builder()
+            .args([".", "--outer-field=outer", "--inner-cli=inner"])
+            .env::<&str, &str>([])
+            .doc("config.json", json!({}))
             .try_parse(),
         [
             "'inner.inner_serde_only' in config file",
