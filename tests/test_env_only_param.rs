@@ -19,7 +19,7 @@ struct TestEnvOnly {
 #[test]
 fn test_env_only_get_program_options() {
     let parser_config = TestEnvOnly::get_parser_config().unwrap();
-    let opts = TestEnvOnly::get_program_options().unwrap();
+    let opts = TestEnvOnly::get_program_options();
 
     assert!(!parser_config.no_help_flag);
 

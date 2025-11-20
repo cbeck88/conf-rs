@@ -1,6 +1,3 @@
-mod common;
-use common::*;
-
 use conf::{Conf, ParseType};
 
 #[derive(Conf)]
@@ -23,7 +20,7 @@ struct B {
 
 #[test]
 fn test_skip_short_a_get_program_options() {
-    let opts = A::get_program_options().unwrap();
+    let opts = A::get_program_options();
 
     let mut iter = opts.iter();
 
@@ -50,7 +47,7 @@ fn test_skip_short_a_get_program_options() {
 
 #[test]
 fn test_skip_short_b_get_program_options() {
-    let opts = B::get_program_options().unwrap();
+    let opts = B::get_program_options();
 
     let mut iter = opts.iter();
 
@@ -125,11 +122,9 @@ struct BadA2 {
 }
 
 #[test]
+#[should_panic(expected = "When flattening B at b1, these short options were not found: ['a']")]
 fn test_skip_short_flags_program_options_unknown_skip_error() {
-    assert_error_contains_text!(
-        BadA2::get_program_options(),
-        ["When flattening B at b1, these short options were not found: ['a']"]
-    );
+    BadA2::get_program_options();
 }
 
 #[derive(Conf, Debug)]
@@ -146,9 +141,7 @@ struct BadA3 {
 }
 
 #[test]
+#[should_panic(expected = "When flattening B at b2, these short options were not found: ['c', 'd']")]
 fn test_skip_short_flags_program_options_unknown_skip_error2() {
-    assert_error_contains_text!(
-        BadA3::get_program_options(),
-        ["When flattening B at b2, these short options were not found: ['c', 'd']"]
-    );
+    BadA3::get_program_options();
 }

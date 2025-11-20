@@ -23,7 +23,7 @@ struct SubsystemOptions {
 #[test]
 fn test_subsystem_options_help() {
     let parser_config = SubsystemOptions::get_parser_config().unwrap();
-    let opts = SubsystemOptions::get_program_options().unwrap();
+    let opts = SubsystemOptions::get_program_options();
 
     let env = Default::default();
     let parser = Parser::new(parser_config, opts, &[], &env).unwrap();
@@ -66,7 +66,7 @@ struct OtherSubsystemOptions {
 #[test]
 fn test_other_subsystem_options_help() {
     let parser_config = OtherSubsystemOptions::get_parser_config().unwrap();
-    let opts = OtherSubsystemOptions::get_program_options().unwrap();
+    let opts = OtherSubsystemOptions::get_program_options();
 
     let env = Default::default();
     let parser = Parser::new(parser_config, opts, &[], &env).unwrap();
@@ -128,7 +128,7 @@ struct SystemOptions {
 #[test]
 fn test_system_options_help() {
     let parser_config = SystemOptions::get_parser_config().unwrap();
-    let opts = SystemOptions::get_program_options().unwrap();
+    let opts = SystemOptions::get_program_options();
 
     let env = Default::default();
     let parser = Parser::new(parser_config, opts, &[], &env).unwrap();

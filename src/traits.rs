@@ -90,7 +90,7 @@ pub trait Conf: Sized {
     #[doc(hidden)]
     fn get_parser(parsed_env: &ParsedEnv) -> Result<Parser<'_>, Error> {
         let parser_config = Self::get_parser_config()?;
-        let program_options = Self::get_program_options()?;
+        let program_options = Self::get_program_options();
         let subcommands = Self::get_subcommands(parsed_env)?;
         Parser::new(parser_config, program_options, subcommands, parsed_env)
     }
@@ -108,7 +108,7 @@ pub trait Conf: Sized {
     // Users shouldn't generally call this, because the returned data is implementation details,
     // and may change without a semver breaking change to the crate version.
     #[doc(hidden)]
-    fn get_program_options() -> Result<&'static [ProgramOption], Error>;
+    fn get_program_options() -> &'static [ProgramOption];
     // Get the subcommands that are declared on this Conf.
     //
     // These come from `conf(subcommand)` being used on a field, and `derive(Subcommand)` being used
@@ -135,16 +135,7 @@ pub trait Conf: Sized {
     fn any_program_options_appeared<'a>(
         conf_context: &ConfContext<'a>,
     ) -> Result<Option<(&'a str, ConfValueSource<&'a str>)>, InnerError> {
-        // This unwrap is unfortunate but this code is only called when an earlier call to
-        // Self::get_program_options has succeeded, since we have to call that to
-        // instantiate the parser, and we have to do that before getting a ConfContext.
-        // The only place in the library where a `ConfContext` is created where one doesn't already
-        // exist is in `try_parse_from`, and the ConfContext::new function is pub(crate).
-        // And we have to call get_program_options before that point, which calls it
-        // recursively on all the constituent structures.
-        // So I don't think this unwrap will panic unless get_program_options is implemented in a
-        // non-deterministic way, which it shouldn't be.
-        let program_options = Self::get_program_options().unwrap();
+        let program_options = Self::get_program_options();
         for opt in program_options {
             if let Some(value_source) = conf_context.option_appears(&opt.id)? {
                 return Ok(Some((&opt.id, value_source)));

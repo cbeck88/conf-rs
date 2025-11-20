@@ -119,24 +119,19 @@ impl GenConfStruct {
             .struct_item
             .gen_post_process_program_options(&program_options_ident)?;
 
-        // Note: fields_push_program_options is allowed to early return with ? on an error
         Ok(quote! {
-            fn get_program_options() -> Result<&'static [::conf::ProgramOption], ::conf::Error> {
+            fn get_program_options() -> &'static [::conf::ProgramOption] {
                 static CACHED: ::std::sync::OnceLock<Vec<::conf::ProgramOption>> = ::std::sync::OnceLock::new();
 
-                if CACHED.get().is_none() {
+                CACHED.get_or_init(|| {
                     let mut #program_options_ident = vec![];
 
                     #(#fields_push_program_options)*
 
                     #struct_post_process_program_options
 
-                    let _ = CACHED.set(#program_options_ident);
-                }
-
-                let cached = CACHED.get().unwrap();
-
-                Ok(cached.as_ref())
+                    #program_options_ident
+                }).as_ref()
             }
         })
     }

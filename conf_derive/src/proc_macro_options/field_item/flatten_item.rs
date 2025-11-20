@@ -323,11 +323,14 @@ impl FlattenItem {
               // Check for positional args in flatten optional
               for opt in __inner_options__ {
                   if opt.is_positional {
-                      return Err(::conf::Error::positional_in_flatten_optional(
-                          #field_name,
-                          <#inner_type as ::conf::Conf>::get_name(),
-                          &opt.id
-                      ));
+                      panic!(
+                          "{}",
+                          ::conf::Error::positional_in_flatten_optional(
+                              #field_name,
+                              <#inner_type as ::conf::Conf>::get_name(),
+                              &opt.id
+                          )
+                      );
                   }
               }
             }
@@ -337,7 +340,7 @@ impl FlattenItem {
 
         let push_expr = quote! {
           let mut #was_skipped_ident = [false; #skip_short_len];
-          let __inner_options__ = <#inner_type as ::conf::Conf>::get_program_options()?;
+          let __inner_options__ = <#inner_type as ::conf::Conf>::get_program_options();
           #positional_check
           #program_options_ident.extend(
             __inner_options__.iter().cloned().map(
@@ -354,7 +357,8 @@ impl FlattenItem {
                 .filter_map(
                   |(short_form, was_skipped)| if was_skipped { None } else { Some(short_form) }
                 ).collect();
-            return Err(
+            panic!(
+              "{}",
               ::conf::Error::skip_short_not_found(
                 not_skipped,
                 #field_name,

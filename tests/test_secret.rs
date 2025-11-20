@@ -32,7 +32,7 @@ struct C {
 
 #[test]
 fn test_secret_a_get_program_options() {
-    let opts = A::get_program_options().unwrap();
+    let opts = A::get_program_options();
 
     let mut iter = opts.iter();
 
@@ -76,7 +76,7 @@ fn test_secret_a_get_program_options() {
 
 #[test]
 fn test_secret_b_get_program_options() {
-    let opts = B::get_program_options().unwrap();
+    let opts = B::get_program_options();
 
     let mut iter = opts.iter();
 
