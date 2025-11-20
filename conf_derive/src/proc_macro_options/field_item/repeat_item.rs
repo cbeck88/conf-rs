@@ -555,6 +555,7 @@ impl RepeatItem {
                       = #conf_context_ident.get_repeat_osstring_opt(#id).map_err(|err| vec![err])?;
 
                     #before_value_parser
+                    #conf_context_ident.log_config_event(#id, value_source);
 
                     let mut result: #field_type = Default::default();
                     let mut errors = Vec::<InnerError>::new();
@@ -599,6 +600,7 @@ impl RepeatItem {
                       = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
 
                     #before_value_parser
+                    #conf_context_ident.log_config_event(#id, value_source);
 
                     let mut result: #field_type = Default::default();
                     let mut errors = Vec::<InnerError>::new();
@@ -668,6 +670,7 @@ impl RepeatItem {
         // If there's no CLI or env source, this repeat wasn't registered with clap,
         // so we just use the serde value directly
         if !self.has_cli_or_env_source() {
+            let id = self.field_name.to_string();
             let try_from = self.get_serde_try_from();
 
             if let Some(_try_from_type) = try_from {
@@ -679,7 +682,10 @@ impl RepeatItem {
                 return Ok((
                     quote! {
                         {
-                            let _ = #conf_context_ident;
+                            #conf_context_ident.log_config_event(
+                                #id,
+                                ::conf::ConfValueSource::Document(#doc_name)
+                            );
                             let mut __result__ = Vec::with_capacity(#doc_val.len());
                             for __item__ in #doc_val {
                                 match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
@@ -702,7 +708,10 @@ impl RepeatItem {
                 return Ok((
                     quote! {
                         {
-                            let _ = #conf_context_ident;
+                            #conf_context_ident.log_config_event(
+                                #id,
+                                ::conf::ConfValueSource::Document(#doc_name)
+                            );
                             Ok(#doc_val)
                         }
                     },
@@ -728,9 +737,14 @@ impl RepeatItem {
             let inner_type = type_is_vec(&self.field_type)?
                 .ok_or_else(|| Error::new(self.field_type.span(), "Expected Vec<T> type"))?;
 
+            let id = self.field_name.to_string();
             let before_value_parser = |_| {
                 quote! {
                     if value_source.is_default() {
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
                         let mut __result__ = Vec::with_capacity(#doc_val.len());
                         for __item__ in #doc_val {
                             match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
@@ -777,9 +791,14 @@ impl RepeatItem {
         } else {
             // When use_value_parser is not enabled, the behavior is, if conf context produced a
             // default value, we should instead simply return the doc value.
+            let id = self.field_name.to_string();
             let before_value_parser = |_| {
                 quote! {
                   if value_source.is_default() {
+                    #conf_context_ident.log_config_event(
+                        #id,
+                        ::conf::ConfValueSource::Document(#doc_name)
+                    );
                     return Ok(#doc_val);
                   }
                 }

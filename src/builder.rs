@@ -65,13 +65,21 @@ where
     }
 
     /// Set the config logger used in this parse
-    pub fn config_logger(mut self, f: F) -> Self {
+    /// This enables introspection on the config process, so that it can be determined
+    /// which program options are configured via which value sources.
+    pub fn config_logger<F2: FnMut(&dyn ConfigEvent)>(self, f: F2) -> ConfBuilder<S, F2> {
         assert!(
             self.config_logger.is_none(),
             "Cannot set config_logger twice"
         );
-        self.config_logger = Some(f);
-        self
+        ConfBuilder {
+            collected_env: self.collected_env,
+            inited_env: self.inited_env,
+            collected_args: self.collected_args,
+            inited_args: self.inited_args,
+            config_logger: Some(f),
+            _marker: PhantomData,
+        }
     }
 
     /// Parse based on supplied sources (or falling back to defaults), and exiting the program

@@ -1,5 +1,6 @@
 use crate::{
-    ConfigLogger, InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption, str_to_bool,
+    ConfigLogger, InnerError, ParseType, ParsedArgs, ParsedEnv, ProgramOption,
+    introspection::ValueSource as PublicValueSource, str_to_bool,
 };
 use clap::parser::ValueSource;
 use core::fmt::Debug;
@@ -12,7 +13,7 @@ use std::{
 // This is mainly used to render help if something fails in the value parser later
 // It is generic over a string type so that it can accommodate owned and borrowed data.
 #[doc(hidden)]
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ConfValueSource<S>
 where
     S: Clone + Debug + Eq + PartialEq + Ord + PartialOrd,
@@ -35,6 +36,16 @@ impl ConfValueSource<&str> {
 
     pub fn is_default(&self) -> bool {
         matches!(self, Self::Default)
+    }
+
+    /// Convert to the public ValueSource type used in introspection
+    pub fn to_public_value_source(&self) -> PublicValueSource<'_> {
+        match self {
+            Self::Args => PublicValueSource::Args {},
+            Self::Env(var) => PublicValueSource::Env { var },
+            Self::Document(name) => PublicValueSource::Document { name },
+            Self::Default => PublicValueSource::Default {},
+        }
     }
 }
 
@@ -237,7 +248,7 @@ impl<'a> ConfContext<'a> {
         if let Some((value_source, val_os)) = maybe_val {
             // Convert OsStr to str, handling UTF-8 errors
             let val_str = val_os.to_str().ok_or_else(|| {
-                InnerError::invalid_value_os(value_source.clone(), val_os, opt, "Invalid UTF-8")
+                InnerError::invalid_value_os(value_source, val_os, opt, "Invalid UTF-8")
             })?;
             Ok((Some((value_source, val_str)), opt))
         } else {
@@ -456,7 +467,7 @@ impl<'a> ConfContext<'a> {
             env: self.env,
             id_prefix: self.id_prefix.clone() + sub_id_prefix,
             flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
-            config_logger: self.config_logger.clone(),
+            config_logger: self.config_logger,
         }
     }
 
@@ -493,7 +504,7 @@ impl<'a> ConfContext<'a> {
             env: self.env,
             id_prefix,
             flattened_optional_debug_info,
-            config_logger: self.config_logger.clone(),
+            config_logger: self.config_logger,
         }
     }
 
@@ -508,7 +519,7 @@ impl<'a> ConfContext<'a> {
                     env: self.env,
                     id_prefix: self.id_prefix.clone(),
                     flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
-                    config_logger: self.config_logger.clone(),
+                    config_logger: self.config_logger,
                 },
             )
         })
@@ -607,5 +618,46 @@ impl<'a> ConfContext<'a> {
             single_options,
             flattened_options,
         )
+    }
+
+    /// Log a configuration event to the config logger if one is present.
+    /// This should be called when a leaf field (flag, parameter, or repeat) is successfully initialized.
+    pub fn log_config_event(&self, id: &str, value_source: ConfValueSource<&str>) {
+        if let Some(logger_cell) = self.config_logger {
+            let id = self.id_prefix.clone() + id;
+            let opt = self
+                .args
+                .id_to_option()
+                .get(id.as_str())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Option not found by id ({id}), this is an internal error: {:?}",
+                        self.args.id_to_option()
+                    )
+                });
+
+            // Create a config event implementation
+            struct ConfigEventImpl<'a> {
+                option: &'a ProgramOption,
+                value_source: ConfValueSource<&'a str>,
+            }
+
+            impl<'a> crate::ConfigEvent for ConfigEventImpl<'a> {
+                fn program_option(&self) -> &dyn crate::ProgramOptionMeta {
+                    self.option
+                }
+
+                fn value_source(&self) -> PublicValueSource<'_> {
+                    self.value_source.to_public_value_source()
+                }
+            }
+
+            let event = ConfigEventImpl {
+                option: opt,
+                value_source,
+            };
+
+            logger_cell.borrow_mut()(&event);
+        }
     }
 }

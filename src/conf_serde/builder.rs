@@ -69,6 +69,21 @@ where
         self
     }
 
+    /// Set the config logger used in this parse
+    /// This enables introspection on the config process, so that it can be determined
+    /// which program options are configured via which value sources.
+    pub fn config_logger<F2: FnMut(&dyn ConfigEvent)>(
+        self,
+        f: F2,
+    ) -> ConfSerdeBuilder<'de, D, S, F2> {
+        ConfSerdeBuilder {
+            inner: self.inner.config_logger(f),
+            document_name: self.document_name,
+            document: self.document,
+            _marker: PhantomData,
+        }
+    }
+
     /// Parse based on supplied sources (or falling back to defaults), and exiting the program
     /// with errors logged to stderr if parsing fails.
     pub fn parse(self) -> S {

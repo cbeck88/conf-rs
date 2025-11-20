@@ -308,7 +308,8 @@ impl FlagItem {
 
         Ok((
             quote! {
-                let (_src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                #conf_context_ident.log_config_event(#id, src);
                 Ok(val)
             },
             false,
@@ -329,11 +330,13 @@ impl FlagItem {
         // If there's no CLI or env source, this flag wasn't registered with clap,
         // so we just use the serde value directly
         if !self.has_cli_or_env_source() {
-            let _ = id; // suppress unused warning
             if let Some(_try_from_type) = try_from {
                 return Ok((
                     quote! {
-                        let _ = #conf_context_ident;
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
                         <bool as ::core::convert::TryFrom<_>>::try_from(#doc_val)
                             .map_err(|err| ::conf::InnerError::serde(
                                 #doc_name,
@@ -346,7 +349,10 @@ impl FlagItem {
             } else {
                 return Ok((
                     quote! {
-                        let _ = #conf_context_ident;
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
                         Ok(#doc_val)
                     },
                     false,
@@ -360,6 +366,7 @@ impl FlagItem {
             Ok((
                 quote! {
                     let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                    #conf_context_ident.log_config_event(#id, src);
                     if src.is_default() {
                         <bool as ::core::convert::TryFrom<_>>::try_from(#doc_val)
                             .map_err(|err| ::conf::InnerError::serde(
@@ -377,6 +384,7 @@ impl FlagItem {
             Ok((
                 quote! {
                     let (src, val) = #conf_context_ident.get_boolean_opt(#id)?;
+                    #conf_context_ident.log_config_event(#id, src);
                     if src.is_default() {
                         Ok(#doc_val)
                     } else {

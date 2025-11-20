@@ -570,6 +570,7 @@ impl ParameterItem {
                         #if_no_conf_context_val
                       };
                     #before_value_parser
+                    #conf_context_ident.log_config_event(#id, value_source);
                     match __value_parser__(val_os) {
                       #value_parser_ok_arm
                       Err(err) => Err(
@@ -607,6 +608,7 @@ impl ParameterItem {
                         #if_no_conf_context_val
                       };
                     #before_value_parser
+                    #conf_context_ident.log_config_event(#id, value_source);
                     match __value_parser__(val_str) {
                       #value_parser_ok_arm
                       Err(err) => Err(
@@ -666,6 +668,7 @@ impl ParameterItem {
             // When try_from is set, #doc_val has the try_from type (or Option<try_from_type> for optional fields).
             // To pick this value for the field, we use TryFrom::try_from to convert.
             let field_type = &self.field_type;
+            let id = self.field_name.to_string();
             let field_name_str = self.field_name.to_string();
 
             // For Option<T> fields, we deserialize Option<U> and map the conversion
@@ -673,6 +676,10 @@ impl ParameterItem {
             if let Some(inner_type) = &self.is_optional_type {
                 let if_no_conf_context_val = |_| {
                     quote! {
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
                         return match #doc_val {
                             Some(__intermediate__) => {
                                 <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__)
@@ -691,6 +698,10 @@ impl ParameterItem {
                 let before_value_parser = |_| {
                     quote! {
                         if value_source.is_default() {
+                            #conf_context_ident.log_config_event(
+                                #id,
+                                ::conf::ConfValueSource::Document(#doc_name)
+                            );
                             return match #doc_val {
                                 Some(__intermediate__) => {
                                     <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__)
@@ -714,6 +725,10 @@ impl ParameterItem {
             } else {
                 let if_no_conf_context_val = |_| {
                     quote! {
+                        #conf_context_ident.log_config_event(
+                            #id,
+                            ::conf::ConfValueSource::Document(#doc_name)
+                        );
                         return <#field_type as ::core::convert::TryFrom<_>>::try_from(#doc_val)
                             .map_err(|err| ::conf::InnerError::serde(
                                 #doc_name,
@@ -726,6 +741,10 @@ impl ParameterItem {
                 let before_value_parser = |_| {
                     quote! {
                         if value_source.is_default() {
+                            #conf_context_ident.log_config_event(
+                                #id,
+                                ::conf::ConfValueSource::Document(#doc_name)
+                            );
                             return <#field_type as ::core::convert::TryFrom<_>>::try_from(#doc_val)
                                 .map_err(|err| ::conf::InnerError::serde(
                                     #doc_name,
@@ -781,8 +800,13 @@ impl ParameterItem {
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
             // To pick this value for the field, we just return it.
+            let id = self.field_name.to_string();
             let if_no_conf_context_val = |_| {
                 quote! {
+                  #conf_context_ident.log_config_event(
+                      #id,
+                      ::conf::ConfValueSource::Document(#doc_name)
+                  );
                   return Ok(#doc_val);
                 }
             };
@@ -790,6 +814,10 @@ impl ParameterItem {
             let before_value_parser = |_| {
                 quote! {
                   if value_source.is_default() {
+                    #conf_context_ident.log_config_event(
+                        #id,
+                        ::conf::ConfValueSource::Document(#doc_name)
+                    );
                     return Ok(#doc_val);
                   }
                 }

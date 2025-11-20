@@ -1,4 +1,4 @@
-use crate::{CowStr, ParsedEnv};
+use crate::{CowStr, ParsedEnv, ProgramOptionMeta};
 use std::fmt;
 
 /// This is a property of every program option, and dictates what form of data we expect to collect
@@ -254,5 +254,42 @@ impl ProgramOption {
             writeln!(stream, "          [secret]")?;
         }
         Ok(())
+    }
+}
+
+impl ProgramOptionMeta for ProgramOption {
+    fn id(&self) -> &dyn fmt::Display {
+        &self.id
+    }
+
+    fn description(&self) -> &dyn fmt::Display {
+        self.description
+            .as_ref()
+            .map(|d| d as &dyn fmt::Display)
+            .unwrap_or(&"")
+    }
+
+    fn short_form(&self) -> Option<char> {
+        self.short_form
+    }
+
+    fn long_form(&self) -> Option<&dyn fmt::Display> {
+        self.long_form.as_ref().map(|l| l as &dyn fmt::Display)
+    }
+
+    fn is_positional(&self) -> bool {
+        self.is_positional
+    }
+
+    fn env_form(&self) -> Option<&dyn fmt::Display> {
+        self.env_form.as_ref().map(|e| e as &dyn fmt::Display)
+    }
+
+    fn has_serde_source(&self) -> bool {
+        self.has_serde_source
+    }
+
+    fn is_required(&self) -> bool {
+        self.is_required
     }
 }

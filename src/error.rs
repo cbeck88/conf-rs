@@ -205,7 +205,7 @@ impl InnerError {
         let constraint_single_options = constraint_single_options
             .as_ref()
             .iter()
-            .map(|(opt, src)| ((*opt).clone(), src.clone().into_owned()))
+            .map(|(opt, src)| ((*opt).clone(), (*src).into_owned()))
             .collect::<Vec<_>>();
         let constraint_flattened_data = constraint_flattened_data
             .as_ref()
@@ -214,7 +214,7 @@ impl InnerError {
                 (
                     (*field_name).to_owned(),
                     (*opt).clone(),
-                    src.clone().into_owned(),
+                    (*src).into_owned(),
                 )
             })
             .collect::<Vec<_>>();
