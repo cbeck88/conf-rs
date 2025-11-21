@@ -822,7 +822,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    **Examples**:
 
-   Auto-detected for Vec<PathBuf>:
+   Auto-detected for `Vec<PathBuf>`:
    ```rust
    # use conf::Conf;
    use std::path::PathBuf;

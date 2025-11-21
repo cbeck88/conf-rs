@@ -1,5 +1,4 @@
-//! A `derive`-based, highly composable env-and-argument parser aimed at the practically-minded web
-//! developer building large web projects.
+//! A `derive`-based config parser aimed at the practically-minded web developer building large web projects.
 //!
 //! To use `conf`, use the `#[derive(Conf)]` proc macro on your configuration struct.
 //! Then call a [`Conf`] trait function to parse your configuration struct.
@@ -37,7 +36,7 @@ use parse_env::parse_env;
 use parser::ParsedArgs;
 use str_to_bool::str_to_bool;
 
-// These exports represent the public API.
+// These exports represent public API.
 pub use builder::ConfBuilder;
 pub use error::Error;
 pub use find_parameter::find_parameter;

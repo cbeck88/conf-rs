@@ -1,6 +1,6 @@
 # conf
 
-`conf` is a `derive`-based config parser, with support for hierarchical config, aimed at the practically-minded web developer building large web projects.
+`conf` is a `derive`-based config parser aimed at the practically-minded web developer building large web projects.
 
 [![Crates.io](https://img.shields.io/crates/v/conf?style=flat-square)](https://crates.io/crates/conf)
 [![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
@@ -303,7 +303,7 @@ One way this can be done in `conf` is by using the `value_parser` feature, which
 
 A `value_parser` is a function that takes a `&str` and returns either a value or an error.
 
-For example, if you need to read a `pem` file on startup, one way you could do that is
+For example, if you need to read a `.pem` file on startup, one way you could do that is
 
 ```rust
 use conf::Conf;
@@ -435,7 +435,7 @@ See also [./examples/serde/basic.rs](./examples/serde/basic.rs).
 
 #### Multiple config files
 
-A limitation of `conf` is that you can only pass it one document in this manner -- you can't call [`ConfBuilder::doc`] multiple times and pass a series of progressively lower-priority file contents.
+A limitation of `conf` is that you can only pass it one document in this manner -- you can't call [`crate::ConfBuilder::doc`] multiple times and pass a series of progressively lower-priority file contents.
 
 However, you can use other libraries to help with this.
 

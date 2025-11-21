@@ -203,7 +203,7 @@ pub trait Conf: Sized {
 /// The Subcommands trait represents one or more subcommands that can be added to a `Conf`
 /// structure. To use it, put `#[derive(Subcommands)]` on your enum, and then add a
 /// `#[conf(subcommands)]` field to your `Conf` structure whose type is your enum type, or
-/// `Option<T>`.
+/// `Option<T>` where `T` is your enum type.
 ///
 /// Each variant of the enum corresponds to a subcommand, and must contain a single un-named `Conf`
 /// structure.
