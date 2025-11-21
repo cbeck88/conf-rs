@@ -65,7 +65,8 @@ pub use builder::ConfSerdeBuilder;
 
 mod state_machine;
 pub use state_machine::{
-    ConfSerdeSeed, InitializationStateMachine, NextValueProducer, PrefixStrippingStateMachine,
+    ConfSerdeSeed, InitializationStateMachine, NextValueProducer, OptionalStateMachine,
+    PrefixStrippingStateMachine,
 };
 
 mod traits;

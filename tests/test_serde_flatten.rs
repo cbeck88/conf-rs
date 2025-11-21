@@ -374,3 +374,480 @@ fn test_serde_flatten_optional_parent_none() {
 
     assert!(result.database.is_none());
 }
+
+// Tests for #[conf(flatten)] without serde(flatten) on Option<T>
+// In this case, the flattened struct has its own key in the JSON structure.
+// The tests above (test_flatten_optional_serde_activates_group_*) demonstrate this pattern.
+
+#[test]
+fn test_flatten_optional_serde_activates_group_all_fields() {
+    // Test that serde can activate optional group when all required fields are provided
+    // Using flatten WITHOUT serde(flatten), so struct has its own key in JSON
+    let result = OptionalFlattenConfig::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "database": {
+                    "db_host": "localhost",
+                    "db_port": 5432
+                }
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.db_host, "localhost");
+    assert_eq!(db.db_port, 5432);
+}
+
+#[test]
+fn test_flatten_optional_serde_activates_group_missing_required() {
+    // This is the key test: serde provides only one field (db_host) via the "database" key
+    // This should activate the optional group, making db_port required
+    // Since db_port is required but not provided, this should error
+    assert_error_contains_text!(
+        OptionalFlattenConfig::conf_builder()
+            .args([".", "--name=test"])
+            .env::<&str, &str>([])
+            .doc(
+                "config.json",
+                json!({
+                    "database": {
+                        "db_host": "localhost"
+                    }
+                })
+            )
+            .try_parse(),
+        ["required", "db_port"]
+    );
+}
+
+#[test]
+fn test_flatten_optional_serde_activates_group_mixed_sources() {
+    // Serde provides one field via JSON, args provides the other required field
+    // This tests that the optional group is properly activated and both sources work together
+    let result = OptionalFlattenConfig::conf_builder()
+        .args([".", "--name=test", "--db-port=5432"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "database": {
+                    "db_host": "localhost"
+                }
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.db_host, "localhost");
+    assert_eq!(db.db_port, 5432);
+}
+
+/// Test serde(flatten) combined with flatten-optional (Option<T>)
+/// This uses the OptionalStateMachine wrapper to handle the optional case
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct OptionalSerdeFlat {
+    #[arg(long, env)]
+    pub name: String,
+    #[conf(flatten, serde(flatten))]
+    pub database: Option<DatabaseConfig>,
+}
+
+#[test]
+fn test_serde_flatten_optional_all_fields() {
+    // All fields from serde - should activate the optional group
+    let result = OptionalSerdeFlat::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "db_host": "localhost",
+                "db_port": 5432,
+                "db_name": "testdb"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.db_host, "localhost");
+    assert_eq!(db.db_port, 5432);
+    assert_eq!(db.db_name, Some("testdb".to_string()));
+}
+
+#[test]
+fn test_serde_flatten_optional_none() {
+    // No fields provided - optional group should be None
+    let result = OptionalSerdeFlat::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_none());
+}
+
+#[test]
+fn test_serde_flatten_optional_missing_required() {
+    // Serde provides only one field - should activate group and error on missing required field
+    assert_error_contains_text!(
+        OptionalSerdeFlat::conf_builder()
+            .args([".", "--name=test"])
+            .env::<&str, &str>([])
+            .doc(
+                "config.json",
+                json!({
+                    "db_host": "localhost"
+                })
+            )
+            .try_parse(),
+        ["required", "db_port"]
+    );
+}
+
+#[test]
+fn test_serde_flatten_optional_mixed_sources() {
+    // Serde provides one field via JSON, args provides the other required field
+    let result = OptionalSerdeFlat::conf_builder()
+        .args([".", "--name=test", "--db-port=5432"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "db_host": "localhost"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.db_host, "localhost");
+    assert_eq!(db.db_port, 5432);
+}
+
+#[test]
+fn test_serde_flatten_optional_args_only() {
+    // Critical test: serde provides NOTHING, but args provides all required fields
+    // The optional group should be activated by args, not return None
+    let result = OptionalSerdeFlat::conf_builder()
+        .args([".", "--name=test", "--db-host=localhost", "--db-port=5432"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.db_host, "localhost");
+    assert_eq!(db.db_port, 5432);
+}
+
+#[test]
+fn test_serde_flatten_optional_args_incomplete() {
+    // Critical test: serde provides NOTHING, but args provides only ONE required field
+    // Should error on missing db_port, not return None
+    assert_error_contains_text!(
+        OptionalSerdeFlat::conf_builder()
+            .args([".", "--name=test", "--db-host=localhost"])
+            .env::<&str, &str>([])
+            .doc("config.json", json!({}))
+            .try_parse(),
+        ["required", "db_port"]
+    );
+}
+
+#[test]
+fn test_serde_flatten_optional_truly_none() {
+    // Neither serde nor args provides anything - should be None, not an error
+    let result = OptionalSerdeFlat::conf_builder()
+        .args([".", "--name=test"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.name, "test");
+    assert!(result.database.is_none());
+}
+
+/// Nested optional serde(flatten) structs
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct InnerConfig {
+    #[arg(long, env)]
+    pub inner_field: String,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct MiddleConfig {
+    #[arg(long, env)]
+    pub middle_field: String,
+    #[conf(flatten, serde(flatten))]
+    pub inner: Option<InnerConfig>,
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct OuterConfig {
+    #[arg(long, env)]
+    pub outer_name: String,
+    #[conf(flatten, serde(flatten))]
+    pub middle: Option<MiddleConfig>,
+}
+
+#[test]
+fn test_nested_optional_flatten_both_none() {
+    // Neither layer activated - both should be None
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_none());
+}
+
+#[test]
+fn test_nested_optional_flatten_outer_only_via_serde() {
+    // Activate middle layer via serde, but not inner
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "middle_field": "middle_value"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_value");
+    assert!(middle.inner.is_none());
+}
+
+#[test]
+fn test_nested_optional_flatten_outer_only_via_args() {
+    // Activate middle layer via args, but not inner
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test", "--middle-field=middle_value"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_value");
+    assert!(middle.inner.is_none());
+}
+
+#[test]
+fn test_nested_optional_flatten_inner_activates_outer_via_serde() {
+    // Activate inner via serde - this should activate middle too, requiring middle_field
+    assert_error_contains_text!(
+        OuterConfig::conf_builder()
+            .args([".", "--outer-name=test"])
+            .env::<&str, &str>([])
+            .doc(
+                "config.json",
+                json!({
+                    "inner_field": "inner_value"
+                })
+            )
+            .try_parse(),
+        ["required", "middle_field"]
+    );
+}
+
+#[test]
+fn test_nested_optional_flatten_inner_activates_outer_via_args() {
+    // Activate inner via args - this should activate middle too, requiring middle_field
+    assert_error_contains_text!(
+        OuterConfig::conf_builder()
+            .args([".", "--outer-name=test", "--inner-field=inner_value"])
+            .env::<&str, &str>([])
+            .doc("config.json", json!({}))
+            .try_parse(),
+        ["required", "middle_field"]
+    );
+}
+
+#[test]
+fn test_nested_optional_flatten_both_activated_via_serde() {
+    // Both layers activated via serde
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "middle_field": "middle_value",
+                "inner_field": "inner_value"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_value");
+    assert!(middle.inner.is_some());
+    let inner = middle.inner.unwrap();
+    assert_eq!(inner.inner_field, "inner_value");
+}
+
+#[test]
+fn test_nested_optional_flatten_both_activated_via_args() {
+    // Both layers activated via args
+    let result = OuterConfig::conf_builder()
+        .args([
+            ".",
+            "--outer-name=test",
+            "--middle-field=middle_value",
+            "--inner-field=inner_value",
+        ])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_value");
+    assert!(middle.inner.is_some());
+    let inner = middle.inner.unwrap();
+    assert_eq!(inner.inner_field, "inner_value");
+}
+
+#[test]
+fn test_nested_optional_flatten_outer_serde_inner_args() {
+    // Activate middle via serde, inner via args
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test", "--inner-field=inner_from_args"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "middle_field": "middle_from_serde"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_from_serde");
+    assert!(middle.inner.is_some());
+    let inner = middle.inner.unwrap();
+    assert_eq!(inner.inner_field, "inner_from_args");
+}
+
+#[test]
+fn test_nested_optional_flatten_outer_args_inner_serde() {
+    // Activate middle via args, inner via serde
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test", "--middle-field=middle_from_args"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "inner_field": "inner_from_serde"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "middle_from_args");
+    assert!(middle.inner.is_some());
+    let inner = middle.inner.unwrap();
+    assert_eq!(inner.inner_field, "inner_from_serde");
+}
+
+#[test]
+fn test_nested_optional_flatten_inner_only_provided_both_via_serde() {
+    // Only inner_field provided via serde, middle_field missing - should error
+    // because inner being activated means middle must be activated
+    assert_error_contains_text!(
+        OuterConfig::conf_builder()
+            .args([".", "--outer-name=test"])
+            .env::<&str, &str>([])
+            .doc(
+                "config.json",
+                json!({
+                    "inner_field": "inner_value"
+                })
+            )
+            .try_parse(),
+        ["required", "middle_field"]
+    );
+}
+
+#[test]
+fn test_nested_optional_flatten_inner_only_provided_both_via_args() {
+    // Only inner_field provided via args, middle_field missing - should error
+    assert_error_contains_text!(
+        OuterConfig::conf_builder()
+            .args([".", "--outer-name=test", "--inner-field=inner_value"])
+            .env::<&str, &str>([])
+            .doc("config.json", json!({}))
+            .try_parse(),
+        ["required", "middle_field"]
+    );
+}
+
+#[test]
+fn test_nested_optional_flatten_inner_serde_middle_missing_args() {
+    // Inner provided by serde, should require middle_field even if not in serde
+    // Can satisfy via args
+    let result = OuterConfig::conf_builder()
+        .args([".", "--outer-name=test", "--middle-field=from_args"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "inner_field": "from_serde"
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.outer_name, "test");
+    assert!(result.middle.is_some());
+    let middle = result.middle.unwrap();
+    assert_eq!(middle.middle_field, "from_args");
+    assert!(middle.inner.is_some());
+    let inner = middle.inner.unwrap();
+    assert_eq!(inner.inner_field, "from_serde");
+}

@@ -481,23 +481,36 @@ impl FlattenItem {
             let state_machine_type: Type;
             let state_machine_init: TokenStream;
 
-            // Check if we have a prefix to strip
-            if let Some(prefix) = self.get_serde_flatten_prefix() {
-                // With prefix: use PrefixStrippingStateMachine
-                // The state machine type wraps the inner type's ISM
+            // Build the state machine type and init, applying wrappers as needed
+            // Start with the base inner type's ISM
+            let base_type: Type = parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
+            let base_init: TokenStream = quote! { #ctxt.for_flattened(#id_prefix).into() };
+
+            // Apply PrefixStrippingStateMachine wrapper if needed
+            let (type_after_prefix, init_after_prefix) =
+                if let Some(prefix) = self.get_serde_flatten_prefix() {
+                    let wrapped_type: Type = parse_quote! {
+                        ::conf::PrefixStrippingStateMachine<'static, #base_type>
+                    };
+                    let wrapped_init = quote! {
+                        ::conf::PrefixStrippingStateMachine::new(#prefix, #base_init)
+                    };
+                    (wrapped_type, wrapped_init)
+                } else {
+                    (base_type, base_init)
+                };
+
+            // Apply OptionalStateMachine wrapper if this is a flatten-optional field
+            if self.is_optional_type.is_some() {
                 state_machine_type = parse_quote! {
-                    ::conf::PrefixStrippingStateMachine<'static, <#inner_type as ::conf::ConfSerde>::ISM::<#ct>>
+                    ::conf::OptionalStateMachine<#type_after_prefix>
                 };
                 state_machine_init = quote! {
-                    ::conf::PrefixStrippingStateMachine::new(#prefix, #ctxt.for_flattened(#id_prefix).into())
+                    ::conf::OptionalStateMachine::new(#init_after_prefix)
                 };
             } else {
-                // Without prefix: original behavior
-                state_machine_type =
-                    parse_quote! { <#inner_type as ::conf::ConfSerde>::ISM::<#ct> };
-                state_machine_init = quote! {
-                    #ctxt.for_flattened(#id_prefix).into()
-                };
+                state_machine_type = type_after_prefix;
+                state_machine_init = init_after_prefix;
             }
 
             Ok(SerdeStrategy {

@@ -63,6 +63,14 @@ pub trait InitializationStateMachine<'de>: Sized {
     where
         NVP: NextValueProducer<'de>;
     fn finalize(self) -> Result<Self::Value, Vec<InnerError>>;
+
+    /// Check if this state machine needs to be finalized.
+    ///
+    /// This is used to implement flatten-optional: if an optional flattened group
+    /// hasn't received any values from any source (serde, args, or env), it should
+    /// return `None` rather than attempting finalization which would error on missing
+    /// required fields.
+    fn needs_finalize(&self) -> bool;
 }
 
 /// Wrapper type to treat an initialization state machine as a serde::de::Visitor impl.
@@ -210,5 +218,71 @@ where
 
     fn finalize(self) -> Result<Self::Value, Vec<InnerError>> {
         self.inner.finalize()
+    }
+
+    fn needs_finalize(&self) -> bool {
+        self.inner.needs_finalize()
+    }
+}
+
+/// A wrapper around an [`InitializationStateMachine`] that makes it optional.
+///
+/// This is used to implement `#[conf(flatten, serde(flatten))]` on `Option<T>` fields.
+///
+/// The wrapped group is considered "activated" if:
+/// - Serde provides any key for it, OR
+/// - Args/env provides any value for any field in the group
+///
+/// If activated, all required fields must be satisfied. If not activated, returns None.
+///
+/// This wrapper tracks whether serde mentioned the group (`received_key`), and also
+/// checks whether args/env mentioned it by inspecting the result of inner.finalize().
+#[doc(hidden)]
+pub struct OptionalStateMachine<M> {
+    inner: M,
+    received_key: bool,
+}
+
+impl<M> OptionalStateMachine<M> {
+    /// Create a new optional wrapper around an inner state machine.
+    pub fn new(inner: M) -> Self {
+        Self {
+            inner,
+            received_key: false,
+        }
+    }
+}
+
+impl<'de, M> InitializationStateMachine<'de> for OptionalStateMachine<M>
+where
+    M: InitializationStateMachine<'de>,
+{
+    type Value = Option<M::Value>;
+
+    fn wants_key(&self, key: &str) -> bool {
+        self.inner.wants_key(key)
+    }
+
+    fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self
+    where
+        NVP: NextValueProducer<'de>,
+    {
+        Self {
+            inner: self.inner.next(key, next_value_producer),
+            received_key: true,
+        }
+    }
+
+    fn finalize(self) -> Result<Self::Value, Vec<InnerError>> {
+        if self.needs_finalize() {
+            self.inner.finalize().map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn needs_finalize(&self) -> bool {
+        // Check received_key first for short-circuit optimization
+        self.received_key || self.inner.needs_finalize()
     }
 }

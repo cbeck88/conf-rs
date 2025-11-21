@@ -1,6 +1,6 @@
 use crate::{
-    ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, ParsedEnv, Parser,
-    ParserConfig, ProgramOption, introspection, lazybuf::LazyBuf,
+    ConfBuilder, ConfContext, ConfValueSource, Error, InnerError, ParsedEnv, Parser, ParserConfig,
+    ProgramOption, introspection, lazybuf::LazyBuf,
 };
 use std::ffi::OsString;
 

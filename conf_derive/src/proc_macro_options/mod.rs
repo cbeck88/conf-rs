@@ -590,6 +590,15 @@ impl GenConfStruct {
                     // usual.
                     #gather_and_validate
                 }
+
+                fn needs_finalize(&self) -> bool {
+                    // Check if any program options from this struct appeared in the conf context
+                    // (from args or env). This is used for flatten-optional to determine if the
+                    // group should be activated when serde doesn't mention it.
+                    <Self::Value as ::conf::Conf>::any_program_options_appeared(
+                        &self.#conf_serde_context_ident.conf_context
+                    ).unwrap_or(None).is_some()
+                }
             }
         };
 

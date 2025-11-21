@@ -14,14 +14,14 @@ mod conf_context;
 mod error;
 mod find_parameter;
 pub mod introspection;
+#[doc(hidden)]
+pub mod lazybuf;
 mod parse_env;
 mod parser;
 mod program_option;
 mod str_to_bool;
 mod styles;
 mod traits;
-#[doc(hidden)]
-pub mod lazybuf;
 
 // These are not needed by users or by generated code
 use conf_context::FlattenedOptionalDebugInfo;
@@ -67,7 +67,7 @@ pub use conf_serde::{ConfSerde, ConfSerdeBuilder};
 #[cfg(feature = "serde")]
 pub use conf_serde::{
     ConfSerdeContext, ConfSerdeSeed, IdentString, InitializationStateMachine, NextValueProducer,
-    PrefixStrippingStateMachine, SubcommandsSerde,
+    OptionalStateMachine, PrefixStrippingStateMachine, SubcommandsSerde,
 };
 // Re-export serde crate for the proc macro
 #[doc(hidden)]
