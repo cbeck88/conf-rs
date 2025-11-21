@@ -30,7 +30,7 @@ The features that you get for this bargain are:
 * **Support for user-defined validation predicates**. This allows you to express constraints that can't be expressed in `clap`.
 * **Support for layered config**. This means that you can use structured data loaded from a file as an additional source for config values, alongside args and env.
 
-`conf` supports using config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
+`conf` also supports consuming config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
 The same commitment to "All the errors and not just one of them" holds. There are several advantages of this integrated approach:
 
 * Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/latest/clap/) for CLI argument parsing only, and then folding the
@@ -43,9 +43,11 @@ The same commitment to "All the errors and not just one of them" holds. There ar
     for users to figure out how to use your program.
   * It leads to poor quality error reporting, because crates like `figment` and `config` rely on `serde::Deserialize` to marshall the composited data onto your final structure.
     This precludes giving multiple error reports if there are multiple problems in different parts of the config. (See [MOTIVATION.md](./MOTIVATION.md) for more discussion.)
-* When using `conf` instead, all of these problems are avoided. Notably, `conf` provides its own proc-macro, and so we can walk the `serde::de::Deserializer` ourselves and
+* When using `conf` instead, all of these problems are avoided. Notably, `conf` provides its own proc-macro, and so we can walk the `serde::Deserializer` ourselves and
   ensure that we get comprehensive error reporting, even if `serde_derive::Deserialize` would have stopped at the first error.
 * `conf` can also be used together with `figment` advantageously. See [Multiple config files](#multiple-config-files) for more on this.
+
+In general, `conf` works with other libraries via dependency injection, and only has a hard dependency on the `clap` ecosystem. The `serde` integration is optional. You can bring any serde-compatible config file parser that you want, at whatever versions you want.
 
 ------
 
@@ -74,7 +76,7 @@ See [MOTIVATION.md](./MOTIVATION.md) for more discussion about this project and 
 
 First add `conf` to the dependencies in your `Cargo.toml` file:
 
-```
+```toml
 [dependencies]
 conf = "0.1"
 ```
@@ -84,6 +86,7 @@ This struct should derive the `Conf` trait, and the `conf` attributes should be 
 
 ```rust
 use conf::Conf;
+use http::Uri;
 
 #[derive(Conf)]
 pub struct Config {
@@ -97,13 +100,13 @@ pub struct Config {
 
     /// URL to hit, which can be read from args as `--url` or from env as `URL`.
     #[arg(long, env)]
-    url: Url, // This works because Url implements `FromStr`.
+    url: Uri, // This works because Uri implements `FromStr`.
 }
 ```
 
 Finally, you can parse the config:
 
-```rust
+```rust,ignore
     let config = Config::parse();
 ```
 
@@ -123,6 +126,7 @@ A field in your struct can be read from a few sources:
 
 * `#[arg(short)]` means that it has an associated "short" command-line option, such as `-u`. By default the first letter of your field is used. This can be overridden with `#[arg(short='t')]` for example.
 * `#[arg(long)]` means that it has an associated "long" command-line option, such as `--url`. By default the kebab-case name of your field is used. This can be overridden with `#[arg(long="target-url")]` for example.
+* `#[arg(pos)]` means that the argument can be a "positional" command-line option, and doesn't have any associated switch.
 * `#[arg(env)]` means that it has an associated environment variable, such as `URL`. By default the upper snake-case name of your field is used. This can be overridden with `#[arg(env="TARGET_URL")]` for example.
 * `#[arg(default_value)]` specifies a default value for this field if none of the other three possible sources provides one.
 
@@ -136,7 +140,7 @@ So far this is almost exactly the same `clap-derive`. Where it gets more interes
 
 You may have one structure that derives `Conf` and declares a bunch of related config values:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct DbConfig {
     /// Database connection URL.
@@ -171,7 +175,7 @@ pub struct DbConfig {
 
 Then you can "flatten" it into a larger `Conf` structure using the `conf(flatten)` attribute.
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     /// Database
@@ -193,7 +197,7 @@ than pick out needed config arguments one-by-one.
 
 For example, you might need to do this:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     #[conf(flatten)]
@@ -209,11 +213,11 @@ pub struct Config {
 
 because logically, you have three different http clients that you need to configure.
 
-However with `clap-derive`, this is going to cause a problem, because when the fields from `HttpClientConfig` get flattened, their names will collide, and the parser will reject it as ambiguous.
+However with `clap-derive`, this is going to cause a problem, because when the fields from `HttpClientConfig` get flattened, their names will collide, and the parser will reject it as ambiguous. There aren't easy ways to fix this in `clap-derive` -- it doesn't support the "diamond pattern".
 
-When using `conf`, you can resolve it by declaring a prefix.
+When using `conf`, you can resolve the problem by declaring a prefix.
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     #[conf(flatten, prefix)]
@@ -231,7 +235,7 @@ This will cause every option associated to the `auth_service` structure to get a
 
 You can also override this prefix:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     #[conf(flatten, prefix="auth")]
@@ -245,11 +249,11 @@ pub struct Config {
 }
 ```
 
-You can also configure env prefixes and option prefixes separately if you want that. Setting `env_prefix` will cause env vars to be prefixed, but not options. `long_prefix` will cause long-form options to be prefixed, but not env vars. (Short options are never prefixed, so there is not usually a good way to resolve a conflict among them. Short options should be used with caution in a large project.)
+You can also configure env prefixes and option prefixes separately if you want that. Setting `env_prefix` will cause env vars to be prefixed, but not options. `long_prefix` will cause long-form options to be prefixed, but not env vars. (Short options are never prefixed, so there is not usually a great way to resolve a conflict among them. Conf offers a setting `skip_short_flags` on `flatten` sites which can be used to resolve collisions. Short switches should be used with caution in a large project.)
 
 Finally, you can also declare prefixes at the level of a struct rather than a field. So for example, if you need every environment variable your program reads to be prefixed with `ACME_`, you can achieve that very easily.
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 #[conf(env_prefix="ACME_")]
 pub struct Config {
@@ -266,7 +270,7 @@ pub struct Config {
 
 `Option<T>` can also be used with a flattened structure, so if one of these services is optional, you can simply write:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 #[conf(env_prefix="ACME_")]
 pub struct Config {
@@ -280,6 +284,8 @@ pub struct Config {
     pub snaps_service: Option<HttpClientConfig>,
 }
 ```
+
+When `snaps_service` struct has type `Option`, it means that if any of the `snaps_service` values appear, then all of them are required to produce a valid `HttpClientConfig`, and if none of them appear, then `snaps_service` is `None`.
 
 You can read about all the attributes and usage in the docs or the [REFERENCE.md](./REFERENCE.md), but hopefully this is enough to get started.
 
@@ -297,22 +303,17 @@ One way this can be done in `conf` is by using the `value_parser` feature, which
 
 A `value_parser` is a function that takes a `&str` and returns either a value or an error.
 
-For example, if you need to read a `yaml` file on startup according to a schema, one way you could do that is
+For example, if you need to read a `pem` file on startup, one way you could do that is
 
 ```rust
 use conf::Conf;
-use serde::Deserialize;
+use pem::Pem;
 use std::{error::Error, fs};
-
-#[derive(Deserialize)]
-pub struct MyYamlSchema {
-    pub example: String,
-}
 
 #[derive(Conf)]
 pub struct Config {
-    #[conf(long, env, value_parser = |file: &str| -> Result<_, Error> { Ok(serde_yaml::from_str(fs::read_to_string(&file)?)?) }]
-    pub yaml_file: MyYamlSchema,
+    #[conf(long, env, value_parser = |file: &str| -> Result<_, Box<dyn Error>> { Ok(pem::parse(&fs::read_to_string(&file)?)?) })]
+    pub pem: Pem,
 }
 ```
 
@@ -320,11 +321,11 @@ This will read a file path either from CLI args or from env, then attempt to ope
 
 If your `value_parser` is complex or needs to be reused, the best practice is to put it in a named function.
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
-    #[conf(long, env, value_parser = utils::read_yaml_file)]
-    pub yaml_file: MyYamlSchema,
+    #[conf(long, env, value_parser = utils::read_cert_file)]
+    pub pem: Pem,
 }
 ```
 
@@ -334,7 +335,6 @@ This way you will fail fast if the file is not found or is invalid, but also rep
 (Note that we also support `value_parser_os`, which takes `&OsStr` and is a more portable and correct way to read file paths.)
 
 This kind of approach would always read the key from a file, but would allow you to specify the file path either in args or in env.
-This is not the same thing as hierarchical config files though, which we'll discuss next.
 
 ### Hierarchical config
 
@@ -371,6 +371,10 @@ If your config structure logically contains arrays of structs, it may not be ver
 Another drawback is that the `.env` format doesn't really have a spec, and there are many divergent parser implementations. Eventually you may run into incompatibilities between what `docker` does, what `bash` does,
 and what the numerous `dotenv` libraries in different programming languages do. This is typically annoying but not insurmountable.
 
+The `--help` output for `conf` always includes details about any `env` sources for program options.
+
+`conf` also supports introspection via `Conf::program_options()`, so it's possible to auto-generate a .env file template which includes all the env var names and annotates them with the doc strings. See documentation for example code.
+
 #### General config files
 
 Alternatively, you may prefer that your application can load layered config from a file in a more structured format.
@@ -379,13 +383,13 @@ In the `conf` API, self-describing structured data like this is called a "docume
 
 To use a document as a source for layered config in `conf`, you can do the following:
 
-0. You must have the `serde` feature enabled in `conf`, which is on by default.
+0. Enable the `serde` feature of `conf`, which is on by default.
 
-   You must annotate your structs with `#[conf(serde)]`. Fields in your structs might need to implement [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) depending on how they are annotated (see [reference](./REFERENCE_derive_conf.md)).
+   Annotate your structs with `#[conf(serde)]`. Fields in your structs might need to implement [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) depending on how they are annotated (see [reference](./REFERENCE_derive_conf.md)).
 
 1. Determine the file path and load the document content. For example,
 
-   ```rust
+   ```rust,ignore
    let config_path = std::env::var("CONFIG").ok().or_else("config.yaml".to_owned());
 
    let doc_content: serde_yaml::Value = serde_yaml::from_reader(fs::File::open(&config_path).unwrap()).unwrap();
@@ -395,7 +399,7 @@ To use a document as a source for layered config in `conf`, you can do the follo
 
 2. Use the builder API to parse an instance of your structure.
 
-   ```rust
+   ```rust,ignore
    let config = MyConfig::conf_builder()
                 .doc(config_path, doc_content)
                 .parse();
@@ -416,8 +420,8 @@ Any `value_parser` is run only if necessary after the available value sources an
 This will work best if your config files use a "self-describing" format, which has a type like `serde_yaml::Value` or `serde_json::Value`
 which can hold any valid yaml or json, and you deserialize into that first. In particular, it's not recommended to do the following, even if it would avoid some copies:
 
-```rust
-   // Not recommended
+```rust,ignore
+   // Builds, but not recommended
    let config = MyConfig::conf_builder()
                 .doc(config_path, serde_yaml::Deserializer::from_reader(fs::File::open(&config_path).unwrap()))
                 .parse();
@@ -436,11 +440,14 @@ A limitation of `conf` is that you can only pass it one document in this manner 
 However, you can use other libraries to help with this.
 
 ```rust
-   let content: figment::Value
+   use figment::{Figment, value::Value, providers::{Format, Toml}};
+
+   let content: Value
      = Figment::new()
-       .merge(Json::file("file1"))
-       .merge(Json::file("file2"))
-       .extract()?;
+       .merge(Toml::file("file1"))
+       .merge(Toml::file("file2"))
+       .extract()
+       .unwrap();
 ```
 
 The [`Figment::extract` function](https://docs.rs/figment/latest/figment/struct.Figment.html#method.extract) invokes [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html), and so can only report one error. But extracting into a [`figment::Value`](https://docs.rs/figment/latest/figment/value/enum.Value.html) is not expected to fail, since this is the internal representation that `figment` uses.
@@ -451,7 +458,7 @@ This negates some of the challenges of using `figment`. For example in their [do
 
 > Using #[serde(flatten)] [can break error attribution](https://github.com/SergioBenitez/Figment/issues/80#issuecomment-1701946622), so it’s best to avoid using it when possible.
 
-When using `conf`, our `serde(flatten)` implementation doesn't have the same limitations as the stock serde, and none of the same caveats around it apply.
+When using `conf`, our `serde(flatten)` implementation doesn't have the same limitations as the stock serde, and none of the same caveats around it apply. This is because it is built around a [state machine abstraction](./src/state_machine.rs), instead of how `serde_derive` does it. This makes it very easy for us to add features like flatten-with-prefix in serde as well, and to make it compatible with all of our other features.
 
 In this manner, you can get all 6 categories of hierarchical config in your app if needed, without significant restrictions on config file formats.
 
@@ -476,7 +483,7 @@ Usually, if a user-provided value cannot be parsed, we want to provide the value
 
 To prevent `conf` from logging the value, you can mark the field as `secret`.
 
-```rust
+```rust,ignore
     #[arg(env, secret)]
     pub api_key: ApiKey
 ```
@@ -525,7 +532,7 @@ For several reasons, `conf` chose to offer a different API than the `clap` for t
 
 `conf` supports the following syntax:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     #[conf(flatten, prefix="auth")]
@@ -558,6 +565,8 @@ Also, this design makes it easy to use one struct as both the Conf struct and as
 `conf` provides a simple way to specify that some fields in a struct are mutually exclusive.
 
 ```rust
+use conf::Conf;
+
 #[derive(Conf)]
 #[conf(at_most_one_of_fields(a, b, c))]
 pub struct FooConfig {
@@ -565,7 +574,7 @@ pub struct FooConfig {
     pub a: bool,
     #[conf(short, long)]
     pub b: Option<String>,
-    #[conf(long, env)]
+    #[conf(repeat, long, env)]
     pub c: Vec<String>,
 }
 ```
@@ -581,6 +590,8 @@ However, it can only be used with fields on the struct where the attribute appea
 `conf` provides a variation which requires *exactly* one of the fields to appear.
 
 ```rust
+use conf::Conf;
+
 #[derive(Conf)]
 #[conf(one_of_fields(a, b, c))]
 pub struct FooConfig {
@@ -588,7 +599,7 @@ pub struct FooConfig {
     pub a: bool,
     #[conf(short, long)]
     pub b: Option<String>,
-    #[conf(long, env)]
+    #[conf(repeat, long, env)]
     pub c: Vec<String>,
 }
 ```
@@ -598,6 +609,8 @@ When used with all fields in a struct, this is similar to an `ArgGroup` with `mu
 Finally `conf` provides one more variation
 
 ```rust
+use conf::Conf;
+
 #[derive(Conf)]
 #[conf(at_least_one_of_fields(a, b, c))]
 pub struct FooConfig {
@@ -605,7 +618,7 @@ pub struct FooConfig {
     pub a: bool,
     #[conf(short, long)]
     pub b: Option<String>,
-    #[conf(long, env)]
+    #[conf(repeat, long, env)]
     pub c: Vec<String>,
 }
 ```
@@ -622,7 +635,9 @@ A validation predicate is a function that takes `&T` where `T` is the struct at 
 
 Example:
 
-```rust
+```rust,ignore
+use conf::Conf;
+
 #[derive(Conf)]
 #[conf(validation_predicate = Config::validate)]
 pub struct FooConfig {
@@ -630,7 +645,7 @@ pub struct FooConfig {
     pub a: bool,
     #[conf(short, long)]
     pub b: Option<String>,
-    #[conf(long, env)]
+    #[conf(repeat, long, env)]
     pub c: Vec<String>,
 }
 
@@ -652,7 +667,7 @@ If a predicate fails, `conf` is still able to report those errors and any other 
 
 For example, in this config struct:
 
-```rust
+```rust,ignore
 #[derive(Conf)]
 pub struct Config {
     #[conf(flatten, prefix="auth")]

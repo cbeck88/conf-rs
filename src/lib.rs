@@ -5,9 +5,17 @@
 //! Then call a [`Conf`] trait function to parse your configuration struct.
 //! Proc macro attributes are documented there.
 //!
-//! See README for an overview.
+//! For hierarchical config, add the `#[conf(serde)]` annotation to your configuration struct.
+//! Then use [`Conf::conf_builder`] to get a builder object, and call `ConfBuilder::doc`
+//! to supply a "document" representing the config file in any serde-compatible format.
+//! A typical example might be a `serde_json::Value`.
+//! Then call `ConfBuilder::parse` or similar on the builder.
+//!
+//! See the [readme] for an overview.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
+
+pub mod readme;
 
 mod builder;
 mod conf_context;
