@@ -9,10 +9,10 @@ pub struct ParsedArgs<'a> {
     pub arg_matches: &'a ArgMatches,
     // A reference to the parser that produced these arg matches.
     // This is needed to:
-    // * Keep track of id_to_option map
+    // * Access the program options
     // * When checking for subcommands, be able to update to the subcommand parser, so that the
-    //   correct id_to_option map is used.
-    pub parser: &'a Parser<'a>,
+    //   correct program options are used.
+    pub parser: &'a Parser,
 }
 
 impl<'a> ParsedArgs<'a> {
@@ -30,10 +30,22 @@ impl<'a> ParsedArgs<'a> {
         }
     }
 
-    // Get the id_to_option map from the parser.
-    // This is very helpful to the ConfContext to handle env parsing and error reporting.
-    pub fn id_to_option(&self) -> &'a HashMap<&'a str, &'a ProgramOption> {
-        &self.parser.id_to_option
+    /// Get a program option by its ID
+    pub fn get_program_option(&self, id: &str) -> Option<&'a ProgramOption> {
+        self.parser
+            .id_to_option
+            .get(id)
+            .map(|&idx| &self.parser.options[idx])
+    }
+
+    /// Get all available program option IDs (for debugging)
+    #[doc(hidden)]
+    pub fn get_available_ids(&self) -> Vec<&str> {
+        self.parser
+            .id_to_option
+            .keys()
+            .map(|s| s.as_str())
+            .collect()
     }
 
     // Check if Clap found a subcommand among these matches.
@@ -72,9 +84,10 @@ pub struct ParserConfig {
 
 /// A parser which tries to parse args, matching them to a list of ProgramOptions.
 #[derive(Clone)]
-pub struct Parser<'a> {
-    id_to_option: HashMap<&'a str, &'a ProgramOption>,
-    subcommands: Vec<Parser<'a>>,
+pub struct Parser {
+    options: Vec<ProgramOption>,
+    id_to_option: HashMap<String, usize>,
+    subcommands: Vec<Parser>,
     command: Command,
 }
 
@@ -110,20 +123,21 @@ fn build_help_text(option: &ProgramOption, env: &ParsedEnv) -> String {
     help_text
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     /// Create a parser from top-level parser config and a list of program options
     /// This parser doesn't consider env at all when parsing, but does use env when rendering help.
     pub fn new(
         parser_config: ParserConfig,
-        options: &'a [ProgramOption],
-        subcommands: impl AsRef<[Parser<'a>]>,
-        env: &'a ParsedEnv,
+        options: Vec<ProgramOption>,
+        subcommands: impl AsRef<[Parser]>,
+        env: &ParsedEnv,
     ) -> Result<Self, Error> {
         let subcommands = subcommands.as_ref();
         let id_to_option = options
             .iter()
-            .map(|opt| (&*opt.id, opt))
-            .collect::<HashMap<&'a str, &'a ProgramOption>>();
+            .enumerate()
+            .map(|(idx, opt)| (opt.id.as_ref().to_owned(), idx))
+            .collect::<HashMap<String, usize>>();
 
         // Build a clap command
         let mut command = Command::new(parser_config.name);
@@ -212,10 +226,16 @@ impl<'a> Parser<'a> {
         command.build();
 
         Ok(Self {
+            options,
             id_to_option,
             subcommands: subcommands.to_vec(),
             command,
         })
+    }
+
+    /// Get a reference to the program options
+    pub fn get_program_options(&self) -> &[ProgramOption] {
+        &self.options
     }
 
     /// Rename a parser. (This is used by subcommands)
@@ -286,7 +306,7 @@ impl<'a> Parser<'a> {
     fn make_arg(
         _parser_config: &ParserConfig,
         env: &ParsedEnv,
-        option: &'a ProgramOption,
+        option: &ProgramOption,
         positional_index: Option<usize>,
     ) -> Result<MaybeArg, Error> {
         // Handle positional arguments

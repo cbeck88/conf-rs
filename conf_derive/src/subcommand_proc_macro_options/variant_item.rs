@@ -244,20 +244,13 @@ impl VariantItem {
     ) -> Result<TokenStream, Error> {
         let command_name = &self.command_name;
         let aliases = &self.aliases;
-        let variant_name_str = self.variant_name.to_string();
 
         if let Some(ty) = self.variant_type.as_ref() {
             let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
-            // Use a unique static OnceLock per variant to store program options
-            let static_name = format!("__PROGRAM_OPTIONS_{}__", variant_name_str.to_uppercase());
-            let static_ident = Ident::new(&static_name, self.variant_name.span());
 
             Ok(quote! {
                 {
-                  static #static_ident: ::std::sync::OnceLock<Vec<::conf::ProgramOption>> = ::std::sync::OnceLock::new();
-                  let program_options = #static_ident.get_or_init(|| {
-                    <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.iter().collect::<Vec<_>>()
-                  });
+                  let program_options = <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
                   #parsers_ident.push(
                     <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
                       .rename(#command_name)
@@ -268,7 +261,7 @@ impl VariantItem {
         } else {
             Ok(quote! {
               #parsers_ident.push(
-                ::conf::Parser::new(::conf::ParserConfig::default(), &[], &[], #parsed_env_ident)?
+                ::conf::Parser::new(::conf::ParserConfig::default(), vec![], &[], #parsed_env_ident)?
                   .rename(#command_name)
                   #(.add_alias(#aliases))*
               );

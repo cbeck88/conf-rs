@@ -124,7 +124,7 @@ pub trait Conf: Sized {
         let parsed_env = ParsedEnv::default();
         let program_options = Self::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
         let parser =
-            Self::get_parser(&parsed_env, &program_options).expect("Failed to create parser");
+            Self::get_parser(&parsed_env, program_options).expect("Failed to create parser");
         parser.into_command().debug_assert();
     }
 
@@ -138,10 +138,10 @@ pub trait Conf: Sized {
     // This Parser may be used in Conf::try_parse_from, or may be used to implement
     // Subcommands::get_commands.
     #[doc(hidden)]
-    fn get_parser<'a>(
-        parsed_env: &'a ParsedEnv,
-        program_options: &'a [ProgramOption],
-    ) -> Result<Parser<'a>, Error> {
+    fn get_parser(
+        parsed_env: &ParsedEnv,
+        program_options: Vec<ProgramOption>,
+    ) -> Result<Parser, Error> {
         let parser_config = Self::get_parser_config()?;
         let subcommands = Self::get_subcommands(parsed_env)?;
         Parser::new(parser_config, program_options, subcommands, parsed_env)
@@ -169,7 +169,7 @@ pub trait Conf: Sized {
     //
     // This requires ParsedEnv because a command contains a help page, and the env influences that.
     #[doc(hidden)]
-    fn get_subcommands(parsed_env: &ParsedEnv) -> Result<Vec<Parser<'_>>, Error>;
+    fn get_subcommands(parsed_env: &ParsedEnv) -> Result<Vec<Parser>, Error>;
     // Try to parse an instance of self from a given parser context
     // This is implemented using the derive macros.
     // Users generally can't call this, because ConfContext is not constructible by any public APIs.
@@ -225,7 +225,7 @@ pub trait Subcommands: Sized {
     // This is generally done by calling get_parser for each variant, and then get_command on the
     // parser. The Command::name should then be set based on the name of the enum variant.
     #[doc(hidden)]
-    fn get_parsers(env: &ParsedEnv) -> Result<Vec<Parser<'_>>, Error>;
+    fn get_parsers(env: &ParsedEnv) -> Result<Vec<Parser>, Error>;
 
     // Get the subcommand names associated to this enum, for error messages
     #[doc(hidden)]
