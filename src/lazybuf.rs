@@ -1,4 +1,7 @@
-//! Helper for traversing a tree of data (program options) defined in static buffers
+//! LazyBuf is a hybrid compile-time/run-time tree data structure that allows information such as
+//! program options to be generated in several places by proc-macros, and then implicitly aggregated
+//! and iterated over (with runtime adjustments) transparently and efficiently, exposing a simple
+//! iterator API and avoiding unnecessary allocations and lazy statics.
 
 #[doc(hidden)]
 #[derive(Copy, Debug)]

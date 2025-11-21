@@ -264,7 +264,7 @@ impl FlagItem {
             .unwrap_or_default();
 
         Ok(Some(quote! {
-            ::conf::Node::Leaf(::conf::ProgramOption {
+            ::conf::lazybuf::Node::Leaf(::conf::ProgramOption {
                 id: ::std::borrow::Cow::Borrowed(#id),
                 parse_type: ::conf::ParseType::Flag,
                 description: #description,

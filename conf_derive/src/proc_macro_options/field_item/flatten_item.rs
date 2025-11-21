@@ -315,7 +315,7 @@ impl FlattenItem {
         };
 
         Ok(Some(quote! {
-            ::conf::Node::Branch(::conf::LazyBuf {
+            ::conf::lazybuf::Node::Branch(::conf::lazybuf::LazyBuf {
                 buffer: <#inner_type as ::conf::Conf>::PROGRAM_OPTIONS.buffer,
                 transform: #transform_fn,
             })

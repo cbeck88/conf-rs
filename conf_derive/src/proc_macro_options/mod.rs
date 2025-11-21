@@ -112,12 +112,12 @@ impl GenConfStruct {
         let struct_transform = self.struct_item.gen_program_options_transform()?;
 
         Ok(quote! {
-            const PROGRAM_OPTIONS: ::conf::LazyBuf<::conf::ProgramOption> = {
-                static NODES: &[::conf::Node<::conf::ProgramOption>] = &[
+            const PROGRAM_OPTIONS: ::conf::lazybuf::LazyBuf<::conf::ProgramOption> = {
+                static NODES: &[::conf::lazybuf::Node<::conf::ProgramOption>] = &[
                     #(#field_nodes),*
                 ];
 
-                ::conf::LazyBuf {
+                ::conf::lazybuf::LazyBuf {
                     buffer: NODES,
                     transform: #struct_transform,
                 }

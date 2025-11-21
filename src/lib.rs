@@ -20,7 +20,8 @@ mod program_option;
 mod str_to_bool;
 mod styles;
 mod traits;
-mod tree;
+#[doc(hidden)]
+pub mod lazybuf;
 
 // These are not needed by users or by generated code
 use conf_context::FlattenedOptionalDebugInfo;
@@ -34,7 +35,6 @@ pub use error::Error;
 pub use find_parameter::find_parameter;
 pub use styles::Styles;
 pub use traits::{Conf, Subcommands};
-pub use tree::{LazyBuf, Node};
 
 // Re-export anstyle for users to create Style objects
 pub use anstyle;
@@ -59,8 +59,7 @@ pub use program_option::{ParseType, ProgramOption};
 // The serde feature brings in some more types and traits
 #[cfg(feature = "serde")]
 mod conf_serde;
-// These are publicly documented. Everything needed to understand how to use the builder
-// should be well-documented.
+// The ConfSerde trait and builder are publicly documented
 #[cfg(feature = "serde")]
 pub use conf_serde::{ConfSerde, ConfSerdeBuilder};
 // These are internals used by the derive macro.
@@ -77,6 +76,7 @@ pub use serde::{self, *};
 
 // CowStr is used internally mainly because using it allows us to construct ProgramOption in a const
 // way from string literals, but also to modify them if they have to be flattened into something.
+// In the future we could use a rope or something instead, but this is fine.
 type CowStr = std::borrow::Cow<'static, str>;
 
 // Helper for some of the proc-macro code-gen
