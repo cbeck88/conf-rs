@@ -351,28 +351,20 @@ fn test_wide_hierarchy_unknown_in_nested() {
     );
 }
 
-/// Diamond pattern: two paths with similar structure but unique field names
+/// Diamond pattern: reusing the same struct in multiple places using prefixes
+/// This demonstrates using a single EndpointConfig struct for both primary and secondary,
+/// with prefixes to disambiguate the field names for args/env and serde.
 ///
-/// TODO: With a `serde(flatten(prefix = "..."))` feature, we could reuse the same
-/// EndpointConfig struct for both primary and secondary, and the prefix would be
-/// prepended to the child's serde keys during deserialization. For now, we need
-/// separate structs with unique field names.
+/// Note: Use `#[conf(flatten, prefix = "...", serde(flatten(prefix = "...")))]` where:
+/// - `prefix = "..."` applies to CLI args and env vars (e.g., --primary-url, PRIMARY_URL)
+/// - `serde(flatten(prefix = "..."))` applies to JSON keys (e.g., "primary_url")
 #[derive(Conf, Debug)]
 #[conf(serde)]
-pub struct PrimaryEndpointConfig {
+pub struct EndpointConfig {
     #[arg(long, env)]
-    pub primary_url: String,
+    pub url: String,
     #[arg(long, env)]
-    pub primary_timeout: u32,
-}
-
-#[derive(Conf, Debug)]
-#[conf(serde)]
-pub struct SecondaryEndpointConfig {
-    #[arg(long, env)]
-    pub secondary_url: String,
-    #[arg(long, env)]
-    pub secondary_timeout: u32,
+    pub timeout: u32,
 }
 
 #[derive(Conf, Debug)]
@@ -380,8 +372,8 @@ pub struct SecondaryEndpointConfig {
 pub struct PrimaryConfig {
     #[arg(long, env)]
     pub primary_name: String,
-    #[conf(flatten, serde(flatten))]
-    pub endpoint: PrimaryEndpointConfig,
+    #[conf(flatten, prefix = "primary", serde(flatten(prefix = "primary_")))]
+    pub endpoint: EndpointConfig,
 }
 
 #[derive(Conf, Debug)]
@@ -389,8 +381,8 @@ pub struct PrimaryConfig {
 pub struct SecondaryConfig {
     #[arg(long, env)]
     pub secondary_name: String,
-    #[conf(flatten, serde(flatten))]
-    pub endpoint: SecondaryEndpointConfig,
+    #[conf(flatten, prefix = "secondary", serde(flatten(prefix = "secondary_")))]
+    pub endpoint: EndpointConfig,
 }
 
 #[derive(Conf, Debug)]
@@ -426,17 +418,14 @@ fn test_diamond_pattern_all_from_json() {
 
     assert_eq!(result.id, "diamond");
     assert_eq!(result.primary.primary_name, "primary");
-    assert_eq!(
-        result.primary.endpoint.primary_url,
-        "http://primary.example.com"
-    );
-    assert_eq!(result.primary.endpoint.primary_timeout, 1000);
+    assert_eq!(result.primary.endpoint.url, "http://primary.example.com");
+    assert_eq!(result.primary.endpoint.timeout, 1000);
     assert_eq!(result.secondary.secondary_name, "secondary");
     assert_eq!(
-        result.secondary.endpoint.secondary_url,
+        result.secondary.endpoint.url,
         "http://secondary.example.com"
     );
-    assert_eq!(result.secondary.endpoint.secondary_timeout, 2000);
+    assert_eq!(result.secondary.endpoint.timeout, 2000);
 }
 
 #[test]
@@ -457,14 +446,11 @@ fn test_diamond_pattern_mixed_sources() {
 
     assert_eq!(result.id, "env_diamond");
     assert_eq!(result.primary.primary_name, "json_primary");
-    assert_eq!(result.primary.endpoint.primary_url, "from_args");
-    assert_eq!(result.primary.endpoint.primary_timeout, 500);
+    assert_eq!(result.primary.endpoint.url, "from_args");
+    assert_eq!(result.primary.endpoint.timeout, 500);
     assert_eq!(result.secondary.secondary_name, "env_secondary");
-    assert_eq!(
-        result.secondary.endpoint.secondary_url,
-        "http://json.example.com"
-    );
-    assert_eq!(result.secondary.endpoint.secondary_timeout, 9999);
+    assert_eq!(result.secondary.endpoint.url, "http://json.example.com");
+    assert_eq!(result.secondary.endpoint.timeout, 9999);
 }
 
 /// Optional fields at various levels

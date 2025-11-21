@@ -185,10 +185,6 @@ fn test_serde_flatten_prefix_partial_override() {
     assert_eq!(result.cache.port, 6379);
 }
 
-// TODO: Optional flatten with prefix needs work
-// The issue is that PrefixStrippingStateMachine's Value type is the inner type's Value,
-// but for optional flatten we need Option<T>.
-
 #[test]
 fn test_serde_flatten_prefix_unknown_field_rejected() {
     // Unknown fields with the prefix should be rejected
@@ -288,4 +284,69 @@ fn test_serde_flatten_empty_prefix() {
     assert_eq!(result.name, "test");
     assert_eq!(result.server.host, "roothost");
     assert_eq!(result.server.port, 7777);
+}
+
+// Test for optional flatten with prefix - verifying the TODO at line 188 is resolved
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct OptionalPrefixConfig {
+    #[arg(long, env)]
+    pub app_name: String,
+    #[conf(flatten, serde(flatten(prefix)))]
+    pub database: Option<DatabaseConfig>,
+}
+
+#[test]
+fn test_optional_flatten_with_prefix_all_provided() {
+    // All fields provided with prefix - should work
+    let result = OptionalPrefixConfig::conf_builder()
+        .args([".", "--app-name=myapp"])
+        .env::<&str, &str>([])
+        .doc(
+            "config.json",
+            json!({
+                "database_host": "localhost",
+                "database_port": 5432
+            }),
+        )
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.app_name, "myapp");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.host, "localhost");
+    assert_eq!(db.port, 5432);
+}
+
+#[test]
+fn test_optional_flatten_with_prefix_none() {
+    // Nothing provided - should be None
+    let result = OptionalPrefixConfig::conf_builder()
+        .args([".", "--app-name=myapp"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.app_name, "myapp");
+    assert!(result.database.is_none());
+}
+
+#[test]
+fn test_optional_flatten_with_prefix_args_activation() {
+    // Args activates the optional group
+    // Note: prefix only applies to serde keys, not arg names
+    let result = OptionalPrefixConfig::conf_builder()
+        .args([".", "--app-name=myapp", "--host=localhost", "--port=5432"])
+        .env::<&str, &str>([])
+        .doc("config.json", json!({}))
+        .try_parse()
+        .unwrap();
+
+    assert_eq!(result.app_name, "myapp");
+    assert!(result.database.is_some());
+    let db = result.database.unwrap();
+    assert_eq!(db.host, "localhost");
+    assert_eq!(db.port, 5432);
 }
