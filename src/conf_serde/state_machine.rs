@@ -56,20 +56,31 @@ where
 /// It can be finalized when there are no more key-value pairs, producing Value or a set of errors.
 #[doc(hidden)]
 pub trait InitializationStateMachine<'de>: Sized {
+    /// The target value being initialized by the machine
     type Value;
 
+    /// True if the state machine would consume a key-value pair from serde map access if this key were available.
     fn wants_key(&self, key: &str) -> bool;
+
+    /// Consume a key-value pair.
     fn next<NVP>(self, key: &str, next_value_producer: NVP) -> Self
     where
         NVP: NextValueProducer<'de>;
+
+    /// Finalize self, producing either Self::Value or one or more errors.
     fn finalize(self) -> Result<Self::Value, Vec<InnerError>>;
 
     /// Check if this state machine needs to be finalized.
     ///
-    /// This is used to implement flatten-optional: if an optional flattened group
-    /// hasn't received any values from any source (serde, args, or env), it should
-    /// return `None` rather than attempting finalization which would error on missing
-    /// required fields.
+    /// In the majority of scenarios, this is ignored, and state machines are always finalized.
+    ///
+    /// For some features like flatten-optional, the field we need to initialize is `Option<Value>`,
+    /// and we have a state machine for `Value` which we now need to decide whether to finalize.
+    /// `needs_finalize` is queried to decide whether it should return `None` or attempt to finalize self
+    /// and return `Some` (which may also fail and produce errors).
+    ///
+    /// In general, this should return true if this state machine consumed or would consume
+    /// any values from non-serde sources, and false otherwise.
     fn needs_finalize(&self) -> bool;
 }
 
