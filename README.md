@@ -78,7 +78,7 @@ First add `conf` to the dependencies in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-conf = "0.1"
+conf = "0.2"
 ```
 
 Then, create a `struct` which represents the configuration data your application needs to read on startup.
