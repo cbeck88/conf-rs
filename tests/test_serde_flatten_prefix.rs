@@ -286,7 +286,7 @@ fn test_serde_flatten_empty_prefix() {
     assert_eq!(result.server.port, 7777);
 }
 
-// Test for optional flatten with prefix - verifying the TODO at line 188 is resolved
+// Test for optional flatten with prefix
 #[derive(Conf, Debug)]
 #[conf(serde)]
 pub struct OptionalPrefixConfig {
