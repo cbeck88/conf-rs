@@ -664,11 +664,14 @@ fn split_osstr(s: &OsStr, delim: char) -> impl Iterator<Item = &OsStr> {
     );
     let delim = delim as u8;
 
-    // Safety:
+    // SAFETY:
     // Because delim is ASCII, it is encoded uniquely as 1 byte, in UTF-8 and WTF-8, and any
     // self-synchronizing superset of ASCII.
     // Therefore if we see a byte matching `delim` within `s`, and `s` is well-formed, then
     // the split of s at that byte must also be well-formed.
+    //
+    // See also docu and examples here:
+    // https://doc.rust-lang.org/std/ffi/struct.OsStr.html#method.from_encoded_bytes_unchecked
     s.as_encoded_bytes()
         .split(move |b| *b == delim)
         .map(|bytes| unsafe { OsStr::from_encoded_bytes_unchecked(bytes) })
