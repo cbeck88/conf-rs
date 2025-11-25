@@ -1,0 +1,5 @@
+error: env_delimiter must be an ASCII character when using value_parser_os (or with Vec<PathBuf>/Vec<OsString> types). OsStr uses a platform-specific encoding and only splitting by ASCII is supported.
+ --> tests/ui/env_delimiter_non_ascii_pathbuf.rs:6:47
+  |
+6 |     #[conf(repeat, long, env, env_delimiter = '中')]
+  |                                               ^^^^

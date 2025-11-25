@@ -249,3 +249,62 @@ fn test_env_aliases2_parsing() {
     assert_eq!(result.b.required, "5");
     assert_eq!(result.c.required, "7");
 }
+
+/// Test if env aliases work with repeat fields
+#[derive(Conf, Debug)]
+struct TestEnvAliasesRepeat {
+    /// Repeat field with env aliases
+    #[conf(repeat, long, env, env_aliases = ["ITEMS_ALIAS", "ITEMS_ALT"])]
+    items: Vec<String>,
+}
+
+#[test]
+fn test_env_aliases_repeat_parsing() {
+    // Test with primary env variable
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS", "a,b,c")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["a", "b", "c"]);
+
+    // Test with first alias
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS_ALIAS", "x,y,z")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["x", "y", "z"]);
+
+    // Test with second alias
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS_ALT", "foo,bar")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["foo", "bar"]);
+
+    // Test priority: primary env takes precedence over aliases
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS", "primary"), ("ITEMS_ALIAS", "alias")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["primary"]);
+
+    // Test priority: first alias takes precedence over second alias
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec!["."],
+        vec![("ITEMS_ALIAS", "first"), ("ITEMS_ALT", "second")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["first"]);
+
+    // Test with command line args - args take precedence
+    let result = TestEnvAliasesRepeat::try_parse_from::<&str, &str, &str>(
+        vec![".", "--items", "from_arg"],
+        vec![("ITEMS", "from_env")],
+    )
+    .unwrap();
+    assert_eq!(result.items, vec!["from_arg"]);
+}

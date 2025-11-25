@@ -85,36 +85,3 @@ fn test_non_ascii_delimiter_with_string_type() {
     assert_eq!(result.items[1], "world");
     assert_eq!(result.items[2], "foo");
 }
-
-// =============================================================================
-// COMPILE-TIME ERROR TESTS
-// =============================================================================
-// The following configurations should fail to compile with a proc macro error.
-// These are documented here but commented out since we don't have trybuild.
-//
-// Test 1: Non-ASCII delimiter with explicit value_parser_os
-// ---------------------------------------------------------
-// #[derive(Conf, Debug)]
-// pub struct BadConfig1 {
-//     #[conf(repeat, long, env, env_delimiter = '日', value_parser_os = |s: &std::ffi::OsStr| Ok::<_, String>(s.to_owned()))]
-//     pub items: Vec<OsString>,
-// }
-// Expected error: "env_delimiter must be an ASCII character when using value_parser_os"
-//
-// Test 2: Non-ASCII delimiter with Vec<PathBuf> (auto-detected value_parser_os)
-// -----------------------------------------------------------------------------
-// #[derive(Conf, Debug)]
-// pub struct BadConfig2 {
-//     #[conf(repeat, long, env, env_delimiter = '中')]
-//     pub paths: Vec<PathBuf>,
-// }
-// Expected error: "env_delimiter must be an ASCII character when using value_parser_os"
-//
-// Test 3: Non-ASCII delimiter with Vec<OsString> (auto-detected value_parser_os)
-// ------------------------------------------------------------------------------
-// #[derive(Conf, Debug)]
-// pub struct BadConfig3 {
-//     #[conf(repeat, long, env, env_delimiter = '文')]
-//     pub items: Vec<OsString>,
-// }
-// Expected error: "env_delimiter must be an ASCII character when using value_parser_os"

@@ -1,0 +1,5 @@
+error: unrecognized conf repeat option
+ --> tests/ui/repeat_and_flatten_conflict.rs:5:20
+  |
+5 |     #[conf(repeat, flatten)]
+  |                    ^^^^^^^

@@ -1,0 +1,5 @@
+error: Setting env_aliases without setting an env is an error, make one of the aliases the primary env.
+ --> tests/ui/env_aliases_without_env_repeat.rs:5:5
+  |
+5 |     #[conf(repeat, long, env_aliases = ["ALIAS1", "ALIAS2"])]
+  |     ^

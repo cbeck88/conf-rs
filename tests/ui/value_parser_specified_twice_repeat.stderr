@@ -1,0 +1,11 @@
+error: value_parser cannot be specified twice
+  --> tests/ui/value_parser_specified_twice_repeat.rs:10:9
+   |
+10 |         value_parser = |s: &str| Ok::<_, String>(s.to_uppercase())
+   |         ^^^^^^^^^^^^
+
+error: Earlier specified here
+ --> tests/ui/value_parser_specified_twice_repeat.rs:9:24
+  |
+9 |         value_parser = |s: &str| Ok::<_, String>(s.to_owned()),
+  |                        ^

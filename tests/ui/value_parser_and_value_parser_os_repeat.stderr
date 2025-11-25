@@ -1,0 +1,5 @@
+error: Cannot specify both value_parser and value_parser_os
+ --> tests/ui/value_parser_and_value_parser_os_repeat.rs:6:5
+  |
+6 |     #[conf(
+  |     ^

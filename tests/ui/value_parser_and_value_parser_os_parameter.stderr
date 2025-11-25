@@ -1,0 +1,5 @@
+error: #[conf(value_parser)] and #[conf(value_parser_os)] cannot both be specified
+ --> tests/ui/value_parser_and_value_parser_os_parameter.rs:6:5
+  |
+6 |     #[conf(
+  |     ^

@@ -1,0 +1,11 @@
+error: default_value cannot be specified twice
+ --> tests/ui/default_value_specified_twice.rs:5:43
+  |
+5 |     #[conf(long, default_value = "first", default_value = "second")]
+  |                                           ^^^^^^^^^^^^^
+
+error: Earlier specified here
+ --> tests/ui/default_value_specified_twice.rs:5:34
+  |
+5 |     #[conf(long, default_value = "first", default_value = "second")]
+  |                                  ^^^^^^^

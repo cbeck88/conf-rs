@@ -1,0 +1,13 @@
+error: unrecognized conf parameter option
+ --> tests/ui/try_from_and_use_value_parser.rs:5:23
+  |
+5 |     #[conf(long, env, use_value_parser)]
+  |                       ^^^^^^^^^^^^^^^^
+
+error: cannot find attribute `serde` in this scope
+ --> tests/ui/try_from_and_use_value_parser.rs:6:7
+  |
+6 |     #[serde(try_from = "String")]
+  |       ^^^^^
+  |
+  = note: `serde` is in scope, but it is a crate, not an attribute

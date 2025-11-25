@@ -190,7 +190,7 @@ impl RepeatItem {
                     } else if path.is_ident("env_aliases") {
                         set_once(
                             &path,
-                            &mut result.aliases,
+                            &mut result.env_aliases,
                             Some(parse_required_value::<LitStrArray>(meta)?),
                         )
                     } else if path.is_ident("value_parser") {
