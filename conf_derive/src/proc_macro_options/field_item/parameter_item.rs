@@ -511,30 +511,10 @@ impl ParameterItem {
     /// For required fields without serde, this typically returns an error.
     /// For optional fields without serde, this returns Ok(None).
     /// When serde with use_value_parser is used, this returns the document value converted appropriately.
-    ///
-    /// # `before_value_parser` callback
-    ///
-    /// If provided, `before_value_parser` is a function that takes an `ExprRequest` and returns
-    /// a `TokenStream`. It will be invoked with the appropriate request type based on the value parser.
-    ///
-    /// The generated code creates these variables before calling `before_value_parser`:
-    /// - `value_source: ConfValueSource<&str>` - where the value came from
-    /// - `val_str: &str` (for `ExprRequest::Str`) or `val_os: &OsStr` (for `ExprRequest::OsStr`)
-    /// - `opt: &ProgramOption` - the option metadata
-    ///
-    /// The `before_value_parser` TokenStream can:
-    /// - Reference these variables
-    /// - Shadow them with new values (e.g., replacing with serde document value)
-    /// - Early return from the function if needed
-    ///
-    /// After `before_value_parser` executes, the code expects:
-    /// - `value_source` and `val_str`/`val_os` to be in scope (possibly shadowed)
-    /// - The variable to have the same type as initially created
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
         if_no_conf_context_val: &dyn Fn(ExprRequest) -> TokenStream,
-        before_value_parser: Option<&dyn Fn(ExprRequest) -> TokenStream>,
     ) -> Result<(TokenStream, bool), syn::Error> {
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
@@ -559,7 +539,6 @@ impl ParameterItem {
 
         let initializer = match self.get_value_parser_expr() {
             ValueParserExpr::OsStr(value_parser_expr) => {
-                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::OsStr));
                 let if_no_conf_context_val = (if_no_conf_context_val)(ExprRequest::OsStr);
                 // Use OsStr-based value parser
                 quote! {
@@ -574,13 +553,16 @@ impl ParameterItem {
 
                     let (maybe_val, opt): (Option<_>, &ProgramOption)
                       = #conf_context_ident.get_osstring_opt(#id)?;
+                    debug_assert!(
+                        maybe_val.as_ref().map_or(true, |(vs, _)| !vs.is_default()),
+                        "ConfContext should never return Default - the proc-macro generates default logic"
+                    );
                     let (value_source, val_os): (ConfValueSource<&str>, &::std::ffi::OsStr)
                       = if let Some(val) = maybe_val {
                         val
                       } else {
                         #if_no_conf_context_val
                       };
-                    #before_value_parser
                     #conf_context_ident.log_config_event(#id, value_source);
                     match __value_parser__(val_os) {
                       #value_parser_ok_arm
@@ -597,7 +579,6 @@ impl ParameterItem {
                 }
             }
             ValueParserExpr::Str(value_parser_expr) => {
-                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::Str));
                 let if_no_conf_context_val = (if_no_conf_context_val)(ExprRequest::Str);
                 // Use str-based value parser - ConfContext handles UTF-8 conversion
                 quote! {
@@ -612,13 +593,16 @@ impl ParameterItem {
 
                     let (maybe_val, opt): (Option<_>, &ProgramOption)
                       = #conf_context_ident.get_string_opt(#id)?;
+                    debug_assert!(
+                        maybe_val.as_ref().map_or(true, |(vs, _)| !vs.is_default()),
+                        "ConfContext should never return Default - the proc-macro generates default logic"
+                    );
                     let (value_source, val_str): (ConfValueSource<&str>, &str)
                       = if let Some(val) = maybe_val {
                         val
                       } else {
                         #if_no_conf_context_val
                       };
-                    #before_value_parser
                     #conf_context_ident.log_config_event(#id, value_source);
                     match __value_parser__(val_str) {
                       #value_parser_ok_arm
@@ -666,7 +650,6 @@ impl ParameterItem {
                 return self.gen_initializer_helper(
                     conf_context_ident,
                     &if_no_conf_context_val,
-                    None,
                 );
             } else if self.is_optional_type.is_some() {
                 // Serde-only optional field without default: return None
@@ -717,7 +700,7 @@ impl ParameterItem {
                 quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
             }
         };
-        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val, None)
+        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided document value.
@@ -792,20 +775,9 @@ impl ParameterItem {
                     }
                 };
 
-                let before_value_parser = |_| {
-                    // Note: value_source can only be Args or Env here (never Default), because:
-                    // 1. get_string_opt() only returns Args/Env (ConfContext no longer returns Default)
-                    // 2. if_no_conf_context_val returns Document source (for serde fields)
-                    // Args/env always shadow the document, so we continue to value parser.
-                    quote! {
-                        debug_assert!(!value_source.is_default(),
-                            "ConfContext should never return Default - the proc-macro generates default logic");
-                    }
-                };
                 self.gen_initializer_helper(
                     conf_context_ident,
                     &if_no_conf_context_val,
-                    Some(&before_value_parser),
                 )
             } else {
                 let if_no_conf_context_val = |_| {
@@ -823,16 +795,9 @@ impl ParameterItem {
                     }
                 };
 
-                let before_value_parser = |_| {
-                    quote! {
-                        debug_assert!(!value_source.is_default(),
-                            "ConfContext should never return Default - the proc-macro generates default logic");
-                    }
-                };
                 self.gen_initializer_helper(
                     conf_context_ident,
                     &if_no_conf_context_val,
-                    Some(&before_value_parser),
                 )
             }
         } else if use_value_parser {
@@ -849,16 +814,9 @@ impl ParameterItem {
                     },
                 }
             };
-            let before_value_parser = |_req: ExprRequest| -> TokenStream {
-                quote! {
-                    debug_assert!(!value_source.is_default(),
-                        "ConfContext should never return Default - the proc-macro generates default logic");
-                }
-            };
             self.gen_initializer_helper(
                 conf_context_ident,
                 &if_no_conf_context_val,
-                Some(&before_value_parser),
             )
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
@@ -874,16 +832,9 @@ impl ParameterItem {
                 }
             };
 
-            let before_value_parser = |_| {
-                quote! {
-                    debug_assert!(!value_source.is_default(),
-                        "ConfContext should never return Default - the proc-macro generates default logic");
-                }
-            };
             self.gen_initializer_helper(
                 conf_context_ident,
                 &if_no_conf_context_val,
-                Some(&before_value_parser),
             )
         }
     }
