@@ -799,26 +799,47 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    example: `#[arg(repeat, env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
 
+*  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
+
+   Controls what character is used as a delimiter when reading the list from an environment variable.
+
+   If omitted, the default is `,`.
+
+   example: `[conf(env_delimiter = '|')]`
+
+   example command-line: `PEERS=peer1|peer2 ./my_prog`
+
+   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like `value_delimiter`.
+
+*  <a name="repeat-no-env-delimiter"></a> `no_env_delimiter` (no argument)
+
+   If set, then the env is parsed as if it is a single `T` and not a list. This can be used for strict compatibility with common `clap` configurations.
+
+   example: `[conf(no_env_delimiter)]`
+
 *  <a name="repeat-value-parser"></a> `value_parser` (expr argument)
 
    example: `#[arg(repeat, value_parser = serde_json::from_str)]`
 
-   By default, `conf` invokes the trait function `FromStr::from_str` to convert the parsed string to the type `T`.
+   By default, `conf` invokes the trait function `FromStr::from_str` to convert each string to the type `T`.
    This can be overrided by setting `value_parser`. Any function expression can be used as long as it produces a `T` and any generic parameters are either specified or inferred.
 
-   *Note*: This behavior is the same as in `clap-derive`.
+   **Environment variable handling**: When the list is read from env, it is split first on the `env_delimiter`, by default ',',
+   unless `no_env_delimiter` is used.
+
+   **Note**: This behavior is the same as in `clap-derive`, and with respect to `env`, when `no_env_delimiter` is used.
 
 *  <a name="repeat-value-parser-os"></a> `value_parser_os` (expr argument)
 
    example: `#[arg(repeat, value_parser_os = my_osstr_function)]`
 
-   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`. This allows parsing values that may contain non-UTF-8 data.
+   Similar to `value_parser`, but the parser function receives `&OsStr` instead of `&str`.
 
    The parser function should have signature `fn(&OsStr) -> Result<T, E>` where `E` implements `Display`.
 
    **Auto-detection**: Like with parameters, `conf` defaults to an appropriate `OsStr`-based parser for `Vec<PathBuf>` and `Vec<OsString>` types, when no `value_parser` or `value_parser_os` is specified.
 
-   **Environment variable handling**: When using `value_parser_os`, `env_delimiter` can't be used because we can't split a string without knowing its encoding. The `env_delimiter` is disabled in this case and its an error to try to set it.
+   **Environment variable handling**: When using `value_parser_os`, the delimiter is restricted to ASCII characters. This is because `OsStr` represents a platform-specific encoding and only splitting by ASCII is supported.
 
    **Examples**:
 
@@ -835,23 +856,20 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    }
    ```
 
+   With custom delimiter:
+   ```rust
+   # use conf::Conf;
+   use std::path::PathBuf;
+
+   #[derive(Conf)]
+   struct Config {
+       /// Input files, colon-separated in env (like PATH)
+       #[conf(repeat, long, env, env_delimiter = ':')]
+       inputs: Vec<PathBuf>,
+   }
+   ```
+
    This attribute is mutually exclusive with `value_parser`.
-
-*  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
-
-   Controls what character is used as a delimiter when reading the list from an environment variable.
-
-   example: `[conf(env_delimiter = '|')]`
-
-   example command-line: `PEERS=peer1|peer2 ./my_prog`
-
-   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like `value_delimiter`.
-
-*  <a name="repeat-no-env-delimiter"></a> `no_env_delimiter` (no argument)
-
-   If set, then the env is parsed as if it is a single `T` and not a list. This can be used for strict compatibility with common `clap` configurations.
-
-   example: `[conf(no_env_delimiter)]`
 
 *  <a name="repeat-allow-hyphen-values"></a> `allow_hyphen_values` (no arguments)
 

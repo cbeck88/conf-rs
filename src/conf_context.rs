@@ -259,6 +259,7 @@ impl<'a> ConfContext<'a> {
     pub fn get_repeat_osstring_opt(
         &self,
         id: &str,
+        env_delimiter: Option<char>,
     ) -> Result<(ConfValueSource<&'a str>, Vec<&'a OsStr>, &'a ProgramOption), InnerError> {
         let id = self.id_prefix.clone() + id;
         let opt = self.args.get_program_option(&id).unwrap_or_else(|| {
@@ -289,8 +290,12 @@ impl<'a> ConfContext<'a> {
         for env_form in opt.env_form.iter().chain(opt.env_aliases.iter()) {
             if let Some(val) = self.get_env_os(env_form) {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
-                // No delimiter - return as single OsStr value
-                return Ok((value_source, vec![val], opt));
+
+                return Ok(if let Some(delim) = env_delimiter {
+                    (value_source, split_osstr(val, delim).collect(), opt)
+                } else {
+                    (value_source, vec![val], opt)
+                });
             }
         }
 
@@ -300,7 +305,7 @@ impl<'a> ConfContext<'a> {
     /// Get a repeat program option if it was set, using any of its aliases.
     /// Returns values as &str. If any value from command-line arguments contains invalid UTF-8,
     /// returns an error.
-    /// If env is set, env is parsed via the delimiter (char).
+    /// If env is set, env is parsed via the delimiter (char), if a delimiter is provided.
     /// If args and env are set, args shadows env.
     pub fn get_repeat_opt(
         &self,
@@ -648,5 +653,56 @@ impl<'a> ConfContext<'a> {
 
             logger_cell.borrow_mut()(&event);
         }
+    }
+}
+
+#[allow(unsafe_code)]
+fn split_osstr(s: &OsStr, delim: char) -> impl Iterator<Item = &OsStr> {
+    assert!(
+        delim.is_ascii(),
+        "when splitting OsStr, the delimiter must be ascii if present"
+    );
+    let delim = delim as u8;
+
+    // Safety:
+    // Because delim is ASCII, it is encoded uniquely as 1 byte, in UTF-8 and WTF-8, and any
+    // self-synchronizing superset of ASCII.
+    // Therefore if we see a byte matching `delim` within `s`, and `s` is well-formed, then
+    // the split of s at that byte must also be well-formed.
+    s.as_encoded_bytes()
+        .split(move |b| *b == delim)
+        .map(|bytes| unsafe { OsStr::from_encoded_bytes_unchecked(bytes) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_osstr_with_ascii_delimiter() {
+        let s = OsStr::new("a,b,c");
+        let parts: Vec<_> = split_osstr(s, ',').collect();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0], "a");
+        assert_eq!(parts[1], "b");
+        assert_eq!(parts[2], "c");
+    }
+
+    #[test]
+    fn test_split_osstr_with_colon_delimiter() {
+        let s = OsStr::new("/usr/bin:/usr/local/bin:/home/user/bin");
+        let parts: Vec<_> = split_osstr(s, ':').collect();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0], "/usr/bin");
+        assert_eq!(parts[1], "/usr/local/bin");
+        assert_eq!(parts[2], "/home/user/bin");
+    }
+
+    #[test]
+    #[should_panic(expected = "when splitting OsStr, the delimiter must be ascii if present")]
+    fn test_split_osstr_non_ascii_delimiter_panics() {
+        let s = OsStr::new("a日b日c");
+        // Using a non-ASCII delimiter should panic
+        let _ = split_osstr(s, '日').collect::<Vec<_>>();
     }
 }

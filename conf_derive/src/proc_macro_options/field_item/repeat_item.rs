@@ -246,14 +246,6 @@ impl RepeatItem {
             ));
         }
 
-        // Validate value_parser_os and env_delimiter are incompatible
-        if result.value_parser_os.is_some() && result.env_delimiter.is_some() {
-            return Err(Error::new(
-                field.span(),
-                "value_parser_os is incompatible with env_delimiter (use no_env_delimiter instead)",
-            ));
-        }
-
         if result.no_env_delimiter && result.env_delimiter.is_some() {
             return Err(Error::new(
                 field.span(),
@@ -273,6 +265,21 @@ impl RepeatItem {
                 field.span(),
                 "no_env_delimiter has no effect if an env variable is not declared",
             ));
+        }
+
+        // Validate that env_delimiter is ASCII when value_parser_os is used (explicitly or implicitly)
+        // This is required because OsStr splitting only works safely with ASCII delimiters
+        if let Some(ref delim) = result.env_delimiter {
+            if matches!(result.get_value_parser_expr(), ValueParserExpr::OsStr(_))
+                && !delim.value().is_ascii()
+            {
+                return Err(Error::new(
+                    delim.span(),
+                    "env_delimiter must be an ASCII character when using value_parser_os \
+                     (or with Vec<PathBuf>/Vec<OsString> types). \
+                     OsStr uses a platform-specific encoding and only splitting by ASCII is supported.",
+                ));
+            }
         }
 
         // Validate positional argument constraints
@@ -445,19 +452,16 @@ impl RepeatItem {
     }
 
     fn get_delimiter(&self) -> TokenStream {
-        quote_opt(
-            &if self.no_env_delimiter || self.value_parser_os.is_some() {
-                // No delimiter when no_env_delimiter is set OR when using value_parser_os
-                // (value_parser_os implies no splitting since we can't split non-UTF-8 data)
-                None
-            } else {
-                Some(
-                    self.env_delimiter
-                        .clone()
-                        .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
-                )
-            },
-        )
+        quote_opt(&if self.no_env_delimiter {
+            None
+        } else {
+            // Default delimiter is comma for both value_parser and value_parser_os
+            Some(
+                self.env_delimiter
+                    .clone()
+                    .unwrap_or_else(|| LitChar::new(',', self.field_name.span())),
+            )
+        })
     }
 
     fn get_value_parser_expr(&self) -> ValueParserExpr {
@@ -553,7 +557,7 @@ impl RepeatItem {
                     use ::std::ffi::OsStr;
 
                     let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&OsStr>, &ProgramOption)
-                      = #conf_context_ident.get_repeat_osstring_opt(#id).map_err(|err| vec![err])?;
+                      = #conf_context_ident.get_repeat_osstring_opt(#id, #delimiter).map_err(|err| vec![err])?;
 
                     #before_value_parser
                     #conf_context_ident.log_config_event(#id, value_source);
