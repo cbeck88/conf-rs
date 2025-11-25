@@ -203,15 +203,9 @@ impl<'a> ConfContext<'a> {
             }
         }
 
-        if let Some(env_form) = opt.env_form.as_deref() {
+        for env_form in opt.env_form.iter().chain(opt.env_aliases.iter()) {
             if let Some(val) = self.get_env_os(env_form) {
-                return Ok((Some((ConfValueSource::<&str>::Env(env_form), val)), opt));
-            }
-        }
-
-        for env_alias in opt.env_aliases.iter() {
-            if let Some(val) = self.get_env_os(env_alias) {
-                let value_source = ConfValueSource::<&str>::Env(env_alias);
+                let value_source = ConfValueSource::<&str>::Env(env_form);
                 let val_and_source = Some((value_source, val));
 
                 return Ok((val_and_source, opt));
@@ -292,17 +286,9 @@ impl<'a> ConfContext<'a> {
             }
         }
 
-        if let Some(env_form) = opt.env_form.as_deref() {
+        for env_form in opt.env_form.iter().chain(opt.env_aliases.iter()) {
             if let Some(val) = self.get_env_os(env_form) {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
-                // No delimiter - return as single OsStr value
-                return Ok((value_source, vec![val], opt));
-            }
-        }
-
-        for env_alias in opt.env_aliases.iter() {
-            if let Some(val) = self.get_env_os(env_alias) {
-                let value_source = ConfValueSource::<&str>::Env(env_alias);
                 // No delimiter - return as single OsStr value
                 return Ok((value_source, vec![val], opt));
             }
@@ -358,32 +344,13 @@ impl<'a> ConfContext<'a> {
             }
         }
 
-        if let Some(env_form) = opt.env_form.as_deref() {
+        for env_form in opt.env_form.iter().chain(opt.env_aliases.iter()) {
             if let Some(val) = self.get_env_os(env_form) {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
 
                 // Convert to str for delimiter splitting
                 let val_str = val.to_str().ok_or_else(|| {
                     InnerError::invalid_utf8_env(env_form, opt, self.env.get(env_form))
-                })?;
-
-                return Ok(if let Some(delim) = env_delimiter {
-                    // Split by delimiter
-                    (value_source, val_str.split(delim).collect(), opt)
-                } else {
-                    // Return as single value
-                    (value_source, vec![val_str], opt)
-                });
-            }
-        }
-
-        for env_alias in opt.env_aliases.iter() {
-            if let Some(val) = self.get_env_os(env_alias) {
-                let value_source = ConfValueSource::<&str>::Env(env_alias);
-
-                // Convert to str for delimiter splitting
-                let val_str = val.to_str().ok_or_else(|| {
-                    InnerError::invalid_utf8_env(env_alias, opt, self.env.get(env_alias))
                 })?;
 
                 return Ok(if let Some(delim) = env_delimiter {
