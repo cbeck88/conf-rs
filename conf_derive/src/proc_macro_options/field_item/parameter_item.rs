@@ -647,10 +647,7 @@ impl ParameterItem {
                     }
                 };
 
-                return self.gen_initializer_helper(
-                    conf_context_ident,
-                    &if_no_conf_context_val,
-                );
+                return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val);
             } else if self.is_optional_type.is_some() {
                 // Serde-only optional field without default: return None
                 return Ok((
@@ -775,10 +772,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(
-                    conf_context_ident,
-                    &if_no_conf_context_val,
-                )
+                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
             } else {
                 let if_no_conf_context_val = |_| {
                     quote! {
@@ -795,10 +789,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(
-                    conf_context_ident,
-                    &if_no_conf_context_val,
-                )
+                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
             }
         } else if use_value_parser {
             // When use_value_parser is true, then #doc_val has type String.
@@ -814,10 +805,7 @@ impl ParameterItem {
                     },
                 }
             };
-            self.gen_initializer_helper(
-                conf_context_ident,
-                &if_no_conf_context_val,
-            )
+            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
             // To pick this value for the field, we just return it.
@@ -832,10 +820,7 @@ impl ParameterItem {
                 }
             };
 
-            self.gen_initializer_helper(
-                conf_context_ident,
-                &if_no_conf_context_val,
-            )
+            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
         }
     }
 

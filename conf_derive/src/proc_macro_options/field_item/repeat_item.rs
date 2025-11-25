@@ -1,4 +1,4 @@
-use super::{ExprRequest, StructItem, ValueParserExpr};
+use super::{StructItem, ValueParserExpr};
 use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -498,34 +498,22 @@ impl RepeatItem {
 
     /// Generate initializer code for this repeat field.
     ///
-    /// # `before_value_parser` contract
+    /// # `if_no_conf_context_val` callback
     ///
-    /// If provided, `before_value_parser` is a function that takes an `ExprRequest` and returns
-    /// a `TokenStream`. It will be invoked with the appropriate request type based on the value parser.
-    ///
-    /// The generated code creates these variables before calling `before_value_parser`:
-    /// - `value_source: ConfValueSource<&str>` - where the values came from
-    /// - `strs: Vec<&str>` (for `ExprRequest::Str`) or `Vec<&OsStr>` (for `ExprRequest::OsStr`)
-    /// - `opt: &ProgramOption` - the option metadata
-    ///
-    /// The `before_value_parser` TokenStream can:
-    /// - Reference these variables
-    /// - Shadow them with new values (e.g., replacing with serde document values)
-    /// - Early return from the function if needed
-    ///
-    /// After `before_value_parser` executes, the code expects:
-    /// - `value_source` and `strs` to be in scope (possibly shadowed)
-    /// - `strs` to have the same type as initially created (`Vec<&str>` or `Vec<&OsStr>`)
+    /// Callback invoked when conf_context doesn't find a value (when `maybe_val` is `None`).
+    /// For repeat fields without serde, this returns an empty vec.
+    /// For repeat fields with serde, this returns the document value (with appropriate conversions).
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
-        before_value_parser: Option<&dyn Fn(ExprRequest) -> TokenStream>,
+        if_no_conf_context_val: &dyn Fn() -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
         let delimiter = self.get_delimiter();
         let value_parser_expr = self.get_value_parser_expr();
+        let if_no_conf_context_val = (if_no_conf_context_val)();
 
         // Note: We can't use rust into_iter, collect, map_err because sometimes it messes with type
         // inference around the value parser
@@ -542,7 +530,6 @@ impl RepeatItem {
 
         let initializer = match value_parser_expr {
             ValueParserExpr::OsStr(value_parser_os) => {
-                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::OsStr));
                 // OsStr-based value parser
                 quote! {
                   {
@@ -556,10 +543,19 @@ impl RepeatItem {
                     use ::std::vec::Vec;
                     use ::std::ffi::OsStr;
 
-                    let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&OsStr>, &ProgramOption)
+                    let (maybe_val, opt): (Option<_>, &ProgramOption)
                       = #conf_context_ident.get_repeat_osstring_opt(#id, #delimiter).map_err(|err| vec![err])?;
+                    debug_assert!(
+                        maybe_val.as_ref().map_or(true, |(vs, _)| !vs.is_default()),
+                        "ConfContext should never return Default - the proc-macro generates default logic"
+                    );
 
-                    #before_value_parser
+                    let (value_source, strs): (ConfValueSource<&str>, Vec<&OsStr>) = if let Some(val) = maybe_val {
+                        val
+                    } else {
+                        #if_no_conf_context_val
+                    };
+
                     #conf_context_ident.log_config_event(#id, value_source);
 
                     let mut result: #field_type = Default::default();
@@ -588,7 +584,6 @@ impl RepeatItem {
                 }
             }
             ValueParserExpr::Str(value_parser) => {
-                let before_value_parser = before_value_parser.map(|f| (f)(ExprRequest::Str));
                 // String-based value parser - use get_repeat_opt
                 quote! {
                   {
@@ -601,10 +596,19 @@ impl RepeatItem {
                     use ::conf::{ConfValueSource, ProgramOption, InnerError};
                     use ::std::vec::Vec;
 
-                    let (value_source, strs, opt): (ConfValueSource<&str>, Vec<&str>, &ProgramOption)
+                    let (maybe_val, opt): (Option<_>, &ProgramOption)
                       = #conf_context_ident.get_repeat_opt(#id, #delimiter).map_err(|err| vec![err])?;
+                    debug_assert!(
+                        maybe_val.as_ref().map_or(true, |(vs, _)| !vs.is_default()),
+                        "ConfContext should never return Default - the proc-macro generates default logic"
+                    );
 
-                    #before_value_parser
+                    let (value_source, strs): (ConfValueSource<&str>, Vec<&str>) = if let Some(val) = maybe_val {
+                        val
+                    } else {
+                        #if_no_conf_context_val
+                    };
+
                     #conf_context_ident.log_config_event(#id, value_source);
 
                     let mut result: #field_type = Default::default();
@@ -658,7 +662,15 @@ impl RepeatItem {
             ));
         }
 
-        self.gen_initializer_helper(conf_context_ident, None)
+        let id = self.field_name.to_string();
+        let if_no_conf_context_val = || {
+            quote! {
+                // No args/env found, return empty vec (repeat fields default to empty)
+                #conf_context_ident.log_config_event(#id, ::conf::ConfValueSource::Default);
+                return Ok(Default::default());
+            }
+        };
+        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided doc val
@@ -743,73 +755,58 @@ impl RepeatItem {
                 .ok_or_else(|| Error::new(self.field_type.span(), "Expected Vec<T> type"))?;
 
             let id = self.field_name.to_string();
-            let before_value_parser = |_| {
+            let if_no_conf_context_val = || {
                 quote! {
-                    if value_source.is_default() {
-                        #conf_context_ident.log_config_event(
-                            #id,
-                            ::conf::ConfValueSource::Document(#doc_name)
-                        );
-                        let mut __result__ = Vec::with_capacity(#doc_val.len());
-                        for __item__ in #doc_val {
-                            match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
-                                Ok(__converted__) => __result__.push(__converted__),
-                                Err(__err__) => {
-                                    return Err(vec![::conf::InnerError::serde(
-                                        #doc_name,
-                                        #field_name_str,
-                                        __err__
-                                    )]);
-                                }
+                    #conf_context_ident.log_config_event(
+                        #id,
+                        ::conf::ConfValueSource::Document(#doc_name)
+                    );
+                    let mut __result__ = Vec::with_capacity(#doc_val.len());
+                    for __item__ in #doc_val {
+                        match <#inner_type as ::core::convert::TryFrom<_>>::try_from(__item__) {
+                            Ok(__converted__) => __result__.push(__converted__),
+                            Err(__err__) => {
+                                return Err(vec![::conf::InnerError::serde(
+                                    #doc_name,
+                                    #field_name_str,
+                                    __err__
+                                )]);
                             }
                         }
-                        return Ok(__result__);
                     }
+                    return Ok(__result__);
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
+            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
         } else if use_value_parser {
-            // When use_value_parser is enabled, the behavior is, if conf_context produced a default
-            // value, we should overwrite it with the document value. `strs` is a `Vec<&str>`,
-            // and #doc_val is a `Vec<String>`.
-            let before_value_parser = |req: ExprRequest| -> TokenStream {
-                match req {
-                    ExprRequest::Str => quote! {
-                      let (value_source, strs) = if value_source.is_default() {
-                        (ConfValueSource::Document(#doc_name), #doc_val.iter().map(String::as_str).collect())
-                      } else {
-                        (value_source, strs)
-                      };
-                    },
-                    ExprRequest::OsStr => quote! {
-                      let (value_source, strs) = if value_source.is_default() {
-                        (ConfValueSource::Document(#doc_name), #doc_val.iter().map(OsStr::new).collect())
-                      } else {
-                        (value_source, strs)
-                      };
-                    },
-                }
+            // When use_value_parser is enabled and no args/env found, use document value.
+            // The value_parser will be run on each element from the document.
+            let value_parser_expr = self.get_value_parser_expr();
+            let if_no_conf_context_val = || match value_parser_expr {
+                ValueParserExpr::Str(_) => quote! {
+                    (ConfValueSource::Document(#doc_name), #doc_val.iter().map(String::as_str).collect())
+                },
+                ValueParserExpr::OsStr(_) => quote! {
+                    (ConfValueSource::Document(#doc_name), #doc_val.iter().map(|s| ::std::ffi::OsStr::new(s.as_str())).collect())
+                },
             };
 
-            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
+            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
         } else {
-            // When use_value_parser is not enabled, the behavior is, if conf context produced a
-            // default value, we should instead simply return the doc value.
+            // When use_value_parser is not enabled and no args/env found, return doc value directly.
             let id = self.field_name.to_string();
-            let before_value_parser = |_| {
+            let if_no_conf_context_val = || {
                 quote! {
-                  if value_source.is_default() {
                     #conf_context_ident.log_config_event(
                         #id,
                         ::conf::ConfValueSource::Document(#doc_name)
                     );
                     return Ok(#doc_val);
-                  }
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, Some(&before_value_parser))
+            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
         }
     }
 

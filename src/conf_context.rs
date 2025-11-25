@@ -251,11 +251,18 @@ impl<'a> ConfContext<'a> {
     /// No delimiter parsing is performed for env values - they are returned as a single value.
     /// If args and env are set, args shadows env.
     /// NOTE: This should only be used when value_parser_os is specified. Otherwise use get_repeat_opt.
+    #[allow(clippy::type_complexity)]
     pub fn get_repeat_osstring_opt(
         &self,
         id: &str,
         env_delimiter: Option<char>,
-    ) -> Result<(ConfValueSource<&'a str>, Vec<&'a OsStr>, &'a ProgramOption), InnerError> {
+    ) -> Result<
+        (
+            Option<(ConfValueSource<&'a str>, Vec<&'a OsStr>)>,
+            &'a ProgramOption,
+        ),
+        InnerError,
+    > {
         let id = self.id_prefix.clone() + id;
         let opt = self.args.get_program_option(&id).unwrap_or_else(|| {
             let available = self.args.get_available_ids();
@@ -278,7 +285,7 @@ impl<'a> ConfContext<'a> {
                 // Return as OsStr, no conversion to str
                 let results: Vec<&'a OsStr> = val_os.map(|os| os.as_os_str()).collect();
 
-                return Ok((value_source.into(), results, opt));
+                return Ok((Some((value_source.into(), results)), opt));
             }
         }
 
@@ -287,14 +294,16 @@ impl<'a> ConfContext<'a> {
                 let value_source = ConfValueSource::<&str>::Env(env_form);
 
                 return Ok(if let Some(delim) = env_delimiter {
-                    (value_source, split_osstr(val, delim).collect(), opt)
+                    (Some((value_source, split_osstr(val, delim).collect())), opt)
                 } else {
-                    (value_source, vec![val], opt)
+                    (Some((value_source, vec![val])), opt)
                 });
             }
         }
 
-        Ok((ValueSource::DefaultValue.into(), vec![], opt))
+        // Note: default values are NOT returned here. The proc-macro generates the fallback
+        // to default logic in the initializer code, not ConfContext.
+        Ok((None, opt))
     }
 
     /// Get a repeat program option if it was set, using any of its aliases.
@@ -302,11 +311,18 @@ impl<'a> ConfContext<'a> {
     /// returns an error.
     /// If env is set, env is parsed via the delimiter (char), if a delimiter is provided.
     /// If args and env are set, args shadows env.
+    #[allow(clippy::type_complexity)]
     pub fn get_repeat_opt(
         &self,
         id: &str,
         env_delimiter: Option<char>,
-    ) -> Result<(ConfValueSource<&'a str>, Vec<&'a str>, &'a ProgramOption), InnerError> {
+    ) -> Result<
+        (
+            Option<(ConfValueSource<&'a str>, Vec<&'a str>)>,
+            &'a ProgramOption,
+        ),
+        InnerError,
+    > {
         let id = self.id_prefix.clone() + id;
         let opt = self.args.get_program_option(&id).unwrap_or_else(|| {
             let available = self.args.get_available_ids();
@@ -340,7 +356,7 @@ impl<'a> ConfContext<'a> {
                     })
                     .collect();
 
-                return Ok((value_source.into(), strs?, opt));
+                return Ok((Some((value_source.into(), strs?)), opt));
             }
         }
 
@@ -355,15 +371,17 @@ impl<'a> ConfContext<'a> {
 
                 return Ok(if let Some(delim) = env_delimiter {
                     // Split by delimiter
-                    (value_source, val_str.split(delim).collect(), opt)
+                    (Some((value_source, val_str.split(delim).collect())), opt)
                 } else {
                     // Return as single value
-                    (value_source, vec![val_str], opt)
+                    (Some((value_source, vec![val_str])), opt)
                 });
             }
         }
 
-        Ok((ValueSource::DefaultValue.into(), vec![], opt))
+        // Note: default values are NOT returned here. The proc-macro generates the fallback
+        // to default logic in the initializer code, not ConfContext.
+        Ok((None, opt))
     }
 
     /// Check if a given option appears in cli args or env (not defaulted)
@@ -404,8 +422,8 @@ impl<'a> ConfContext<'a> {
             ParseType::Repeat => {
                 // Hack: don't supply delimiter char even if it exists, since it won't matter for
                 // this function
-                let (src, _val, _opt) = self.get_repeat_opt(id, None)?;
-                Some(src)
+                let (maybe, _opt) = self.get_repeat_opt(id, None)?;
+                maybe.map(|(src, _val)| src)
             }
         })
     }
