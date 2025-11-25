@@ -1,0 +1,5 @@
+error: default_help_str is provided but there is no default that it is documenting
+ --> tests/ui/default_help_str_without_default.rs:5:5
+  |
+5 |     #[conf(long, default_help_str = "some help")]
+  |     ^

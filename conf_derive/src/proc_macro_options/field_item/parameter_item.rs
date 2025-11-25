@@ -146,6 +146,7 @@ pub struct ParameterItem {
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
     default_value: Option<LitStr>,
+    default_help_str: Option<LitStr>,
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
@@ -177,6 +178,7 @@ impl ParameterItem {
             env_name: None,
             env_aliases: None,
             default_value: None,
+            default_help_str: None,
             value_parser: None,
             value_parser_os: None,
             serde: None,
@@ -228,6 +230,9 @@ impl ParameterItem {
                     } else if path.is_ident("default_value") {
                         let val = meta.value()?.parse::<LitStr>()?;
                         set_once(&path, &mut result.default_value, Some(val))
+                    } else if path.is_ident("default_help_str") {
+                        let val = meta.value()?.parse::<LitStr>()?;
+                        set_once(&path, &mut result.default_help_str, Some(val))
                     } else if path.is_ident("value_parser") {
                         set_once(
                             &path,
@@ -291,6 +296,17 @@ impl ParameterItem {
             return Err(Error::new(
                 field.span(),
                 "#[conf(value_parser)] and #[conf(value_parser_os)] cannot both be specified",
+            ));
+        }
+
+        // Validate default_help_str without default_value
+        if result.default_help_str.is_some()
+            && result.default_value.is_none()
+            && result.is_optional_type.is_none()
+        {
+            return Err(Error::new(
+                field.span(),
+                "default_help_str is provided but there is no default that it is documenting",
             ));
         }
 
@@ -425,7 +441,11 @@ impl ParameterItem {
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
-        let default_help_str = quote_opt_cow(&self.default_value);
+        // Use default_help_str if provided, otherwise fall back to default_value
+        let default_help_str = quote_opt_cow(
+            &self.default_help_str.as_ref()
+                .or(self.default_value.as_ref())
+        );
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;

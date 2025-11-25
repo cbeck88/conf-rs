@@ -29,6 +29,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [aliases](#parameter-aliases)
     * [env_aliases](#parameter-env-aliases)
     * [default_value](#parameter-default-value)
+    * [default_help_str](#parameter-default-help-str)
     * [value_parser](#parameter-value-parser)
     * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
@@ -431,6 +432,29 @@ A parameter represents a single value that can be parsed from a string.
    Specifies the default value assigned to this parameter if none of the switches or env are present.
 
    *Note*: This behavior is the same as in `clap-derive`.
+
+*  <a name="parameter-default-help-str"></a> `default_help_str` (string argument)
+
+   example: `#[arg(default_value = "actual_value", default_help_str = "displayed in help")]`
+
+   Overrides the use of `default_value` in the help text. This allows displaying a different string in `--help` than the actual default value used for initialization.
+
+   **Example**:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// API endpoint URL
+       #[conf(long, default_value = "https://api.example.com/v2/data", default_help_str = "<default endpoint>")]
+       api_url: String,
+
+       /// Connection timeout
+       #[conf(long, default_value = "30", default_help_str = "30 seconds")]
+       timeout: u32,
+   }
+   ```
+
+   In the help output, users will see `<default endpoint>` and `30 seconds` as the default values, while the actual initialization will use `"https://api.example.com/v2/data"` and `"30"` respectively.
 
 *  <a name="parameter-value-parser"></a> `value_parser` (expr argument)
 
