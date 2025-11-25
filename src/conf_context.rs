@@ -198,7 +198,6 @@ impl<'a> ConfContext<'a> {
 
                 let val_and_source = Some((value_source.into(), val_os.as_os_str()));
                 // Args take precedence over env, so return now if we got args.
-                // If we got default_value we want to fall through to env
                 return Ok((val_and_source, opt));
             }
         }
@@ -212,12 +211,8 @@ impl<'a> ConfContext<'a> {
             }
         }
 
-        if let Some(default_val) = opt.default_value.as_deref() {
-            let value_source = ConfValueSource::Default;
-            let val_and_source = Some((value_source, OsStr::new(default_val)));
-
-            return Ok((val_and_source, opt));
-        }
+        // Note: default values are NOT returned here. The proc-macro generates the fallback
+        // to default logic in the initializer code, not ConfContext.
 
         Ok((None, opt))
     }

@@ -36,7 +36,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("required"));
     assert_eq!(opts[0].env_form.as_deref(), Some("REQUIRED"));
-    assert_eq!(opts[0].default_value, None);
+    assert_eq!(opts[0].default_help_str, None);
     assert!(opts[0].is_required);
     assert_eq!(opts[0].description.as_deref(), Some("This is a test param"));
 
@@ -44,7 +44,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[1].short_form, Some('m'));
     assert_eq!(opts[1].long_form.as_deref(), Some("foo"));
     assert_eq!(opts[1].env_form.as_deref(), Some("MY_OPTION"));
-    assert_eq!(opts[1].default_value, None);
+    assert_eq!(opts[1].default_help_str, None);
     assert!(!opts[1].is_required);
     assert_eq!(opts[1].description.as_deref(), None);
 
@@ -52,7 +52,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[2].short_form, Some('d'));
     assert_eq!(opts[2].long_form, None);
     assert_eq!(opts[2].env_form.as_deref(), Some("DEFAULTED"));
-    assert_eq!(opts[2].default_value.as_deref(), Some("def"));
+    assert_eq!(opts[2].default_help_str.as_deref(), Some("def"));
     assert!(!opts[2].is_required);
     assert_eq!(
         opts[2].description.as_deref(),
@@ -63,7 +63,7 @@ fn test_params_get_program_options() {
     assert_eq!(opts[3].short_form, Some('s'));
     assert_eq!(opts[3].long_form, None);
     assert_eq!(opts[3].env_form.as_deref(), Some("SHOULD_WORK"));
-    assert_eq!(opts[3].default_value.as_deref(), Some("maybe"));
+    assert_eq!(opts[3].default_help_str.as_deref(), Some("maybe"));
     assert!(!opts[3].is_required);
     assert_eq!(opts[3].description.as_deref(), None);
 }

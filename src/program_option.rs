@@ -50,8 +50,9 @@ pub struct ProgramOption {
     pub env_form: Option<CowStr>,
     /// Any env aliases
     pub env_aliases: Cow<'static, [CowStr]>,
-    /// The default-value, if any. This is used in help text and actually parsed when we use the default.
-    pub default_value: Option<CowStr>,
+    /// The default-value, if any. This is used in help text. The proc-macro generates the actual
+    /// fallback to the default value in the initializer code, not ConfContext.
+    pub default_help_str: Option<CowStr>,
     /// Whether this option is considered required to appear. Affects help generation & semantics
     /// around flatten optional.
     pub is_required: bool,
@@ -87,7 +88,7 @@ impl ProgramOption {
             mut aliases,
             mut env_form,
             mut env_aliases,
-            default_value,
+            default_help_str,
             is_required,
             allow_hyphen_values,
             secret,
@@ -154,7 +155,7 @@ impl ProgramOption {
             aliases,
             env_form,
             env_aliases,
-            default_value,
+            default_help_str,
             is_required,
             allow_hyphen_values,
             secret,
@@ -248,7 +249,7 @@ impl ProgramOption {
             }
         }
 
-        if let Some(def) = self.default_value.as_ref() {
+        if let Some(def) = self.default_help_str.as_ref() {
             writeln!(stream, "          [default: {def}]")?;
         }
         if self.is_secret() {

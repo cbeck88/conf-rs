@@ -433,7 +433,7 @@ impl RepeatItem {
               aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),
               env_form: #env_form,
               env_aliases: ::std::borrow::Cow::Borrowed(&[#env_aliases]),
-              default_value: None,
+              default_help_str: None,
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
               secret: #secret,

@@ -111,7 +111,7 @@ fn build_help_text(option: &ProgramOption, env: &ParsedEnv) -> String {
     }
 
     // Add default value
-    if let Some(def) = option.default_value.as_ref() {
+    if let Some(def) = option.default_help_str.as_ref() {
         help_text += &format!("\n[default: {def}]");
     }
 
@@ -355,7 +355,7 @@ impl Parser {
                 let mut buf = String::new();
                 option.print(&mut buf, Some(env))?;
                 Ok(MaybeArg::EnvOnly(buf))
-            } else if option.default_value.is_some()
+            } else if option.default_help_str.is_some()
                 || option.has_serde_source
                 || !option.is_required
             {

@@ -23,7 +23,7 @@ fn test_env_aliases_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form, None);
     assert_eq!(opt.env_form.as_deref(), Some("REQUIRED"));
-    assert_eq!(opt.default_value, None);
+    assert_eq!(opt.default_help_str, None);
     assert!(opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -105,7 +105,7 @@ fn test_env_aliases2_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form, None);
     assert_eq!(opt.env_form.as_deref(), Some("REQUIRED"));
-    assert_eq!(opt.default_value, None);
+    assert_eq!(opt.default_help_str, None);
     assert!(opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -121,7 +121,7 @@ fn test_env_aliases2_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form, None);
     assert_eq!(opt.env_form.as_deref(), Some("B_REQUIRED"));
-    assert_eq!(opt.default_value, None);
+    assert_eq!(opt.default_help_str, None);
     assert!(opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -137,7 +137,7 @@ fn test_env_aliases2_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form, None);
     assert_eq!(opt.env_form.as_deref(), Some("DADA_REQUIRED"));
-    assert_eq!(opt.default_value, None);
+    assert_eq!(opt.default_help_str, None);
     assert!(opt.is_required);
     assert_eq!(
         opt.description.as_deref(),

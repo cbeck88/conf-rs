@@ -425,7 +425,7 @@ impl ParameterItem {
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
-        let default_value = quote_opt_cow(&self.default_value);
+        let default_help_str = quote_opt_cow(&self.default_value);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
@@ -452,7 +452,7 @@ impl ParameterItem {
                 aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),
                 env_form: #env_form,
                 env_aliases: ::std::borrow::Cow::Borrowed(&[#env_aliases]),
-                default_value: #default_value,
+                default_help_str: #default_help_str,
                 is_required: #is_required,
                 allow_hyphen_values: #allow_hyphen_values,
                 secret: #secret,
@@ -699,8 +699,19 @@ impl ParameterItem {
         }
 
         // Default behavior when no conf context value is found
-        let if_no_conf_context_val = |_req: ExprRequest| {
-            if self.is_optional_type.is_some() {
+        let if_no_conf_context_val = |req: ExprRequest| {
+            // Check for default_value first
+            if let Some(default_value) = &self.default_value {
+                let default_value_str = default_value.value();
+                match req {
+                    ExprRequest::Str => quote! {
+                        (::conf::ConfValueSource::Default, #default_value_str)
+                    },
+                    ExprRequest::OsStr => quote! {
+                        (::conf::ConfValueSource::Default, ::std::ffi::OsStr::new(#default_value_str))
+                    },
+                }
+            } else if self.is_optional_type.is_some() {
                 quote! { return Ok(None); }
             } else {
                 quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
@@ -782,25 +793,13 @@ impl ParameterItem {
                 };
 
                 let before_value_parser = |_| {
+                    // Note: value_source can only be Args or Env here (never Default), because:
+                    // 1. get_string_opt() only returns Args/Env (ConfContext no longer returns Default)
+                    // 2. if_no_conf_context_val returns Document source (for serde fields)
+                    // Args/env always shadow the document, so we continue to value parser.
                     quote! {
-                        if value_source.is_default() {
-                            #conf_context_ident.log_config_event(
-                                #id,
-                                ::conf::ConfValueSource::Document(#doc_name)
-                            );
-                            return match #doc_val {
-                                Some(__intermediate__) => {
-                                    <#inner_type as ::core::convert::TryFrom<_>>::try_from(__intermediate__)
-                                        .map(Some)
-                                        .map_err(|err| ::conf::InnerError::serde(
-                                            #doc_name,
-                                            #field_name_str,
-                                            err
-                                        ))
-                                }
-                                None => Ok(None),
-                            };
-                        }
+                        debug_assert!(!value_source.is_default(),
+                            "ConfContext should never return Default - the proc-macro generates default logic");
                     }
                 };
                 self.gen_initializer_helper(
@@ -826,18 +825,8 @@ impl ParameterItem {
 
                 let before_value_parser = |_| {
                     quote! {
-                        if value_source.is_default() {
-                            #conf_context_ident.log_config_event(
-                                #id,
-                                ::conf::ConfValueSource::Document(#doc_name)
-                            );
-                            return <#field_type as ::core::convert::TryFrom<_>>::try_from(#doc_val)
-                                .map_err(|err| ::conf::InnerError::serde(
-                                    #doc_name,
-                                    #field_name_str,
-                                    err
-                                ));
-                        }
+                        debug_assert!(!value_source.is_default(),
+                            "ConfContext should never return Default - the proc-macro generates default logic");
                     }
                 };
                 self.gen_initializer_helper(
@@ -860,22 +849,10 @@ impl ParameterItem {
                     },
                 }
             };
-            let before_value_parser = |req: ExprRequest| -> TokenStream {
-                match req {
-                    ExprRequest::Str => quote! {
-                      let (value_source, val_str) = if value_source.is_default() {
-                        (ConfValueSource::Document(#doc_name), #doc_val.as_str())
-                      } else {
-                        (value_source, val_str)
-                      };
-                    },
-                    ExprRequest::OsStr => quote! {
-                      let (value_source, val_os) = if value_source.is_default() {
-                        (ConfValueSource::Document(#doc_name), ::std::ffi::OsStr::new(#doc_val.as_str()))
-                      } else {
-                        (value_source, val_os)
-                      };
-                    },
+            let before_value_parser = |_req: ExprRequest| -> TokenStream {
+                quote! {
+                    debug_assert!(!value_source.is_default(),
+                        "ConfContext should never return Default - the proc-macro generates default logic");
                 }
             };
             self.gen_initializer_helper(
@@ -899,13 +876,8 @@ impl ParameterItem {
 
             let before_value_parser = |_| {
                 quote! {
-                  if value_source.is_default() {
-                    #conf_context_ident.log_config_event(
-                        #id,
-                        ::conf::ConfValueSource::Document(#doc_name)
-                    );
-                    return Ok(#doc_val);
-                  }
+                    debug_assert!(!value_source.is_default(),
+                        "ConfContext should never return Default - the proc-macro generates default logic");
                 }
             };
             self.gen_initializer_helper(

@@ -28,7 +28,7 @@ fn test_flags_get_program_options() {
     assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("my-flag"));
     assert_eq!(opts[0].env_form.as_deref(), Some("MY_FLAG"));
-    assert_eq!(opts[0].default_value, None);
+    assert_eq!(opts[0].default_help_str, None);
     assert!(!opts[0].is_required);
     assert_eq!(opts[0].description.as_deref(), Some("This is a test flag"));
 
@@ -36,7 +36,7 @@ fn test_flags_get_program_options() {
     assert_eq!(opts[1].short_form, Some('m'));
     assert_eq!(opts[1].long_form.as_deref(), Some("my-obscure-flag"));
     assert_eq!(opts[1].env_form.as_deref(), Some("MY_OBSCURE_FLAG"));
-    assert_eq!(opts[1].default_value, None);
+    assert_eq!(opts[1].default_help_str, None);
     assert!(!opts[1].is_required);
     assert_eq!(opts[1].description.as_deref(), None);
 }
