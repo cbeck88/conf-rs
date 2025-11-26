@@ -66,24 +66,36 @@ impl RepeatSerdeItem {
         }
 
         // Validate mutual exclusivity
-        if let (Some(deserialize_with), Some(use_value_parser)) = (&result.deserialize_with, &result.use_value_parser) {
+        if let (Some(deserialize_with), Some(use_value_parser)) =
+            (&result.deserialize_with, &result.use_value_parser)
+        {
             return Err(mutually_exclusive_error(
-                "deserialize_with", deserialize_with,
-                "use_value_parser", use_value_parser,
+                "deserialize_with",
+                deserialize_with,
+                "use_value_parser",
+                use_value_parser,
             ));
         }
 
-        if let (Some(try_from), Some(use_value_parser)) = (&result.try_from, &result.use_value_parser) {
+        if let (Some(try_from), Some(use_value_parser)) =
+            (&result.try_from, &result.use_value_parser)
+        {
             return Err(mutually_exclusive_error(
-                "try_from", try_from,
-                "use_value_parser", use_value_parser,
+                "try_from",
+                try_from,
+                "use_value_parser",
+                use_value_parser,
             ));
         }
 
-        if let (Some(try_from), Some(deserialize_with)) = (&result.try_from, &result.deserialize_with) {
+        if let (Some(try_from), Some(deserialize_with)) =
+            (&result.try_from, &result.deserialize_with)
+        {
             return Err(mutually_exclusive_error(
-                "try_from", try_from,
-                "deserialize_with", deserialize_with,
+                "try_from",
+                try_from,
+                "deserialize_with",
+                deserialize_with,
             ));
         }
 
@@ -111,7 +123,7 @@ pub struct RepeatItem {
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
     env_delimiter: Option<LitChar>,
-    no_env_delimiter: bool,
+    no_env_delimiter: Option<Span>,
     serde: Option<RepeatSerdeItem>,
     description: Option<String>,
     is_positional: bool,
@@ -146,7 +158,7 @@ impl RepeatItem {
             value_parser: None,
             value_parser_os: None,
             env_delimiter: None,
-            no_env_delimiter: false,
+            no_env_delimiter: None,
             serde: None,
             description: None,
             is_positional: false,
@@ -211,8 +223,7 @@ impl RepeatItem {
                             Some(parse_required_value::<LitChar>(meta)?),
                         )
                     } else if path.is_ident("no_env_delimiter") {
-                        result.no_env_delimiter = true;
-                        Ok(())
+                        set_once(&path, &mut result.no_env_delimiter, Some(path.span()))
                     } else if path.is_ident("allow_hyphen_values") {
                         result.allow_hyphen_values = true;
                         Ok(())
@@ -238,32 +249,44 @@ impl RepeatItem {
         }
 
         // Validate value_parser and value_parser_os are mutually exclusive
-        if let (Some(value_parser), Some(value_parser_os)) = (&result.value_parser, &result.value_parser_os) {
+        if let (Some(value_parser), Some(value_parser_os)) =
+            (&result.value_parser, &result.value_parser_os)
+        {
             return Err(mutually_exclusive_error(
-                "value_parser", value_parser,
-                "value_parser_os", value_parser_os,
+                "value_parser",
+                value_parser,
+                "value_parser_os",
+                value_parser_os,
             ));
         }
 
-        if result.no_env_delimiter && result.env_delimiter.is_some() {
-            return Err(Error::new(
-                field.span(),
-                "Cannot specify both env_delimiter and no_env_delimiter",
+        if let (Some(no_env_delimiter), Some(env_delimiter)) =
+            (&result.no_env_delimiter, &result.env_delimiter)
+        {
+            return Err(mutually_exclusive_error(
+                "no_env_delimiter",
+                no_env_delimiter,
+                "env_delimiter",
+                env_delimiter,
             ));
         }
 
-        if result.env_delimiter.is_some() && result.env_name.is_none() {
-            return Err(Error::new(
-                field.span(),
-                "env_delimiter has no effect if an env variable is not declared",
-            ));
+        if let Some(env_delimiter) = &result.env_delimiter {
+            if result.env_name.is_none() {
+                return Err(Error::new(
+                    env_delimiter.span(),
+                    "env_delimiter has no effect if an env variable is not declared",
+                ));
+            }
         }
 
-        if result.no_env_delimiter && result.env_name.is_none() {
-            return Err(Error::new(
-                field.span(),
-                "no_env_delimiter has no effect if an env variable is not declared",
-            ));
+        if let Some(no_env_delimiter) = &result.no_env_delimiter {
+            if result.env_name.is_none() {
+                return Err(Error::new(
+                    *no_env_delimiter,
+                    "no_env_delimiter has no effect if an env variable is not declared",
+                ));
+            }
         }
 
         // Validate that env_delimiter is ASCII when value_parser_os is used (explicitly or implicitly)
@@ -451,7 +474,7 @@ impl RepeatItem {
     }
 
     fn get_delimiter(&self) -> TokenStream {
-        quote_opt(&if self.no_env_delimiter {
+        quote_opt(&if self.no_env_delimiter.is_some() {
             None
         } else {
             // Default delimiter is comma for both value_parser and value_parser_os

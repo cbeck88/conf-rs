@@ -66,24 +66,36 @@ impl ParameterSerdeItem {
         }
 
         // Validate mutual exclusivity
-        if let (Some(deserialize_with), Some(use_value_parser)) = (&result.deserialize_with, &result.use_value_parser) {
+        if let (Some(deserialize_with), Some(use_value_parser)) =
+            (&result.deserialize_with, &result.use_value_parser)
+        {
             return Err(mutually_exclusive_error(
-                "deserialize_with", deserialize_with,
-                "use_value_parser", use_value_parser,
+                "deserialize_with",
+                deserialize_with,
+                "use_value_parser",
+                use_value_parser,
             ));
         }
 
-        if let (Some(try_from), Some(use_value_parser)) = (&result.try_from, &result.use_value_parser) {
+        if let (Some(try_from), Some(use_value_parser)) =
+            (&result.try_from, &result.use_value_parser)
+        {
             return Err(mutually_exclusive_error(
-                "try_from", try_from,
-                "use_value_parser", use_value_parser,
+                "try_from",
+                try_from,
+                "use_value_parser",
+                use_value_parser,
             ));
         }
 
-        if let (Some(try_from), Some(deserialize_with)) = (&result.try_from, &result.deserialize_with) {
+        if let (Some(try_from), Some(deserialize_with)) =
+            (&result.try_from, &result.deserialize_with)
+        {
             return Err(mutually_exclusive_error(
-                "try_from", try_from,
-                "deserialize_with", deserialize_with,
+                "try_from",
+                try_from,
+                "deserialize_with",
+                deserialize_with,
             ));
         }
 
@@ -304,10 +316,14 @@ impl ParameterItem {
         }
 
         // Validate value_parser and value_parser_os aren't both specified
-        if let (Some(value_parser), Some(value_parser_os)) = (&result.value_parser, &result.value_parser_os) {
+        if let (Some(value_parser), Some(value_parser_os)) =
+            (&result.value_parser, &result.value_parser_os)
+        {
             return Err(mutually_exclusive_error(
-                "value_parser", value_parser,
-                "value_parser_os", value_parser_os,
+                "value_parser",
+                value_parser,
+                "value_parser_os",
+                value_parser_os,
             ));
         }
 

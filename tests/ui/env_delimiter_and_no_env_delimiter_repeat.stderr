@@ -1,0 +1,11 @@
+error: no_env_delimiter and env_delimiter are mutually exclusive
+  --> tests/ui/env_delimiter_and_no_env_delimiter_repeat.rs:10:9
+   |
+10 |         no_env_delimiter
+   |         ^^^^^^^^^^^^^^^^
+
+error: Conflicts with this
+ --> tests/ui/env_delimiter_and_no_env_delimiter_repeat.rs:9:25
+  |
+9 |         env_delimiter = ':',
+  |                         ^^^

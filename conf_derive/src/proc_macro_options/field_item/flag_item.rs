@@ -62,10 +62,14 @@ impl FlagSerdeItem {
         }
 
         // Validate mutual exclusivity
-        if let (Some(try_from), Some(deserialize_with)) = (&result.try_from, &result.deserialize_with) {
+        if let (Some(try_from), Some(deserialize_with)) =
+            (&result.try_from, &result.deserialize_with)
+        {
             return Err(mutually_exclusive_error(
-                "try_from", try_from,
-                "deserialize_with", deserialize_with,
+                "try_from",
+                try_from,
+                "deserialize_with",
+                deserialize_with,
             ));
         }
 
