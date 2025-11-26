@@ -1,5 +1,11 @@
 error: try_from and use_value_parser are mutually exclusive
- --> tests/ui_serde/try_from_and_use_value_parser.rs:5:28
+ --> tests/ui_serde/try_from_and_use_value_parser.rs:5:58
   |
 5 |     #[conf(long, env, serde(use_value_parser, try_from = "String"))]
-  |                            ^
+  |                                                          ^^^^^^^^
+
+error: Conflicts with this
+ --> tests/ui_serde/try_from_and_use_value_parser.rs:5:29
+  |
+5 |     #[conf(long, env, serde(use_value_parser, try_from = "String"))]
+  |                             ^^^^^^^^^^^^^^^^

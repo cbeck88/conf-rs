@@ -205,6 +205,21 @@ pub fn set_once<T: GetSpan>(
     Ok(())
 }
 
+/// Helper for creating mutual exclusivity errors with two spans
+pub fn mutually_exclusive_error<T1: GetSpan, T2: GetSpan>(
+    first_name: &str,
+    first: &T1,
+    second_name: &str,
+    second: &T2,
+) -> Error {
+    let mut error = Error::new(
+        first.get_span(),
+        format!("{} and {} are mutually exclusive", first_name, second_name),
+    );
+    error.combine(Error::new(second.get_span(), "Conflicts with this"));
+    error
+}
+
 /// Helper for appending a doc string attribute to the description string, if it is a doc string
 /// attribute.
 // Based on code here:

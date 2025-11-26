@@ -1,5 +1,11 @@
 error: deserialize_with and use_value_parser are mutually exclusive
-  --> tests/ui_serde/deserialize_with_and_use_value_parser.rs:13:28
+  --> tests/ui_serde/deserialize_with_and_use_value_parser.rs:13:66
    |
 13 |     #[conf(long, env, serde(use_value_parser, deserialize_with = "custom_deserialize"))]
-   |                            ^
+   |                                                                  ^^^^^^^^^^^^^^^^^^^^
+
+error: Conflicts with this
+  --> tests/ui_serde/deserialize_with_and_use_value_parser.rs:13:29
+   |
+13 |     #[conf(long, env, serde(use_value_parser, deserialize_with = "custom_deserialize"))]
+   |                             ^^^^^^^^^^^^^^^^

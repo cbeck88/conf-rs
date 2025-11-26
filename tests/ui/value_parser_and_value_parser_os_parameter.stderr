@@ -1,5 +1,11 @@
-error: #[conf(value_parser)] and #[conf(value_parser_os)] cannot both be specified
- --> tests/ui/value_parser_and_value_parser_os_parameter.rs:6:5
+error: value_parser and value_parser_os are mutually exclusive
+ --> tests/ui/value_parser_and_value_parser_os_parameter.rs:9:24
   |
-6 |     #[conf(
-  |     ^
+9 |         value_parser = |s: &str| Ok::<_, String>(s.to_owned()),
+  |                        ^
+
+error: Conflicts with this
+  --> tests/ui/value_parser_and_value_parser_os_parameter.rs:10:27
+   |
+10 |         value_parser_os = |s: &std::ffi::OsStr| Ok::<_, String>(s.to_owned())
+   |                           ^

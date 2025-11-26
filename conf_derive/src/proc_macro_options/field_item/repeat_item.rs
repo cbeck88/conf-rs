@@ -12,7 +12,7 @@ pub struct RepeatSerdeItem {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
     pub skip: bool,
-    pub use_value_parser: bool,
+    pub use_value_parser: Option<Span>,
     pub deserialize_with: Option<Path>,
     pub try_from: Option<Type>,
     span: Span,
@@ -24,7 +24,7 @@ impl RepeatSerdeItem {
             rename: None,
             aliases: Vec::new(),
             skip: false,
-            use_value_parser: false,
+            use_value_parser: None,
             deserialize_with: None,
             try_from: None,
             span: meta.input.span(),
@@ -46,8 +46,7 @@ impl RepeatSerdeItem {
                     result.skip = true;
                     Ok(())
                 } else if path.is_ident("use_value_parser") {
-                    result.use_value_parser = true;
-                    Ok(())
+                    set_once(&path, &mut result.use_value_parser, Some(path.span()))
                 } else if path.is_ident("deserialize_with") {
                     set_once(
                         &path,
@@ -67,24 +66,24 @@ impl RepeatSerdeItem {
         }
 
         // Validate mutual exclusivity
-        if result.deserialize_with.is_some() && result.use_value_parser {
-            return Err(Error::new(
-                result.span,
-                "deserialize_with and use_value_parser are mutually exclusive",
+        if let (Some(deserialize_with), Some(use_value_parser)) = (&result.deserialize_with, &result.use_value_parser) {
+            return Err(mutually_exclusive_error(
+                "deserialize_with", deserialize_with,
+                "use_value_parser", use_value_parser,
             ));
         }
 
-        if result.try_from.is_some() && result.use_value_parser {
-            return Err(Error::new(
-                result.span,
-                "try_from and use_value_parser are mutually exclusive",
+        if let (Some(try_from), Some(use_value_parser)) = (&result.try_from, &result.use_value_parser) {
+            return Err(mutually_exclusive_error(
+                "try_from", try_from,
+                "use_value_parser", use_value_parser,
             ));
         }
 
-        if result.try_from.is_some() && result.deserialize_with.is_some() {
-            return Err(Error::new(
-                result.span,
-                "try_from and deserialize_with are mutually exclusive",
+        if let (Some(try_from), Some(deserialize_with)) = (&result.try_from, &result.deserialize_with) {
+            return Err(mutually_exclusive_error(
+                "try_from", try_from,
+                "deserialize_with", deserialize_with,
             ));
         }
 
@@ -239,10 +238,10 @@ impl RepeatItem {
         }
 
         // Validate value_parser and value_parser_os are mutually exclusive
-        if result.value_parser.is_some() && result.value_parser_os.is_some() {
-            return Err(Error::new(
-                field.span(),
-                "Cannot specify both value_parser and value_parser_os",
+        if let (Some(value_parser), Some(value_parser_os)) = (&result.value_parser, &result.value_parser_os) {
+            return Err(mutually_exclusive_error(
+                "value_parser", value_parser,
+                "value_parser_os", value_parser_os,
             ));
         }
 
@@ -361,7 +360,7 @@ impl RepeatItem {
         let use_value_parser = self
             .serde
             .as_ref()
-            .map(|serde| serde.use_value_parser)
+            .map(|serde| serde.use_value_parser.is_some())
             .unwrap_or(false);
 
         if use_value_parser {
@@ -740,7 +739,7 @@ impl RepeatItem {
         let use_value_parser = self
             .serde
             .as_ref()
-            .map(|serde| serde.use_value_parser)
+            .map(|serde| serde.use_value_parser.is_some())
             .unwrap_or(false);
 
         let try_from = self.get_serde_try_from();

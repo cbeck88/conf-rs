@@ -1,5 +1,11 @@
-error: Cannot specify both value_parser and value_parser_os
- --> tests/ui/value_parser_and_value_parser_os_repeat.rs:6:5
-  |
-6 |     #[conf(
-  |     ^
+error: value_parser and value_parser_os are mutually exclusive
+  --> tests/ui/value_parser_and_value_parser_os_repeat.rs:10:24
+   |
+10 |         value_parser = |s: &str| Ok::<_, String>(s.to_owned()),
+   |                        ^
+
+error: Conflicts with this
+  --> tests/ui/value_parser_and_value_parser_os_repeat.rs:11:27
+   |
+11 |         value_parser_os = |s: &std::ffi::OsStr| Ok::<_, String>(s.to_owned())
+   |                           ^
