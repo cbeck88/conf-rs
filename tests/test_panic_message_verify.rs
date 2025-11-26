@@ -54,9 +54,7 @@ impl fmt::Display for ErrorType {
 impl FromStr for ErrorType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i32>()
-            .map(ErrorType)
-            .map_err(|e| e.to_string())
+        s.parse::<i32>().map(ErrorType).map_err(|e| e.to_string())
     }
 }
 

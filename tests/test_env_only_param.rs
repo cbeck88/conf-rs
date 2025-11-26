@@ -39,7 +39,10 @@ fn test_env_only_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form, None);
     assert_eq!(opt.env_form.as_deref(), Some("NOT_REQUIRED"));
-    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("5"));
+    assert_eq!(
+        format_default_help_str(opt.default_help_str).as_deref(),
+        Some("5")
+    );
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Not required env value"));
 

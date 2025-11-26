@@ -14,11 +14,9 @@ fn test_default_no_parens() {
     assert_eq!(result.value, 0);
 
     // With value provided
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--value", "42"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--value", "42"], vec![])
+            .unwrap();
     assert_eq!(result.value, 42);
 }
 
@@ -36,11 +34,9 @@ fn test_default_with_literal() {
     assert_eq!(result.value, 5);
 
     // With value provided
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--value", "42"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--value", "42"], vec![])
+            .unwrap();
     assert_eq!(result.value, 42);
 }
 
@@ -58,11 +54,9 @@ fn test_default_with_expression() {
     assert_eq!(result.value, 15);
 
     // With value provided
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--value", "42"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--value", "42"], vec![])
+            .unwrap();
     assert_eq!(result.value, 42);
 }
 
@@ -88,11 +82,9 @@ fn test_default_bypasses_value_parser() {
     assert_eq!(result.my_value, MyType("from_default".to_string()));
 
     // With value provided, should go through value_parser
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--my-value", "foo"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--my-value", "foo"], vec![])
+            .unwrap();
     assert_eq!(result.my_value, MyType("parsed_foo".to_string()));
 }
 
@@ -110,11 +102,9 @@ fn test_default_with_option() {
     assert_eq!(result.value, Some(42));
 
     // With value provided
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--value", "99"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--value", "99"], vec![])
+            .unwrap();
     assert_eq!(result.value, Some(99));
 }
 
@@ -138,11 +128,9 @@ fn test_default_with_env() {
     assert_eq!(result.value, 42);
 
     // Args take precedence over default
-    let result = Config::try_parse_from::<&str, &str, &str>(
-        vec!["test_app", "--value", "99"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec!["test_app", "--value", "99"], vec![])
+            .unwrap();
     assert_eq!(result.value, 99);
 }
 

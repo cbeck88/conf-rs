@@ -52,7 +52,10 @@ fn test_params_get_program_options() {
     assert_eq!(opts[2].short_form, Some('d'));
     assert_eq!(opts[2].long_form, None);
     assert_eq!(opts[2].env_form.as_deref(), Some("DEFAULTED"));
-    assert_eq!(format_default_help_str(opts[2].default_help_str).as_deref(), Some("def"));
+    assert_eq!(
+        format_default_help_str(opts[2].default_help_str).as_deref(),
+        Some("def")
+    );
     assert!(!opts[2].is_required);
     assert_eq!(
         opts[2].description.as_deref(),
@@ -63,7 +66,10 @@ fn test_params_get_program_options() {
     assert_eq!(opts[3].short_form, Some('s'));
     assert_eq!(opts[3].long_form, None);
     assert_eq!(opts[3].env_form.as_deref(), Some("SHOULD_WORK"));
-    assert_eq!(format_default_help_str(opts[3].default_help_str).as_deref(), Some("maybe"));
+    assert_eq!(
+        format_default_help_str(opts[3].default_help_str).as_deref(),
+        Some("maybe")
+    );
     assert!(!opts[3].is_required);
     assert_eq!(opts[3].description.as_deref(), None);
 }

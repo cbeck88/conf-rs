@@ -335,6 +335,8 @@ impl ProgramOptionMeta for ProgramOption {
     }
 
     fn default_help_str(&self) -> Option<&dyn fmt::Display> {
-        self.default_help_str.as_ref().map(|d| d as &dyn fmt::Display)
+        self.default_help_str
+            .as_ref()
+            .map(|d| d as &dyn fmt::Display)
     }
 }
