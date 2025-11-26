@@ -1,0 +1,11 @@
+error: short cannot be specified twice
+ --> tests/ui/short_mixed_with_short_value_flag.rs:5:25
+  |
+5 |     #[conf(flag, short, short = 'x')]
+  |                         ^^^^^
+
+error: Earlier specified here
+ --> tests/ui/short_mixed_with_short_value_flag.rs:5:18
+  |
+5 |     #[conf(flag, short, short = 'x')]
+  |                  ^^^^^

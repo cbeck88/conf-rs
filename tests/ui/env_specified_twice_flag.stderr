@@ -1,0 +1,11 @@
+error: env cannot be specified twice
+ --> tests/ui/env_specified_twice_flag.rs:5:29
+  |
+5 |     #[conf(flag, long, env, env)]
+  |                             ^^^
+
+error: Earlier specified here
+ --> tests/ui/env_specified_twice_flag.rs:5:24
+  |
+5 |     #[conf(flag, long, env, env)]
+  |                        ^^^

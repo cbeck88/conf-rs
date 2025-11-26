@@ -1,0 +1,11 @@
+error: short cannot be specified twice
+ --> tests/ui/short_specified_twice_parameter.rs:5:19
+  |
+5 |     #[conf(short, short)]
+  |                   ^^^^^
+
+error: Earlier specified here
+ --> tests/ui/short_specified_twice_parameter.rs:5:12
+  |
+5 |     #[conf(short, short)]
+  |            ^^^^^

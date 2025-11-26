@@ -1,0 +1,11 @@
+error: env cannot be specified twice
+ --> tests/ui/env_specified_twice_repeat.rs:5:31
+  |
+5 |     #[conf(repeat, long, env, env)]
+  |                               ^^^
+
+error: Earlier specified here
+ --> tests/ui/env_specified_twice_repeat.rs:5:26
+  |
+5 |     #[conf(repeat, long, env, env)]
+  |                          ^^^

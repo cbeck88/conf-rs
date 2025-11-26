@@ -2,6 +2,7 @@ use conf::Conf;
 
 #[test]
 fn test_default_help_str_overrides_default_value() {
+    #[allow(unused)]
     #[derive(Conf, Debug)]
     struct TestConfig {
         /// A field with both default_value and default_help_str
@@ -34,6 +35,7 @@ fn test_default_help_str_overrides_default_value() {
 
 #[test]
 fn test_default_help_str_in_actual_help() {
+    #[allow(unused)]
     #[derive(Conf, Debug)]
     struct TestConfig {
         #[conf(long, default_value = "real_val", default_help_str = "display_val")]

@@ -1,0 +1,11 @@
+error: short cannot be specified twice
+ --> tests/ui/short_specified_twice_flag.rs:5:25
+  |
+5 |     #[conf(flag, short, short)]
+  |                         ^^^^^
+
+error: Earlier specified here
+ --> tests/ui/short_specified_twice_flag.rs:5:18
+  |
+5 |     #[conf(flag, short, short)]
+  |                  ^^^^^

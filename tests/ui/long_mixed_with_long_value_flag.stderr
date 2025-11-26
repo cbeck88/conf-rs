@@ -1,0 +1,11 @@
+error: long cannot be specified twice
+ --> tests/ui/long_mixed_with_long_value_flag.rs:5:24
+  |
+5 |     #[conf(flag, long, long = "custom")]
+  |                        ^^^^
+
+error: Earlier specified here
+ --> tests/ui/long_mixed_with_long_value_flag.rs:5:18
+  |
+5 |     #[conf(flag, long, long = "custom")]
+  |                  ^^^^

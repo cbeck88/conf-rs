@@ -1,0 +1,11 @@
+error: short cannot be specified twice
+ --> tests/ui/short_mixed_with_short_value_repeat.rs:5:27
+  |
+5 |     #[conf(repeat, short, short = 'x')]
+  |                           ^^^^^
+
+error: Earlier specified here
+ --> tests/ui/short_mixed_with_short_value_repeat.rs:5:20
+  |
+5 |     #[conf(repeat, short, short = 'x')]
+  |                    ^^^^^
