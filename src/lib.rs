@@ -1,14 +1,14 @@
-//! A `derive`-based config parser aimed at the practically-minded web developer building large web projects.
+//! A `derive`-based config parser aimed at the practically-minded developer building large web projects and applications.
 //!
 //! To use `conf`, use the `#[derive(Conf)]` proc macro on your configuration struct.
 //! Then call a [`Conf`] trait function to parse your configuration struct.
 //! Proc macro attributes are documented there.
 //!
 //! For hierarchical config, add the `#[conf(serde)]` annotation to your configuration struct.
-//! Then use [`Conf::conf_builder`] to get a builder object, and call `ConfBuilder::doc`
-//! to supply a "document" representing the config file in any serde-compatible format.
+//! Then use [`Conf::conf_builder`] to get a builder object, and call [`ConfBuilder::doc`]
+//! to supply a serde "document" representing the config file in any serde-compatible format.
 //! A typical example might be a `serde_json::Value`.
-//! Then call `ConfBuilder::parse` or similar on the builder.
+//! Then call [`ConfBuilder::parse`] or similar on the builder.
 //!
 //! See the [readme] for an overview.
 #![deny(unsafe_code)]

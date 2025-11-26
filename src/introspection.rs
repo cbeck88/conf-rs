@@ -1,4 +1,8 @@
-//! Facilities for introspecting on Conf structures
+//! Facilities for introspecting on Conf structures and the Conf process
+//!
+//! The main ways to introspect are:
+//! * [`Conf::program_options`](crate::Conf::program_options), which uses the [`ProgramOptionMeta`] trait
+//! * [`ConfBuilder::config_logger`](crate::ConfBuilder::config_logger), which uses the [`ConfigEvent`] trait
 use core::fmt::Display;
 
 /// Public interface to metadata about a program option

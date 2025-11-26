@@ -4,14 +4,14 @@ use crate::{
 };
 use std::{cell::RefCell, ffi::OsString, marker::PhantomData};
 
-/// A builder which collects config value sources for the parse.
+/// A builder which collects config value sources and other options, before parsing your struct.
 ///
-/// Use any of [`ConfBuilder::args`], [`ConfBuilder::env`], [`ConfBuilder::doc`] to set sources,
-/// if desired use `ConfBuilder::config_logger` to set a callback,
-/// and then call one of [`ConfBuilder::parse`] or [`ConfBuilder::try_parse`].
+/// * Use any of [`ConfBuilder::args`], [`ConfBuilder::env`], [`ConfBuilder::doc`] to set sources
+/// * If desired, use [`ConfBuilder::config_logger`] to set a callback and track [`ValueSource`](crate::introspection::ValueSource)'s
+/// * Use one of [`ConfBuilder::parse`] or [`ConfBuilder::try_parse`] to try to parse your struct.
 ///
-/// If `args` is not called, the default source is `std::env::args_os`.
-/// If `env` is not called, the default source is `std::env::vars_os`.
+/// If `args` is not set, the default source is `std::env::args_os`.
+/// If `env` is not set, the default source is `std::env::vars_os`.
 pub struct ConfBuilder<S, F = fn(&dyn ConfigEvent)>
 where
     S: Conf,

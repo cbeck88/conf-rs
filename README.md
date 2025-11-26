@@ -1,6 +1,6 @@
 # conf
 
-`conf` is a `derive`-based config parser aimed at the practically-minded web developer building large web projects.
+`conf` is a `derive`-based config parser aimed at the practically-minded developer building large web projects and applications.
 
 [![Crates.io](https://img.shields.io/crates/v/conf?style=flat-square)](https://crates.io/crates/conf)
 [![Crates.io](https://img.shields.io/crates/d/conf?style=flat-square)](https://crates.io/crates/conf)
@@ -28,17 +28,18 @@ The features that you get for this bargain are:
 * **You can declare fields which represent secrets.** This controls whether or not the entire value should be printed in error messages if it fails to parse.
 * **Support for an optional-flatten syntax**. This can be simpler and more idiomatic than using argument groups and such in `clap-derive`.
 * **Support for user-defined validation predicates**. This allows you to express constraints that can't be expressed in `clap`.
+* **Support for introspection**. This means that after defining your `Conf` struct, you can inspect all the program options programmatically and generate other content, such as an `.env` file template. `Conf` also supports exposing the "value source" for each individual value that it loads, so that you can further understand not just what config was loaded, but where those values came from.
 * **Support for layered config**. This means that you can use structured data loaded from a file as an additional source for config values, alongside args and env.
 
-`conf` also supports consuming config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
+In addition to `args` and `env`, `conf` supports consuming config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
 The same commitment to "All the errors and not just one of them" holds. There are several advantages of this integrated approach:
 
 * Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/latest/clap/) for CLI argument parsing only, and then folding the
   results of that into a library like [`figment`](https://docs.rs/figment/latest/figment) or [`config`](https://docs.rs/config/latest/config), which can also manage `env`, files, and compositing it all together.
   * However, typically this creates a maintanence burden, because if a required field could be read via `clap` or could be read from `env` or a config file, it needs to be `Option<T>`
-    for `clap` and `T` in the final config structure, so you end up needing to maintain two or more parallel structures.
+    for `clap` and `T` in the final config structure, so you end up needing to maintain two or three parallel structures.
   * If these structures get out of sync, there isn't really any tooling to help you figure it out and the error messages may be confusing.
-  * Dividing the information between two structures this way means that `clap` isn't aware of the other ways that a value can be read.
+  * Dividing the information between multiple structures this way means that `clap` isn't aware of the other ways that a value can be read.
     But `clap` is responsible for generating the `--help` text, and so this causes the documentation of the config to be incomplete and makes it harder
     for users to figure out how to use your program.
   * It leads to poor quality error reporting, because crates like `figment` and `config` rely on `serde::Deserialize` to marshall the composited data onto your final structure.
