@@ -126,7 +126,7 @@ pub struct RepeatItem {
     no_env_delimiter: Option<Span>,
     serde: Option<RepeatSerdeItem>,
     description: Option<String>,
-    is_positional: bool,
+    is_positional: Option<Span>,
 }
 
 impl RepeatItem {
@@ -161,7 +161,7 @@ impl RepeatItem {
             no_env_delimiter: None,
             serde: None,
             description: None,
-            is_positional: false,
+            is_positional: None,
         };
 
         for attr in &field.attrs {
@@ -239,8 +239,7 @@ impl RepeatItem {
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(RepeatSerdeItem::new(meta)?))
                     } else if path.is_ident("pos") {
-                        result.is_positional = true;
-                        Ok(())
+                        set_once(&path, &mut result.is_positional, Some(path.span()))
                     } else {
                         Err(meta.error("unrecognized conf repeat option"))
                     }
@@ -305,18 +304,24 @@ impl RepeatItem {
         }
 
         // Validate positional argument constraints
-        if result.is_positional && result.long_switch.is_some() {
-            return Err(Error::new(
-                field.span(),
-                "#[conf(pos)] cannot be used with #[conf(long)]",
-            ));
-        }
+        if let Some(is_positional) = &result.is_positional {
+            if let Some(long_switch) = &result.long_switch {
+                return Err(mutually_exclusive_error(
+                    "pos",
+                    is_positional,
+                    "long",
+                    long_switch,
+                ));
+            }
 
-        if result.is_positional && result.short_switch.is_some() {
-            return Err(Error::new(
-                field.span(),
-                "#[conf(pos)] cannot be used with #[conf(short)]",
-            ));
+            if let Some(short_switch) = &result.short_switch {
+                return Err(mutually_exclusive_error(
+                    "pos",
+                    is_positional,
+                    "short",
+                    short_switch,
+                ));
+            }
         }
 
         if result.long_switch.is_none()
@@ -417,7 +422,7 @@ impl RepeatItem {
         self.short_switch.is_some()
             || self.long_switch.is_some()
             || self.env_name.is_some()
-            || self.is_positional
+            || self.is_positional.is_some()
     }
 
     /// Generate a routine that pushes a ::conf::ProgramOption corresponding to
@@ -431,7 +436,7 @@ impl RepeatItem {
         let env_form = quote_opt_cow(&self.env_name);
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
-        let is_positional = self.is_positional;
+        let is_positional = self.is_positional.is_some();
         let has_serde_source = self.has_serde_source();
 
         let aliases = self

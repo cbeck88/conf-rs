@@ -164,7 +164,7 @@ pub struct ParameterItem {
     serde: Option<ParameterSerdeItem>,
     test: Option<ParameterTestItem>,
     doc_string: Option<String>,
-    is_positional: bool,
+    is_positional: Option<Span>,
 }
 
 impl ParameterItem {
@@ -197,7 +197,7 @@ impl ParameterItem {
             serde: None,
             test: None,
             doc_string: None,
-            is_positional: false,
+            is_positional: None,
         };
 
         for attr in &field.attrs {
@@ -290,8 +290,7 @@ impl ParameterItem {
                     } else if path.is_ident("test") {
                         set_once(&path, &mut result.test, Some(ParameterTestItem::new(meta)?))
                     } else if path.is_ident("pos") {
-                        result.is_positional = true;
-                        Ok(())
+                        set_once(&path, &mut result.is_positional, Some(path.span()))
                     } else {
                         Err(meta.error("unrecognized conf parameter option"))
                     }
@@ -300,17 +299,21 @@ impl ParameterItem {
         }
 
         // Validate positional argument constraints
-        if result.is_positional {
-            if result.short_switch.is_some() {
-                return Err(Error::new(
-                    field.span(),
-                    "#[conf(pos)] cannot be used with #[conf(short)]",
+        if let Some(is_positional) = &result.is_positional {
+            if let Some(short_switch) = &result.short_switch {
+                return Err(mutually_exclusive_error(
+                    "pos",
+                    is_positional,
+                    "short",
+                    short_switch,
                 ));
             }
-            if result.long_switch.is_some() {
-                return Err(Error::new(
-                    field.span(),
-                    "#[conf(pos)] cannot be used with #[conf(long)]",
+            if let Some(long_switch) = &result.long_switch {
+                return Err(mutually_exclusive_error(
+                    "pos",
+                    is_positional,
+                    "long",
+                    long_switch,
                 ));
             }
         }
@@ -357,7 +360,7 @@ impl ParameterItem {
             && result.env_name.is_none()
             && result.default_value.is_none()
             && result.default_value_expr.is_none()
-            && !result.is_positional
+            && result.is_positional.is_none()
             && struct_item.serde.is_none()
         {
             return Err(Error::new(
@@ -473,7 +476,7 @@ impl ParameterItem {
         self.short_switch.is_some()
             || self.long_switch.is_some()
             || self.env_name.is_some()
-            || self.is_positional
+            || self.is_positional.is_some()
     }
 
     pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
@@ -518,7 +521,7 @@ impl ParameterItem {
 
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
-        let is_positional = self.is_positional;
+        let is_positional = self.is_positional.is_some();
         let has_serde_source = self.has_serde_source();
 
         let aliases = self

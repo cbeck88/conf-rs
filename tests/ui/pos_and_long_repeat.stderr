@@ -1,0 +1,11 @@
+error: pos and long are mutually exclusive
+ --> tests/ui/pos_and_long_repeat.rs:5:20
+  |
+5 |     #[conf(repeat, pos, long)]
+  |                    ^^^
+
+error: Conflicts with this
+ --> tests/ui/pos_and_long_repeat.rs:5:25
+  |
+5 |     #[conf(repeat, pos, long)]
+  |                         ^^^^

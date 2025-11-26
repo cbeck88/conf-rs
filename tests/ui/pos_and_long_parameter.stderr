@@ -1,0 +1,11 @@
+error: pos and long are mutually exclusive
+ --> tests/ui/pos_and_long_parameter.rs:5:23
+  |
+5 |     #[conf(parameter, pos, long)]
+  |                       ^^^
+
+error: Conflicts with this
+ --> tests/ui/pos_and_long_parameter.rs:5:28
+  |
+5 |     #[conf(parameter, pos, long)]
+  |                            ^^^^

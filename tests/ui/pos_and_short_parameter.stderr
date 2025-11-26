@@ -1,0 +1,11 @@
+error: pos and short are mutually exclusive
+ --> tests/ui/pos_and_short_parameter.rs:5:23
+  |
+5 |     #[conf(parameter, pos, short)]
+  |                       ^^^
+
+error: Conflicts with this
+ --> tests/ui/pos_and_short_parameter.rs:5:28
+  |
+5 |     #[conf(parameter, pos, short)]
+  |                            ^^^^^

@@ -1,0 +1,11 @@
+error: pos and short are mutually exclusive
+ --> tests/ui/pos_and_short_repeat.rs:5:20
+  |
+5 |     #[conf(repeat, pos, short)]
+  |                    ^^^
+
+error: Conflicts with this
+ --> tests/ui/pos_and_short_repeat.rs:5:25
+  |
+5 |     #[conf(repeat, pos, short)]
+  |                         ^^^^^
