@@ -1,0 +1,5 @@
+error: Setting aliases without setting a long-switch is an error, make one of the aliases the primary switch name.
+ --> tests/ui/aliases_without_long_parameter.rs:5:41
+  |
+5 |     #[conf(parameter, short, aliases = ["value", "val"])]
+  |                                         ^^^^^^^

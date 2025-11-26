@@ -2,7 +2,7 @@ use conf::Conf;
 
 #[derive(Conf, Debug)]
 pub struct BadConfig {
-    #[conf(parameter, long, env_aliases = ["VALUE_ENV", "VAL_ENV"])]
+    #[conf(parameter, short, aliases = ["value", "val"])]
     pub value: String,
 }
 

@@ -2,8 +2,8 @@ use conf::Conf;
 
 #[derive(Conf, Debug)]
 pub struct BadConfig {
-    #[conf(flag, long, env_aliases = ["VERBOSE_FLAG"])]
-    pub verbose: bool,
+    #[conf(repeat, short, aliases = ["values"])]
+    pub values: Vec<String>,
 }
 
 fn main() {}

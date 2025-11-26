@@ -1,5 +1,5 @@
 error: Setting env_aliases without setting an env is an error, make one of the aliases the primary env.
- --> tests/ui/env_aliases_without_env_flag.rs:5:5
+ --> tests/ui/env_aliases_without_env_flag.rs:5:39
   |
-5 |     #[conf(flag, long, env_aliases = ["ALIAS1", "ALIAS2"])]
-  |     ^
+5 |     #[conf(flag, long, env_aliases = ["VERBOSE_FLAG"])]
+  |                                       ^^^^^^^^^^^^^^

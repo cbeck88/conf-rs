@@ -324,32 +324,24 @@ impl RepeatItem {
             }
         }
 
-        if result.long_switch.is_none()
-            && !result
-                .aliases
-                .as_ref()
-                .map(LitStrArray::is_empty)
-                .unwrap_or(true)
-        {
-            return Err(Error::new(
-                field.span(),
-                "Setting aliases without setting a long-switch is an error, \
-                make one of the aliases the primary switch name.",
-            ));
+        if let Some(aliases) = &result.aliases {
+            if result.long_switch.is_none() && !aliases.is_empty() {
+                return Err(Error::new(
+                    aliases.get_span(),
+                    "Setting aliases without setting a long-switch is an error, \
+                    make one of the aliases the primary switch name.",
+                ));
+            }
         }
 
-        if result.env_name.is_none()
-            && !result
-                .env_aliases
-                .as_ref()
-                .map(LitStrArray::is_empty)
-                .unwrap_or(true)
-        {
-            return Err(Error::new(
-                field.span(),
-                "Setting env_aliases without setting an env is an error, \
-                make one of the aliases the primary env.",
-            ));
+        if let Some(env_aliases) = &result.env_aliases {
+            if result.env_name.is_none() && !env_aliases.is_empty() {
+                return Err(Error::new(
+                    env_aliases.get_span(),
+                    "Setting env_aliases without setting an env is an error, \
+                    make one of the aliases the primary env.",
+                ));
+            }
         }
 
         Ok(result)
