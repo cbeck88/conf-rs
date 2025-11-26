@@ -114,6 +114,7 @@ pub struct RepeatItem {
     field_name: Ident,
     field_type: Type, // This is needed to help with type inference in code gen
     allow_hyphen_values: bool,
+    allow_negative_numbers: bool,
     secret: Option<LitBool>,
     short_switch: Option<LitChar>,
     long_switch: Option<LitStr>,
@@ -143,12 +144,15 @@ impl RepeatItem {
                 "Type of a conf(repeat) field must be Vec<T>",
             ));
         };
-        let allow_hyphen_values = type_is_signed_number(&inner_type);
+        let allow_hyphen_values = false;
+        // signed numbers often start with negative signs
+        let allow_negative_numbers = type_is_signed_number(&inner_type);
 
         let mut result = Self {
             field_name,
             field_type,
             allow_hyphen_values,
+            allow_negative_numbers,
             secret: None,
             short_switch: None,
             long_switch: None,
@@ -226,6 +230,9 @@ impl RepeatItem {
                         set_once(&path, &mut result.no_env_delimiter, Some(path.span()))
                     } else if path.is_ident("allow_hyphen_values") {
                         result.allow_hyphen_values = true;
+                        Ok(())
+                    } else if path.is_ident("allow_negative_numbers") {
+                        result.allow_negative_numbers = true;
                         Ok(())
                     } else if path.is_ident("secret") {
                         set_once(
@@ -427,6 +434,7 @@ impl RepeatItem {
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
         let allow_hyphen_values = self.allow_hyphen_values;
+        let allow_negative_numbers = self.allow_negative_numbers;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional.is_some();
         let has_serde_source = self.has_serde_source();
@@ -455,6 +463,7 @@ impl RepeatItem {
               default_help_str: None,
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
+              allow_negative_numbers: #allow_negative_numbers,
               secret: #secret,
               is_positional: #is_positional,
               has_serde_source: #has_serde_source,

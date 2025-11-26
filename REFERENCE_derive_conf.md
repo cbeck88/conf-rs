@@ -34,6 +34,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [value_parser](#parameter-value-parser)
     * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
+    * [allow_negative_numbers](#parameter-allow-negative-numbers)
     * [secret](#parameter-secret)
     * [serde](#parameter-serde)
       * [rename](#parameter-serde-rename)
@@ -56,6 +57,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env_delimiter](#repeat-env-delimiter)
     * [no_env_delimiter](#repeat-no-env-delimiter)
     * [allow_hyphen_values](#repeat-allow-hyphen-values)
+    * [allow_negative_numbers](#repeat-allow-negative-numbers)
     * [secret](#repeat-secret)
     * [serde](#repeat-serde)
       * [rename](#repeat-serde-rename)
@@ -521,9 +523,19 @@ A parameter represents a single value that can be parsed from a string.
    If you actually intended to set `--my-param` to the value `--my-value`, you can instead write `--my-param=--my-value`, or set it via an environment variable, which doesn't care about this setting.
    If you set `allow_hyphen_values` then this check is not applied, and `--my-param --my-value` gets parsed the same as `--my-param=--my-value`.
 
-   `allow_hyphen_values` is automatically set when the field value has a built-in type `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, since it is more likely in these cases that you intend to pass a negative number.
-
    This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+
+*  <a name="parameter-allow-negative-numbers"></a> `allow_negative_numbers` (no arguments)
+
+   example: `#[arg(allow_negative_numbers)]`
+
+   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_negative_numbers)
+
+   Similar to `allow_hyphen_values`, but specifically allows negative number values like `-42` or `-3.14` while still treating other hyphenated values like `--my-value` as potential errors.
+
+   This is a more conservative option than `allow_hyphen_values` because it only permits values that look like negative numbers (start with `-` or `+` followed by digits), not arbitrary hyphenated strings.
+
+   `allow_negative_numbers` is automatically enabled when the field type is a signed number type (`i8`, `i16`, `i32`, `i64`, `i128`, `isize`, `f32`, `f64`), making it unnecessary to specify this attribute explicitly in most cases.
 
 *  <a name="parameter-default"></a> `default` (optional expression argument)
 
@@ -952,9 +964,19 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    If you actually intended to set `--my-param` to the value `--my-value`, you can instead write `--my-param=--my-value`, or set it via an environment variable, which doesn't care about this setting.
    If you set `allow_hyphen_values` then this check is not applied, and `--my-param --my-value` gets parsed the same as `--my-param=--my-value`.
 
-   `allow_hyphen_values` is automatically set when the field value has a built-in type `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, since it is more likely in these cases that you intend to pass a negative number.
-
    This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+
+*  <a name="repeat-allow-negative-numbers"></a> `allow_negative_numbers` (no arguments)
+
+   example: `#[arg(repeat, allow_negative_numbers)]`
+
+   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_negative_numbers)
+
+   Similar to `allow_hyphen_values`, but specifically allows negative number values like `-42` or `-3.14` while still treating other hyphenated values like `--my-value` as potential errors.
+
+   This is a more conservative option than `allow_hyphen_values` because it only permits values that look like negative numbers (start with `-` or `+` followed by digits), not arbitrary hyphenated strings.
+
+   `allow_negative_numbers` is automatically enabled when the inner type `T` of `Vec<T>` is a signed number type (`i8`, `i16`, `i32`, `i64`, `i128`, `isize`, `f32`, `f64`), making it unnecessary to specify this attribute explicitly in most cases.
 
 *  <a name="repeat-secret"></a> `secret` (optional bool argument)
 
@@ -1521,7 +1543,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    **Note**: It is better to put this on the top-level struct that you will actually parse (e.g., the one you call `Conf::parse()` on), rather than on intermediate structs that are flattened into others. This ensures the entire command-line interface is validated together.
 
-   **Note**: This attribute cannot be used on structs with generic type parameters.
+   **Note**: This attribute cannot be used on structs with generic type parameters. If you need this, please open an issue to discuss.
 
 
 [^1]: Actually, the *tokens* of the type are used, so e.g. it must be `bool` and not an alias for `bool`.

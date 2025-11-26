@@ -77,6 +77,9 @@ pub struct ProgramOption {
     /// If set, tell clap to allow hyphen values. By default clap turns this off, which can help
     /// with error messages / misparses.
     pub allow_hyphen_values: bool,
+    /// If set, tell clap to allow negative numbers. This is similar to allow_hyphen_values but
+    /// only allows numbers, not arbitrary hyphenated values.
+    pub allow_negative_numbers: bool,
     /// If set, then the user has specified that this is (or is not) a secret value, explicitly.
     pub secret: Option<bool>,
     /// Whether this is a positional argument (has no short/long form, accepts value by position)
@@ -133,6 +136,7 @@ impl ProgramOption {
             default_help_str,
             is_required,
             allow_hyphen_values,
+            allow_negative_numbers,
             secret,
             is_positional,
             has_serde_source,
@@ -200,6 +204,7 @@ impl ProgramOption {
             default_help_str,
             is_required,
             allow_hyphen_values,
+            allow_negative_numbers,
             secret,
             is_positional,
             has_serde_source,

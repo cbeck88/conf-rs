@@ -272,6 +272,7 @@ impl FlagItem {
                 default_help_str: None,
                 is_required: false,
                 allow_hyphen_values: false,
+                allow_negative_numbers: false,
                 secret: Some(false),
                 is_positional: false,
                 has_serde_source: #has_serde_source,

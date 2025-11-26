@@ -160,7 +160,7 @@ fn test_repeat_positional_with_value_parser() {
     .unwrap();
     assert_eq!(result.numbers, vec![1, 2, 3, 42]);
 
-    // Test with negative numbers (allow_hyphen_values should be automatic for signed types)
+    // Test with negative numbers (allow_negative_numbers should be automatic for signed types)
     let result = RepeatPositionalWithValueParser::try_parse_from::<&str, &str, &str>(
         vec![".", "-5", "10", "-15"],
         vec![],

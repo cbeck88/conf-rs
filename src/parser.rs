@@ -338,6 +338,7 @@ impl Parser {
                 .required(false) // All args are optional from clap's view, we check requirements later
                 .action(action)
                 .allow_hyphen_values(option.allow_hyphen_values)
+                .allow_negative_numbers(option.allow_negative_numbers)
                 .value_parser(ValueParser::os_string());
 
             // For repeat positionals, allow multiple values
@@ -430,12 +431,14 @@ impl Parser {
                 arg = arg
                     .action(ArgAction::Set)
                     .allow_hyphen_values(option.allow_hyphen_values)
+                    .allow_negative_numbers(option.allow_negative_numbers)
                     .value_parser(ValueParser::os_string())
             }
             ParseType::Repeat => {
                 arg = arg
                     .action(ArgAction::Append)
                     .allow_hyphen_values(option.allow_hyphen_values)
+                    .allow_negative_numbers(option.allow_negative_numbers)
                     .value_parser(ValueParser::os_string())
             }
         };
