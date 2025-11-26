@@ -54,7 +54,7 @@ pub enum MySubcommands {
 # }
 ```
 
-Each enum variant must have zero or one unnamed fields. If a field is present, it must be a `struct` type which implements [`Conf`] [^compat-note-1]. If no field is present (as with `Stat` above), the subcommand takes no additional arguments beyond those defined in the parent struct.
+Each enum variant must have zero or one unnamed fields. If a field is present, it must be a `struct` type which implements [`Conf`](https://docs.rs/conf/latest/conf/trait.Conf.html) [^compat-note-1]. If no field is present (as with `Stat` above), the subcommand takes no additional arguments beyond those defined in the parent struct.
 
 ## Enum-level attributes
 
@@ -144,7 +144,7 @@ Each enum variant must have zero or one unnamed fields. If a field is present, i
 
      example: `#[conf(serde(rename = "foo"))]`
 
-     Similar to `#[serde(rename)]`, changes the name used in serialization.
+     Similar to [`#[serde(rename)]`](https://serde.rs/container-attrs.html#rename), changes the name used in serialization.
 
      If this attribute is not present, the serialization name is the lower snake-case of the variant name.
 
@@ -152,7 +152,7 @@ Each enum variant must have zero or one unnamed fields. If a field is present, i
 
      example: `#[conf(serde(alias = "old_name"))]`, `#[conf(serde(alias = "old_name", alias = "older_name"))]`
 
-     Similar to `#[serde(alias)]`, adds alternative names that can be used when deserializing from serde documents.
+     Similar to [`#[serde(alias)]`](https://serde.rs/field-attrs.html#alias), adds alternative names that can be used when deserializing from serde documents.
      This is useful for maintaining backwards compatibility when renaming subcommands in configuration files.
 
      **Example**:
@@ -181,9 +181,9 @@ Each enum variant must have zero or one unnamed fields. If a field is present, i
 
      example: `#[conf(serde(skip))]`
 
-     Similar to `#[serde(skip)]`, this subcommand won't read data from the serde value source.
+     Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this subcommand won't read data from the serde value source.
 
-[^compat-note-1]: This is more restrictive than the corresponding `clap` system for subcommands, which allows named fields in the enum variants,
+[^compat-note-1]: This is more restrictive than the corresponding [`clap` system for subcommands](https://docs.rs/clap/latest/clap/_derive/index.html#subcommands), which allows named fields in the enum variants,
 decorated with attributes equivalent to those that appear on struct fields. For now, to do that in `conf`
 you have to declare separate structs. This is equally expressive from the user's point of view, and is easier for us to maintain.
 [^2]: Normally, making two fields have the same serialization name won't work in `serde`. In `serde` it is only possible to deserialize a value at most once,

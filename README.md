@@ -701,7 +701,7 @@ If you think that this crate is a good fit for you, the suggested way to use it 
   You should `derive(Conf)` on that struct, and pass that config struct to the component on initialization.
   The config struct should live in the same module as the component that it is configuring.
 * If your component is initialized by a larger component, then that component should have its own config struct and you should use `flatten` to assemble it.
-* Each binary target should have a config struct, and should `::parse()` it in `fn main()`.
+* Each binary target should have a config struct, and should `::parse()` it in `fn main()`. It should also have the `conf(test)` attribute.
 
 ### When should clap-derive be preferred to this crate?
 
