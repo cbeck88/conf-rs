@@ -1,4 +1,5 @@
 use conf::Conf;
+use serde::Deserialize;
 
 fn custom_deserialize<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
@@ -9,8 +10,7 @@ where
 
 #[derive(Conf, Debug)]
 pub struct BadConfig {
-    #[conf(long, env)]
-    #[serde(deserialize_with = "custom_deserialize", try_from = "String")]
+    #[conf(long, env, serde(deserialize_with = "custom_deserialize", try_from = "String"))]
     pub value: String,
 }
 
