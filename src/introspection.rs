@@ -2,8 +2,9 @@
 use core::fmt::Display;
 
 /// Public interface to metadata about a program option
-pub trait ProgramOptionMeta {
-    /// The id of the program option. This is its generally its "rust path" in the config object.
+#[allow(private_bounds)]
+pub trait ProgramOptionMeta: Sealed {
+    /// The id of the program option. This is generally its "rust path" in the config object.
     fn id(&self) -> &dyn Display;
     /// The description of the program option. This is generally its doc string, plus any prefixing.
     /// This is also displayed in the help text for the program option.
@@ -20,7 +21,7 @@ pub trait ProgramOptionMeta {
     fn has_serde_source(&self) -> bool;
     /// True if this option is required to appear in one of the input sources (i.e. it's an error if doesn't)
     fn is_required(&self) -> bool;
-    /// The help string for the default value, if any.
+    /// The help string describing the default value, if any.
     fn default_help_str(&self) -> Option<&dyn Display>;
 }
 
@@ -48,7 +49,8 @@ pub enum ValueSource<'a> {
 }
 
 /// A record of how a program option was assigned a value
-pub trait ConfigEvent {
+#[allow(private_bounds)]
+pub trait ConfigEvent: Sealed {
     /// Get the program option
     fn program_option(&self) -> &dyn ProgramOptionMeta;
     /// Get the value source
@@ -58,3 +60,6 @@ pub trait ConfigEvent {
 /// A callback that receives ConfigEvents
 #[doc(hidden)]
 pub type ConfigLogger<'a> = &'a mut dyn FnMut(&dyn ConfigEvent);
+
+#[doc(hidden)]
+pub(crate) trait Sealed {}

@@ -301,6 +301,8 @@ impl ProgramOption {
     }
 }
 
+impl crate::introspection::Sealed for ProgramOption {}
+
 impl ProgramOptionMeta for ProgramOption {
     fn id(&self) -> &dyn fmt::Display {
         &self.id

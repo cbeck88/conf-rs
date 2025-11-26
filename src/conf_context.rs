@@ -649,6 +649,8 @@ impl<'a> ConfContext<'a> {
                 value_source: ConfValueSource<&'a str>,
             }
 
+            impl<'a> crate::introspection::Sealed for ConfigEventImpl<'a> {}
+
             impl<'a> crate::introspection::ConfigEvent for ConfigEventImpl<'a> {
                 fn program_option(&self) -> &dyn crate::introspection::ProgramOptionMeta {
                     self.option
