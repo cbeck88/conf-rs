@@ -2,6 +2,24 @@ use crate::{CowStr, ParsedEnv, introspection::ProgramOptionMeta};
 use std::borrow::Cow;
 use std::fmt;
 
+/// Helper type for displaying the result of a default_help_str function pointer.
+/// This wraps a function pointer that implements formatting, allowing it to be used with Display.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayFn(pub fn(&mut fmt::Formatter) -> fmt::Result);
+
+impl fmt::Display for DisplayFn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self.0)(f)
+    }
+}
+
+impl From<fn(&mut fmt::Formatter) -> fmt::Result> for DisplayFn {
+    fn from(f: fn(&mut fmt::Formatter) -> fmt::Result) -> Self {
+        DisplayFn(f)
+    }
+}
+
 /// This is a property of every program option, and dictates what form of data we expect to collect
 /// from CLI and env. This also affects the parser's expectations when it encounters a switch
 /// associated to this program option -- does it expect to associate the next argument with this
@@ -31,7 +49,7 @@ impl fmt::Display for ParseType {
 /// Description of a program option, sufficient to identify it on command line or in env, and to
 /// render help text for it It may have one long form and one short form
 #[doc(hidden)]
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ProgramOption {
     /// Id of this option. This is typically the field name literal, and on flattening we prepend
     /// it with `parent.`
@@ -50,9 +68,9 @@ pub struct ProgramOption {
     pub env_form: Option<CowStr>,
     /// Any env aliases
     pub env_aliases: Cow<'static, [CowStr]>,
-    /// The default-value, if any. This is used in help text. The proc-macro generates the actual
+    /// Function to format the default value for help text. The proc-macro generates the actual
     /// fallback to the default value in the initializer code, not ConfContext.
-    pub default_help_str: Option<CowStr>,
+    pub default_help_str: Option<DisplayFn>,
     /// Whether this option is considered required to appear. Affects help generation & semantics
     /// around flatten optional.
     pub is_required: bool,
@@ -65,6 +83,30 @@ pub struct ProgramOption {
     pub is_positional: bool,
     /// Whether this option can be populated from serde deserialization
     pub has_serde_source: bool,
+}
+
+// Program options are considered equal if their id and parse type is the same
+impl PartialEq for ProgramOption {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.parse_type == other.parse_type
+    }
+}
+
+impl Eq for ProgramOption {}
+
+// Lexicographic order by id and then parse type
+impl PartialOrd for ProgramOption {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ProgramOption {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id
+            .cmp(&other.id)
+            .then_with(|| self.parse_type.cmp(&other.parse_type))
+    }
 }
 
 impl ProgramOption {
@@ -249,8 +291,8 @@ impl ProgramOption {
             }
         }
 
-        if let Some(def) = self.default_help_str.as_ref() {
-            writeln!(stream, "          [default: {def}]")?;
+        if let Some(fmt_fn) = self.default_help_str {
+            writeln!(stream, "          [default: {}]", fmt_fn)?;
         }
         if self.is_secret() {
             writeln!(stream, "          [secret]")?;
@@ -290,5 +332,9 @@ impl ProgramOptionMeta for ProgramOption {
 
     fn is_required(&self) -> bool {
         self.is_required
+    }
+
+    fn default_help_str(&self) -> Option<&dyn fmt::Display> {
+        self.default_help_str.as_ref().map(|d| d as &dyn fmt::Display)
     }
 }

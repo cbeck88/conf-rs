@@ -1,0 +1,5 @@
+error: #[conf(default_value)] and #[conf(default)] cannot both be specified
+ --> tests/ui/default_and_default_value_parameter.rs:5:5
+  |
+5 |     #[conf(long, default(42), default_value = "10")]
+  |     ^

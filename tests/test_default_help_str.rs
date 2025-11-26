@@ -1,3 +1,5 @@
+mod common;
+use common::*;
 use conf::Conf;
 
 #[test]
@@ -22,15 +24,15 @@ fn test_default_help_str_overrides_default_value() {
 
     // Check field_with_both - should use default_help_str
     let opt1 = opts.iter().find(|o| o.id == "field_with_both").unwrap();
-    assert_eq!(opt1.default_help_str.as_deref(), Some("shown in help"));
+    assert_eq!(format_default_help_str(opt1.default_help_str).as_deref(), Some("shown in help"));
 
     // Check field_with_default_only - should use default_value as fallback
     let opt2 = opts.iter().find(|o| o.id == "field_with_default_only").unwrap();
-    assert_eq!(opt2.default_help_str.as_deref(), Some("just_default"));
+    assert_eq!(format_default_help_str(opt2.default_help_str).as_deref(), Some("just_default"));
 
     // Check field_help_only - should use default_help_str
     let opt3 = opts.iter().find(|o| o.id == "field_help_only").unwrap();
-    assert_eq!(opt3.default_help_str.as_deref(), Some("help string only"));
+    assert_eq!(format_default_help_str(opt3.default_help_str).as_deref(), Some("help string only"));
 }
 
 #[test]

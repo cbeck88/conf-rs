@@ -125,6 +125,10 @@ pub trait Conf: Sized {
         let program_options = Self::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
         let parser =
             Self::get_parser(&parsed_env, program_options).expect("Failed to create parser");
+
+        // Test that rendering help doesn't panic - this exercises all default_help_str functions
+        let _ = parser.render_clap_help();
+
         parser.into_command().debug_assert();
     }
 

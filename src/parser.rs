@@ -111,8 +111,16 @@ fn build_help_text(option: &ProgramOption, env: &ParsedEnv) -> String {
     }
 
     // Add default value
-    if let Some(def) = option.default_help_str.as_ref() {
-        help_text += &format!("\n[default: {def}]");
+    if let Some(fmt_fn) = option.default_help_str {
+        use core::fmt::Write;
+        help_text += "\n[default: ";
+        write!(&mut help_text, "{}", fmt_fn).unwrap_or_else(|_| {
+            panic!(
+                "default_help_str function for option '{}' returned an error",
+                option.id
+            )
+        });
+        help_text += "]";
     }
 
     // Add secret tag

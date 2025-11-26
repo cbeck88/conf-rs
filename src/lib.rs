@@ -61,7 +61,7 @@ pub use parse_env::ParsedEnv;
 #[doc(hidden)]
 pub use parser::{Parser, ParserConfig};
 #[doc(hidden)]
-pub use program_option::{ParseType, ProgramOption};
+pub use program_option::{DisplayFn, ParseType, ProgramOption};
 
 // The serde feature brings in some more types and traits
 #[cfg(feature = "serde")]

@@ -30,6 +30,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env_aliases](#parameter-env-aliases)
     * [default_value](#parameter-default-value)
     * [default_help_str](#parameter-default-help-str)
+    * [default](#parameter-default)
     * [value_parser](#parameter-value-parser)
     * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
@@ -523,6 +524,52 @@ A parameter represents a single value that can be parsed from a string.
    `allow_hyphen_values` is automatically set when the field value has a built-in type `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, since it is more likely in these cases that you intend to pass a negative number.
 
    This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+
+*  <a name="parameter-default"></a> `default` (optional expression argument)
+
+   example: `#[arg(default)]`, `#[arg(default(42))]`, `#[arg(default(vec![1, 2, 3]))]`
+
+   Specifies a default value using a Rust expression (rather than a string).
+
+   Comparable to `default_value_t` in `clap`, and [`default`](https://serde.rs/field-attrs.html#default) in serde.
+
+   **Basic usage**:
+   - `#[arg(default)]` - Uses `Default::default()` for the field type
+   - `#[arg(default(expr))]` - Uses the provided expression as the default value
+
+   For `Option<T>` fields, the expression must produce type `T` (not `Option<T>`).
+
+   Unlike `default_value`, the `default` expression completely bypasses the `value_parser`.
+
+   **Help text**: When using `default`, the help text that documents the default value is generated
+   using the `Display` trait applied to the default value. If the type doesn't implement `Display`, then
+   `default_help_str` must be provided instead.
+
+   **Examples**:
+
+   Default with a literal value:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Port number
+       #[conf(long, default(8080))]
+       port: u16,
+   }
+   ```
+
+   Default with an expression:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Computed default (help string will be "15")
+       #[conf(long, default(10 + 5))]
+       threshold: i32,
+   }
+   ```
+
+   **Note**: This attribute is mutually exclusive with `default_value`.
 
 *  <a name="parameter-secret"></a> `secret` (optional bool argument)
 

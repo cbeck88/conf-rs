@@ -41,7 +41,7 @@ fn test_client_config_program_options() {
     assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("url"));
     assert_eq!(opts[0].env_form.as_deref(), Some("URL"));
-    assert_eq!(opts[0].default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opts[0].default_help_str).as_deref(), None);
     assert!(opts[0].is_required);
     assert_eq!(opts[0].description.as_deref(), Some("Url"));
 
@@ -49,7 +49,7 @@ fn test_client_config_program_options() {
     assert_eq!(opts[1].short_form, None);
     assert_eq!(opts[1].long_form.as_deref(), Some("retries"));
     assert_eq!(opts[1].env_form.as_deref(), Some("RETRIES"));
-    assert_eq!(opts[1].default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opts[1].default_help_str).as_deref(), Some("3"));
     assert!(!opts[1].is_required);
     assert_eq!(opts[1].description.as_deref(), Some("Number of retries"));
 
@@ -57,7 +57,7 @@ fn test_client_config_program_options() {
     assert_eq!(opts[2].short_form, None);
     assert_eq!(opts[2].long_form.as_deref(), Some("debug"));
     assert_eq!(opts[2].env_form.as_deref(), None);
-    assert_eq!(opts[2].default_help_str, None);
+    assert!(opts[2].default_help_str.is_none());
     assert!(!opts[2].is_required);
     assert_eq!(opts[2].description.as_deref(), Some("debug output"));
 }
@@ -146,7 +146,7 @@ fn test_db_tool_config_program_options() {
     assert_eq!(opts[0].short_form, None);
     assert_eq!(opts[0].long_form.as_deref(), Some("db-url"));
     assert_eq!(opts[0].env_form.as_deref(), Some("DB_URL"));
-    assert_eq!(opts[0].default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opts[0].default_help_str).as_deref(), None);
     assert!(opts[0].is_required);
     assert_eq!(opts[0].description.as_deref(), Some("Url")); // help prefixing was not enabled
 
@@ -154,7 +154,7 @@ fn test_db_tool_config_program_options() {
     assert_eq!(opts[1].short_form, None);
     assert_eq!(opts[1].long_form.as_deref(), Some("db-password"));
     assert_eq!(opts[1].env_form.as_deref(), Some("DB_PASSWORD"));
-    assert_eq!(opts[1].default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opts[1].default_help_str).as_deref(), None);
     assert!(opts[1].is_required);
     assert_eq!(opts[1].description.as_deref(), Some("Password"));
 
@@ -165,7 +165,7 @@ fn test_db_tool_config_program_options() {
         Some("db-connection-pool-size")
     );
     assert_eq!(opts[2].env_form.as_deref(), Some("DB_CONNECTION_POOL_SIZE"));
-    assert_eq!(opts[2].default_help_str.as_deref(), Some("1"));
+    assert_eq!(format_default_help_str(opts[2].default_help_str).as_deref(), Some("1"));
     assert!(!opts[2].is_required);
     assert_eq!(opts[2].description.as_deref(), Some("Connection pool size"));
 
@@ -173,7 +173,7 @@ fn test_db_tool_config_program_options() {
     assert_eq!(opts[3].short_form, Some('d'));
     assert_eq!(opts[3].long_form.as_deref(), Some("dry-run"));
     assert_eq!(opts[3].env_form.as_deref(), None);
-    assert_eq!(opts[3].default_help_str, None);
+    assert!(opts[3].default_help_str.is_none());
     assert!(!opts[3].is_required);
     assert_eq!(
         opts[3].description.as_deref(),
@@ -279,7 +279,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("LISTEN_ADDR"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("127.0.0.1:4040"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("127.0.0.1:4040"));
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Listen addr to bind to"));
 
@@ -288,7 +288,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("DB_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Url")); // help prefixing was enabled
 
@@ -297,7 +297,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-password"));
     assert_eq!(opt.env_form.as_deref(), Some("DB_PASSWORD"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Password"));
 
@@ -306,7 +306,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-connection-pool-size"));
     assert_eq!(opt.env_form.as_deref(), Some("DB_CONNECTION_POOL_SIZE"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("1"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("1"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -318,7 +318,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("AUTH_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Auth Service Url")); // help prefixing was enabled
 
@@ -327,7 +327,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("AUTH_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -339,7 +339,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FRIEND_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Friend Service Url"));
 
@@ -348,7 +348,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FRIEND_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -360,7 +360,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("BUDDY_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Buddy Service Url"));
 
@@ -369,7 +369,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("BUDDY_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -381,7 +381,7 @@ fn test_service_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -526,7 +526,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_LISTEN_ADDR"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("127.0.0.1:4040"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("127.0.0.1:4040"));
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Listen addr to bind to"));
 
@@ -535,7 +535,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_DB_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Url")); // help prefixing was enabled
 
@@ -544,7 +544,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("db-password"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_DB_PASSWORD"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Password"));
 
@@ -556,7 +556,7 @@ fn frob_config_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_DB_CONNECTION_POOL_SIZE")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("1"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("1"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -568,7 +568,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_AUTH_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Auth Service Url")); // help prefixing was enabled
 
@@ -577,7 +577,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("auth-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_AUTH_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -589,7 +589,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_FRIEND_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Friend Service Url"));
 
@@ -598,7 +598,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("friend-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_FRIEND_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -610,7 +610,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_BUDDY_SERVICE_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Buddy Service Url"));
 
@@ -619,7 +619,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("buddy-service-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_BUDDY_SERVICE_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -631,7 +631,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -645,7 +645,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peer-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_URLS"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -657,7 +657,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peer-min-connections"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_MIN_CONNECTIONS"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("2"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("2"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -672,7 +672,7 @@ fn frob_config_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_PEER_BADNESS_SCORE_LIMIT")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("1000"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("1000"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -686,7 +686,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("admin-listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_ADMIN_LISTEN_ADDR"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("127.0.0.1:9090"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("127.0.0.1:9090"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -698,7 +698,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Slack Url"));
 
@@ -707,7 +707,7 @@ fn frob_config_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Slack Number of retries"));
 
@@ -862,7 +862,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_LISTEN_ADDR")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("127.0.0.1:4040"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("127.0.0.1:4040"));
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Listen addr to bind to"));
 
@@ -871,7 +871,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-db-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_TEST_SERVICE_DB_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Url")); // help prefixing was enabled
 
@@ -883,7 +883,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_DB_PASSWORD")
     );
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Database Password"));
 
@@ -895,7 +895,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_DB_CONNECTION_POOL_SIZE")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("1"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("1"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -910,7 +910,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_AUTH_SERVICE_URL")
     );
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Auth Service Url")); // help prefixing was enabled
 
@@ -922,7 +922,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_AUTH_SERVICE_RETRIES")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -937,7 +937,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_FRIEND_SERVICE_URL")
     );
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Friend Service Url"));
 
@@ -949,7 +949,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_FRIEND_SERVICE_RETRIES")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -964,7 +964,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_BUDDY_SERVICE_URL")
     );
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Buddy Service Url"));
 
@@ -976,7 +976,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_TEST_SERVICE_BUDDY_SERVICE_RETRIES")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -988,7 +988,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("t-hard-mode"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -1002,7 +1002,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peers-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_URLS"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -1014,7 +1014,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("peers-min-connections"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_PEER_MIN_CONNECTIONS"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("2"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("2"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -1029,7 +1029,7 @@ fn frob_config2_program_options() {
         opt.env_form.as_deref(),
         Some("FROB_PEER_BADNESS_SCORE_LIMIT")
     );
-    assert_eq!(opt.default_help_str.as_deref(), Some("1000"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("1000"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -1043,7 +1043,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("admin-listen-addr"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_ADMIN_LISTEN_ADDR"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("127.0.0.1:9090"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("127.0.0.1:9090"));
     assert!(!opt.is_required);
     assert_eq!(
         opt.description.as_deref(),
@@ -1055,7 +1055,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-url"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_URL"));
-    assert_eq!(opt.default_help_str.as_deref(), None);
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), None);
     assert!(opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Slack Url"));
 
@@ -1064,7 +1064,7 @@ fn frob_config2_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("slack-retries"));
     assert_eq!(opt.env_form.as_deref(), Some("FROB_SLACK_RETRIES"));
-    assert_eq!(opt.default_help_str.as_deref(), Some("3"));
+    assert_eq!(format_default_help_str(opt.default_help_str).as_deref(), Some("3"));
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), Some("Slack Number of retries"));
 

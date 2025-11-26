@@ -39,7 +39,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("required"));
     assert_eq!(opt.env_form.as_deref(), Some("REQUIRED"));
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -48,7 +48,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("also"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -57,7 +57,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("opt"));
     assert_eq!(opt.env_form.as_deref(), Some("OPT"));
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -66,7 +66,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, Some('f'));
     assert_eq!(opt.long_form.as_deref(), Some("flag"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -75,7 +75,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("b-required"));
     assert_eq!(opt.env_form.as_deref(), Some("B_REQUIRED"));
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -84,7 +84,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("b-also"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -93,7 +93,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("b-opt"));
     assert_eq!(opt.env_form.as_deref(), Some("B_OPT"));
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 
@@ -102,7 +102,7 @@ fn test_flatten_optional_get_program_options() {
     assert_eq!(opt.short_form, None);
     assert_eq!(opt.long_form.as_deref(), Some("b-flag"));
     assert_eq!(opt.env_form.as_deref(), None);
-    assert_eq!(opt.default_help_str, None);
+    assert!(opt.default_help_str.is_none());
     assert!(!opt.is_required);
     assert_eq!(opt.description.as_deref(), None);
 

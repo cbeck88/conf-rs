@@ -146,6 +146,7 @@ pub struct ParameterItem {
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
     default_value: Option<LitStr>,
+    default_value_expr: Option<Expr>,
     default_help_str: Option<LitStr>,
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
@@ -178,6 +179,7 @@ impl ParameterItem {
             env_name: None,
             env_aliases: None,
             default_value: None,
+            default_value_expr: None,
             default_help_str: None,
             value_parser: None,
             value_parser_os: None,
@@ -233,6 +235,17 @@ impl ParameterItem {
                     } else if path.is_ident("default_help_str") {
                         let val = meta.value()?.parse::<LitStr>()?;
                         set_once(&path, &mut result.default_help_str, Some(val))
+                    } else if path.is_ident("default") {
+                        let expr = if meta.input.peek(token::Paren) {
+                            // default(<expr>)
+                            let content;
+                            syn::parenthesized!(content in meta.input);
+                            content.parse::<Expr>()?
+                        } else {
+                            // default (no parens) => Default::default()
+                            parse_quote! { Default::default() }
+                        };
+                        set_once(&path, &mut result.default_value_expr, Some(expr))
                     } else if path.is_ident("value_parser") {
                         set_once(
                             &path,
@@ -299,9 +312,18 @@ impl ParameterItem {
             ));
         }
 
-        // Validate default_help_str without default_value
+        // Validate default_value and default_value_expr aren't both specified
+        if result.default_value.is_some() && result.default_value_expr.is_some() {
+            return Err(Error::new(
+                field.span(),
+                "#[conf(default_value)] and #[conf(default)] cannot both be specified",
+            ));
+        }
+
+        // Validate default_help_str without default_value or default_value_expr
         if result.default_help_str.is_some()
             && result.default_value.is_none()
+            && result.default_value_expr.is_none()
             && result.is_optional_type.is_none()
         {
             return Err(Error::new(
@@ -310,11 +332,16 @@ impl ParameterItem {
             ));
         }
 
+        // Note: If default_value_expr is used without default_help_str, we generate code that
+        // calls Display::fmt on the default value. If the type doesn't implement Display,
+        // this will fail at compile time with a clear error message from rustc.
+
         if result.is_optional_type.is_none()
             && result.short_switch.is_none()
             && result.long_switch.is_none()
             && result.env_name.is_none()
             && result.default_value.is_none()
+            && result.default_value_expr.is_none()
             && !result.is_positional
             && struct_item.serde.is_none()
         {
@@ -435,17 +462,45 @@ impl ParameterItem {
     }
 
     pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
-        let is_required = self.is_optional_type.is_none() && self.default_value.is_none();
+        let is_required = self.is_optional_type.is_none()
+            && self.default_value.is_none()
+            && self.default_value_expr.is_none();
         let id = self.field_name.to_string();
         let description = quote_opt_cow(&self.doc_string);
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
-        // Use default_help_str if provided, otherwise fall back to default_value
-        let default_help_str = quote_opt_cow(
-            &self.default_help_str.as_ref()
-                .or(self.default_value.as_ref())
-        );
+
+        // Generate function pointer for default help text
+        let default_help_str = if let Some(help_str_lit) = &self.default_help_str {
+            // Explicit default_help_str provided - generate function that writes the literal
+            let help_str = help_str_lit.value();
+            quote! {
+                Some(::conf::DisplayFn((|f: &mut ::core::fmt::Formatter| f.write_str(#help_str)) as fn(&mut ::core::fmt::Formatter) -> ::core::fmt::Result))
+            }
+        } else if let Some(default_value_lit) = &self.default_value {
+            // default_value provided - generate function that writes the literal
+            let default_str = default_value_lit.value();
+            quote! {
+                Some(::conf::DisplayFn((|f: &mut ::core::fmt::Formatter| f.write_str(#default_str)) as fn(&mut ::core::fmt::Formatter) -> ::core::fmt::Result))
+            }
+        } else if let Some(default_value_expr) = &self.default_value_expr {
+            // default_value_expr provided - generate function that evaluates expr and displays it
+            // For Option<T> fields, the default_value_expr produces T, not Option<T>
+            let field_type = &self.field_type;
+            let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
+            quote! {
+                Some(::conf::DisplayFn((|f: &mut ::core::fmt::Formatter| {
+                    fn __default_value__() -> #inner_type {
+                        #default_value_expr
+                    }
+                    ::core::fmt::Display::fmt(&__default_value__(), f)
+                }) as fn(&mut ::core::fmt::Formatter) -> ::core::fmt::Result))
+            }
+        } else {
+            quote! { None }
+        };
+
         let allow_hyphen_values = self.allow_hyphen_values;
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional;
@@ -668,6 +723,30 @@ impl ParameterItem {
                 };
 
                 return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val);
+            } else if let Some(default_value_expr) = &self.default_value_expr {
+                // Serde-only field with default expression: bypass value parser
+                let field_type = &self.field_type;
+                let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
+                let wrap_in_some = if self.is_optional_type.is_some() {
+                    quote! { Some(__default_value_result__) }
+                } else {
+                    quote! { __default_value_result__ }
+                };
+                let id = self.field_name.to_string();
+                return Ok((
+                    quote! {
+                        {
+                            fn __default_value__() -> #inner_type {
+                                #default_value_expr
+                            }
+                            let _ = #conf_context_ident;
+                            let __default_value_result__ = __default_value__();
+                            #conf_context_ident.log_config_event(#id, ::conf::ConfValueSource::Default);
+                            Ok(#wrap_in_some)
+                        }
+                    },
+                    false,
+                ));
             } else if self.is_optional_type.is_some() {
                 // Serde-only optional field without default: return None
                 return Ok((
@@ -700,7 +779,28 @@ impl ParameterItem {
 
         // Default behavior when no conf context value is found
         let if_no_conf_context_val = |req: ExprRequest| {
-            // Check for default_value first
+            // Check for default_value_expr first - if present, bypass value parser
+            if let Some(default_value_expr) = &self.default_value_expr {
+                let field_type = &self.field_type;
+                let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
+                let wrap_in_some = if self.is_optional_type.is_some() {
+                    quote! { Some(__default_value_result__) }
+                } else {
+                    quote! { __default_value_result__ }
+                };
+                let id = self.field_name.to_string();
+                return quote! {
+                    {
+                        fn __default_value__() -> #inner_type {
+                            #default_value_expr
+                        }
+                        let __default_value_result__ = __default_value__();
+                        #conf_context_ident.log_config_event(#id, ::conf::ConfValueSource::Default);
+                        return Ok(#wrap_in_some);
+                    }
+                };
+            }
+            // Check for default_value (goes through value parser)
             if let Some(default_value) = &self.default_value {
                 let default_value_str = default_value.value();
                 match req {
@@ -846,6 +946,7 @@ impl ParameterItem {
 
     /// Generate debug assertions for this parameter
     /// If there's a default_value and a value_parser/value_parser_os, test that the default parses
+    /// If there's a default_value_expr, test that it evaluates without panicking
     pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
         // Check if skip_default_value is set. This might be useful when the value_parser has
         // side-effects or reads files from the file-system that might not be there during the test.
@@ -854,6 +955,8 @@ impl ParameterItem {
                 return Ok(quote! {});
             }
         }
+
+        let mut assertions = Vec::new();
 
         if let Some(default_value) = &self.default_value {
             let default_value_str = &default_value.value();
@@ -902,9 +1005,28 @@ impl ParameterItem {
                 }
             };
 
-            Ok(parse_expr)
-        } else {
-            Ok(quote! {})
+            assertions.push(parse_expr);
+        } else if let Some(default_value_expr) = &self.default_value_expr {
+            // Test that the default_value_expr evaluates without panicking and produces the right type
+            // For Option<T> fields, the default_value_expr produces T, not Option<T>
+            let field_type = &self.field_type;
+            let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
+
+            assertions.push(quote! {
+                {
+                    fn __default_value__() -> #inner_type {
+                        #default_value_expr
+                    }
+
+                    // Evaluate the default expression to ensure it doesn't panic
+                    // and type-checks correctly
+                    let _ = __default_value__();
+                }
+            });
         }
+
+        Ok(quote! {
+            #(#assertions)*
+        })
     }
 }

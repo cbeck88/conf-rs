@@ -20,6 +20,8 @@ pub trait ProgramOptionMeta {
     fn has_serde_source(&self) -> bool;
     /// True if this option is required to appear in one of the input sources (i.e. it's an error if doesn't)
     fn is_required(&self) -> bool;
+    /// The help string for the default value, if any.
+    fn default_help_str(&self) -> Option<&dyn Display>;
 }
 
 /// Describes the source of the value when a program option is assigned a value

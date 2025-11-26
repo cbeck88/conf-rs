@@ -10,6 +10,11 @@ pub fn vec_str(list: impl IntoIterator<Item = &'static str>) -> Vec<String> {
     list.into_iter().map(Into::into).collect()
 }
 
+// Helper to format a default_help_str function pointer
+pub fn format_default_help_str(fmt_fn: Option<conf::DisplayFn>) -> Option<String> {
+    fmt_fn.map(|f| format!("{}", f))
+}
+
 #[macro_export]
 macro_rules! assert_multiline_eq {
     ($left:expr, $right:expr) => {
