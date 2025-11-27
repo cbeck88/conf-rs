@@ -30,11 +30,12 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env_aliases](#parameter-env-aliases)
     * [default_value](#parameter-default-value)
     * [default_help_str](#parameter-default-help-str)
-    * [default](#parameter-default)
     * [value_parser](#parameter-value-parser)
     * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
     * [allow_negative_numbers](#parameter-allow-negative-numbers)
+    * [default_if_missing](#parameter-default-if-missing)
+    * [default](#parameter-default)
     * [secret](#parameter-secret)
     * [serde](#parameter-serde)
       * [rename](#parameter-serde-rename)
@@ -537,6 +538,32 @@ A parameter represents a single value that can be parsed from a string.
 
    `allow_negative_numbers` is automatically enabled when the field type is a signed number type (`i8`, `i16`, `i32`, `i64`, `i128`, `isize`, `f32`, `f64`), making it unnecessary to specify this attribute explicitly in most cases.
 
+*  <a name="parameter-default-if-missing"></a> `default_if_missing` (string argument)
+
+   example: `#[arg(default_if_missing = "80")]`
+
+   This corresponds to [`clap::Arg::default_missing_value`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.default_missing_value)
+
+   Specifies the default value used when the switch appears on the command-line without a value. This only applies when the switch appears without a value following it, not when the switch is completely absent.
+
+   **Note**: This can only be used with parameters with short/long forms, not positional arguments.
+
+   **Example**:
+   ```rust
+   # use conf::Conf;
+   #[derive(Conf)]
+   struct Config {
+       /// Server port
+       #[conf(long, default_if_missing = "80")]
+       port: u16,
+   }
+   ```
+
+   With this configuration:
+   - `./app` - An error because `port` is required and not specified
+   - `./app --port` - `port` will be `80` (from `default_if_missing`)
+   - `./app --port 8080` - `port` will be `8080` (from the command line)
+
 *  <a name="parameter-default"></a> `default` (optional expression argument)
 
    example: `#[arg(default)]`, `#[arg(default(42))]`, `#[arg(default(vec![1, 2, 3]))]`
@@ -546,7 +573,7 @@ A parameter represents a single value that can be parsed from a string.
    Comparable to [`default_value_t`](https://docs.rs/clap/latest/clap/_derive/index.html#default-values) in `clap`, and [`default`](https://serde.rs/field-attrs.html#default) in serde.
 
    **Basic usage**:
-   - `#[arg(default)]` - Uses `Default::default()` for the field type
+   - `#[arg(default)]` - Uses `Default::default()` as the default value
    - `#[arg(default(expr))]` - Uses the provided expression as the default value
 
    For `Option<T>` fields, the expression must produce type `T` (not `Option<T>`).
@@ -743,7 +770,14 @@ As in `clap`, if a parameter's field type is `Option<T>`, it has special meaning
 * If a `value_parser` is specified, it should produce `T` rather than `Option<T>`.
 * The option will not be considered required when rendering the help text.
 
-Currently none of the other special [type-based intent inferences that clap does](https://docs.rs/clap/4.5.8/clap/_derive/index.html#arg-types) are implemented in this crate.
+Currently none of the other special [type-based intent inferences that clap does](https://docs.rs/clap/4.5.8/clap/_derive/index.html#arg-types) are implemented in this crate, but there are alternative, more explicit ways to get the behavior:
+
+* `bool` is by default a flag rather than a parameter
+* `Option<T>` is an optional parameter
+* `Option<Option<T>>` is not directly supported, instead you should use `Option<T>` and the `default_if_missing` attribute.
+* `T` is a required parameter
+* `Vec<T>` is not special -- if you want it to be a repeating field, as in clap, you must make it a `repeat` field explicitly. There are legitimate reasons that you might want, e.g. a parameter of type `Vec<T>` whose `value_parser` is `serde_json::from_str`. Making this implicitly a repeat field can be very surprising.
+* `Option<Vec<T>>` is not supported at this time for `repeat` fields.
 
 ### Repeat
 

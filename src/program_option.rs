@@ -80,6 +80,9 @@ pub struct ProgramOption {
     /// If set, tell clap to allow negative numbers. This is similar to allow_hyphen_values but
     /// only allows numbers, not arbitrary hyphenated values.
     pub allow_negative_numbers: bool,
+    /// Default value used when the switch appears on the command-line without a value.
+    /// Only applies to parameters with short/long forms, not positional arguments.
+    pub default_if_missing: Option<CowStr>,
     /// If set, then the user has specified that this is (or is not) a secret value, explicitly.
     pub secret: Option<bool>,
     /// Whether this is a positional argument (has no short/long form, accepts value by position)
@@ -137,6 +140,7 @@ impl ProgramOption {
             is_required,
             allow_hyphen_values,
             allow_negative_numbers,
+            default_if_missing,
             secret,
             is_positional,
             has_serde_source,
@@ -205,6 +209,7 @@ impl ProgramOption {
             is_required,
             allow_hyphen_values,
             allow_negative_numbers,
+            default_if_missing,
             secret,
             is_positional,
             has_serde_source,

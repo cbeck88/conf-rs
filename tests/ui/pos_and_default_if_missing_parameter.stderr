@@ -1,0 +1,11 @@
+error: pos and default_if_missing are mutually exclusive
+ --> tests/ui/pos_and_default_if_missing_parameter.rs:5:23
+  |
+5 |     #[conf(parameter, pos, default_if_missing = "fallback")]
+  |                       ^^^
+
+error: Conflicts with this
+ --> tests/ui/pos_and_default_if_missing_parameter.rs:5:49
+  |
+5 |     #[conf(parameter, pos, default_if_missing = "fallback")]
+  |                                                 ^^^^^^^^^^

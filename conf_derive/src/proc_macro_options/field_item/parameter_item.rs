@@ -160,6 +160,7 @@ pub struct ParameterItem {
     default_value: Option<LitStr>,
     default_value_expr: Option<Expr>,
     default_help_str: Option<LitStr>,
+    default_if_missing: Option<LitStr>,
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
@@ -195,6 +196,7 @@ impl ParameterItem {
             default_value: None,
             default_value_expr: None,
             default_help_str: None,
+            default_if_missing: None,
             value_parser: None,
             value_parser_os: None,
             serde: None,
@@ -249,6 +251,9 @@ impl ParameterItem {
                     } else if path.is_ident("default_help_str") {
                         let val = meta.value()?.parse::<LitStr>()?;
                         set_once(&path, &mut result.default_help_str, Some(val))
+                    } else if path.is_ident("default_if_missing") {
+                        let val = meta.value()?.parse::<LitStr>()?;
+                        set_once(&path, &mut result.default_if_missing, Some(val))
                     } else if path.is_ident("default") {
                         let expr = if meta.input.peek(token::Paren) {
                             // default(<expr>)
@@ -320,6 +325,14 @@ impl ParameterItem {
                     is_positional,
                     "long",
                     long_switch,
+                ));
+            }
+            if let Some(default_if_missing) = &result.default_if_missing {
+                return Err(mutually_exclusive_error(
+                    "pos",
+                    is_positional,
+                    "default_if_missing",
+                    default_if_missing,
                 ));
             }
         }
@@ -519,6 +532,7 @@ impl ParameterItem {
 
         let allow_hyphen_values = self.allow_hyphen_values;
         let allow_negative_numbers = self.allow_negative_numbers;
+        let default_if_missing = quote_opt_cow(&self.default_if_missing);
         let secret = quote_opt(&self.secret);
         let is_positional = self.is_positional.is_some();
         let has_serde_source = self.has_serde_source();
@@ -548,6 +562,7 @@ impl ParameterItem {
                 is_required: #is_required,
                 allow_hyphen_values: #allow_hyphen_values,
                 allow_negative_numbers: #allow_negative_numbers,
+                default_if_missing: #default_if_missing,
                 secret: #secret,
                 is_positional: #is_positional,
                 has_serde_source: #has_serde_source,

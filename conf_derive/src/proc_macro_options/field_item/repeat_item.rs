@@ -464,6 +464,7 @@ impl RepeatItem {
               is_required: false,
               allow_hyphen_values: #allow_hyphen_values,
               allow_negative_numbers: #allow_negative_numbers,
+              default_if_missing: None,
               secret: #secret,
               is_positional: #is_positional,
               has_serde_source: #has_serde_source,

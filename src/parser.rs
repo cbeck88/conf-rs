@@ -432,7 +432,12 @@ impl Parser {
                     .action(ArgAction::Set)
                     .allow_hyphen_values(option.allow_hyphen_values)
                     .allow_negative_numbers(option.allow_negative_numbers)
-                    .value_parser(ValueParser::os_string())
+                    .value_parser(ValueParser::os_string());
+                if let Some(default_if_missing) = option.default_if_missing.as_ref() {
+                    arg = arg
+                        .default_missing_value(default_if_missing.clone().into_owned())
+                        .num_args(0..=1);
+                }
             }
             ParseType::Repeat => {
                 arg = arg
