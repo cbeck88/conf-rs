@@ -56,11 +56,9 @@ fn test_default_if_missing_when_absent() {
     );
 
     // With name provided, port should be None and host should be "localhost"
-    let result = TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(
-        vec![".", "--name=test"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(vec![".", "--name=test"], vec![])
+            .unwrap();
     assert_eq!(result.port, None);
     assert_eq!(result.host, "localhost");
     assert_eq!(result.name, "test");
@@ -82,7 +80,15 @@ fn test_default_if_missing_with_value() {
 
     // Test using space-separated syntax
     let result = TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(
-        vec![".", "--name", "test", "--port", "3000", "--host", "example.com"],
+        vec![
+            ".",
+            "--name",
+            "test",
+            "--port",
+            "3000",
+            "--host",
+            "example.com",
+        ],
         vec![],
     )
     .unwrap();
@@ -118,22 +124,18 @@ fn test_default_if_missing_without_value() {
     assert_eq!(result.config, None);
 
     // Test with required parameter using default_if_missing
-    let result = TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(
-        vec![".", "--name"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(vec![".", "--name"], vec![])
+            .unwrap();
     assert_eq!(result.port, None);
     assert_eq!(result.host, "localhost");
     assert_eq!(result.name, "fallback");
     assert_eq!(result.config, None);
 
     // Test with short form
-    let result = TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(
-        vec![".", "-n", "-c"],
-        vec![],
-    )
-    .unwrap();
+    let result =
+        TestDefaultIfMissing::try_parse_from::<&str, &str, &str>(vec![".", "-n", "-c"], vec![])
+            .unwrap();
     assert_eq!(result.port, None);
     assert_eq!(result.host, "localhost");
     assert_eq!(result.name, "fallback");
