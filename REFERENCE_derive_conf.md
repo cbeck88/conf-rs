@@ -204,7 +204,7 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 *  <a name="flag-aliases"></a>  `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this flag.
-   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
+   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.visible_aliases)
 
    example: `#[arg(aliases=["old-flag-name", "older-flag-name"])]`
 
@@ -417,7 +417,7 @@ A parameter represents a single value that can be parsed from a string.
 *  <a name="parameter-aliases"></a> `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this parameter.
-   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
+   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.visible_aliases)
 
    example: `#[arg(aliases=["old-param-name", "older-param-name"])]`
 
@@ -524,13 +524,13 @@ A parameter represents a single value that can be parsed from a string.
    If you actually intended to set `--my-param` to the value `--my-value`, you can instead write `--my-param=--my-value`, or set it via an environment variable, which doesn't care about this setting.
    If you set `allow_hyphen_values` then this check is not applied, and `--my-param --my-value` gets parsed the same as `--my-param=--my-value`.
 
-   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.allow_hyphen_values)
 
 *  <a name="parameter-allow-negative-numbers"></a> `allow_negative_numbers` (no arguments)
 
    example: `#[arg(allow_negative_numbers)]`
 
-   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_negative_numbers)
+   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.allow_negative_numbers)
 
    Similar to `allow_hyphen_values`, but specifically allows negative number values like `-42` or `-3.14` while still treating other hyphenated values like `--my-value` as potential errors.
 
@@ -542,7 +542,7 @@ A parameter represents a single value that can be parsed from a string.
 
    example: `#[arg(default_if_missing = "80")]`
 
-   This corresponds to [`clap::Arg::default_missing_value`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.default_missing_value)
+   This corresponds to [`clap::Arg::default_missing_value`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.default_missing_value)
 
    Specifies the default value used when the switch appears on the command-line without a value. This only applies when the switch appears without a value following it, not when the switch is completely absent.
 
@@ -570,7 +570,7 @@ A parameter represents a single value that can be parsed from a string.
 
    Specifies a default value using a Rust expression (rather than a string).
 
-   Comparable to [`default_value_t`](https://docs.rs/clap/latest/clap/_derive/index.html#default-values) in `clap`, and [`default`](https://serde.rs/field-attrs.html#default) in serde.
+   Comparable to [`default_value_t`](https://docs.rs/clap/4.5.8/clap/_derive/index.html#default-values) in `clap`, and [`default`](https://serde.rs/field-attrs.html#default) in serde.
 
    **Basic usage**:
    - `#[arg(default)]` - Uses `Default::default()` as the default value
@@ -906,7 +906,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 *  <a name="repeat-aliases"></a> `aliases` (string array argument)
 
    Specifies alternate long switches that should be an alias for this option.
-   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.visible_aliases)
+   This corresponds to [`clap::Arg::visible_aliases`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.visible_aliases)
 
    example: `#[arg(repeat, aliases=["old-param-name", "older-param-name"])]`
 
@@ -926,7 +926,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 
    example command-line: `PEERS=peer1|peer2 ./my_prog`
 
-   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like [`value_delimiter`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.value_delimiter).
+   *Note*: This doesn't have a direct analog in `clap-derive`, but as far as `env` is concerned it's like [`value_delimiter`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.value_delimiter).
 
 *  <a name="repeat-no-env-delimiter"></a> `no_env_delimiter` (no argument)
 
@@ -998,13 +998,13 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    If you actually intended to set `--my-param` to the value `--my-value`, you can instead write `--my-param=--my-value`, or set it via an environment variable, which doesn't care about this setting.
    If you set `allow_hyphen_values` then this check is not applied, and `--my-param --my-value` gets parsed the same as `--my-param=--my-value`.
 
-   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_hyphen_values)
+   This corresponds to [`clap::Arg::allow_hyphen_values`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.allow_hyphen_values)
 
 *  <a name="repeat-allow-negative-numbers"></a> `allow_negative_numbers` (no arguments)
 
    example: `#[arg(repeat, allow_negative_numbers)]`
 
-   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.allow_negative_numbers)
+   This corresponds to [`clap::Arg::allow_negative_numbers`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.allow_negative_numbers)
 
    Similar to `allow_hyphen_values`, but specifically allows negative number values like `-42` or `-3.14` while still treating other hyphenated values like `--my-value` as potential errors.
 
@@ -1148,7 +1148,7 @@ is read and split on a delimiter character which defaults to `','`, to produce a
 when there is no CLI arg and only env is set, is that the entire env value becomes the one element of `my_list`, and there is no way to configure a list with multiple items by setting only `env`.
 So, most likely an app that was using `clap` this way was only using the CLI arguments to configure this value. For `conf`, we consider that this is not a good default behavior.
 
-`clap` does have an additional option for this case called [`value_delimiter`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.value_delimiter), which will cause it to split both CLI arguments and `env` values on a given character.
+`clap` does have an additional option for this case called [`value_delimiter`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.value_delimiter), which will cause it to split both CLI arguments and `env` values on a given character.
 In `conf` however, at this point the field can just be `parameter` instead of a `repeat`, and a `value_parser` can be used which does the splitting.
 So we don't provide the `value_delimiter` feature here.
 
@@ -1157,7 +1157,7 @@ The main reasons that we provide `repeat` are:
 * Ease of migrating an existing `clap-derive` parser that may use the multi-option stuff
 * It can be easier to read CLI args, for example in a shell script, when a list is split into many args rather than having one very long list arg.
 
-If your goal is compatiblity with an existing `clap-derive` parser that parses a `Vec` has no [`value_delimiter`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.value_delimiter), you should use `repeat` with `no_env_delimiter`.
+If your goal is compatiblity with an existing `clap-derive` parser that parses a `Vec` has no [`value_delimiter`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.value_delimiter), you should use `repeat` with `no_env_delimiter`.
 
 If you are making a new option and you want the repeat style of CLI argument parsing, the default for a `repeat` option is `env_delimiter=','`, which preserves your ability to configure via `env`,
 and you can customize this if another choice of delimiter is more appropriate.
@@ -1420,7 +1420,7 @@ and you can customize this if another choice of delimiter is more appropriate.
 
 #### Notes
 
-Using `flatten` with no additional attributes behaves the same as [`clap(flatten)`](https://docs.rs/clap/latest/clap/_derive/index.html#flattening).
+Using `flatten` with no additional attributes behaves the same as [`clap(flatten)`](https://docs.rs/clap/4.5.8/clap/_derive/index.html#flattening).
 
 When using `flatten` with `Option<T>`, the parsing behavior is:
 
@@ -1429,7 +1429,7 @@ When using `flatten` with `Option<T>`, the parsing behavior is:
 
 ### Subcommands
 
-A `subcommands` field works similarly to a [`#[clap(subcommand)]`](https://docs.rs/clap/latest/clap/_derive/index.html#subcommands) field, and represents one or more subcommands that can be used with this `Conf`.
+A `subcommands` field works similarly to a [`#[clap(subcommand)]`](https://docs.rs/clap/4.5.8/clap/_derive/index.html#subcommands) field, and represents one or more subcommands that can be used with this `Conf`.
 
 **Requirements**: A `subcommands` field type must be `T` or `Option<T>` where `T: Subcommands`.
 
@@ -1478,7 +1478,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    Suppresses the automatically generated help option.
 
-   *Note*: Similar to [`disable_help_flag = true`](https://docs.rs/clap/latest/clap/struct.Command.html#method.disable_help_flag) in `clap`, but doesn't propagate to any other structs.
+   *Note*: Similar to [`disable_help_flag = true`](https://docs.rs/clap/4.5.8/clap/struct.Command.html#method.disable_help_flag) in `clap`, but doesn't propagate to any other structs.
 
 *  <a name="struct-about"></a> `about` (string argument) (top-level only)
 
@@ -1570,7 +1570,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
    - Checks that all `default_value` pass the `value_parser` without error, or that `default` is valid, unless that field
      has the `conf(test(skip))` attribute.
    - Constructs a `Parser` from the struct's program options
-   - Runs [`clap::Command::debug_assert()`](https://docs.rs/clap/latest/clap/struct.Command.html#method.debug_assert) to check for configuration errors
+   - Runs [`clap::Command::debug_assert()`](https://docs.rs/clap/4.5.8/clap/struct.Command.html#method.debug_assert) to check for configuration errors
 
    This is useful for catching configuration issues at test time, such as:
    - Conflicting short or long flags
@@ -1589,7 +1589,7 @@ works on that struct. Attributes that are not "top-level only" will still have a
 However, this can become confusing and so `conf` deviates from `clap` here. Instead, in `conf` the only way to specify a repeat parameter is to use the `repeat` attribute.
 
 [^compat-note-2]: Our `value_parser` feature is very similar to `clap-derive`, but it's a little easier to use in this crate at time of writing. For instance `value_parser = serde_json::from_str` just works,
-while at `clap` version 4.5.8 it fails with type inference errors. The reason seems to be that in clap v4, the [`value_parser!` macro](https://docs.rs/clap/latest/clap/macro.value_parser.html) was introduced, and it uses auto-ref specialization to try to detect
+while at `clap` version 4.5.8 it fails with type inference errors. The reason seems to be that in clap v4, the [`value_parser!` macro](https://docs.rs/clap/4.5.8/clap/macro.value_parser.html) was introduced, and it uses auto-ref specialization to try to detect
 features of the value parser type at build time and handle special cases. However, this adds more layers of complexity and prevents the compiler from inferring things like lifetime parameters, afaict, so it makes the
 UX of the `derive` API somewhat worse. Our criteria for the `value_parser` feature are also a bit different because we don't need the solution to work with the `clap_builder` API as well.
 

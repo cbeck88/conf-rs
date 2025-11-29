@@ -183,7 +183,7 @@ Each enum variant must have zero or one unnamed fields. If a field is present, i
 
      Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this subcommand won't read data from the serde value source.
 
-[^compat-note-1]: This is more restrictive than the corresponding [`clap` system for subcommands](https://docs.rs/clap/latest/clap/_derive/index.html#subcommands), which allows named fields in the enum variants,
+[^compat-note-1]: This is more restrictive than the corresponding [`clap` system for subcommands](https://docs.rs/clap/4.5.8/clap/_derive/index.html#subcommands), which allows named fields in the enum variants,
 decorated with attributes equivalent to those that appear on struct fields. For now, to do that in `conf`
 you have to declare separate structs. This is equally expressive from the user's point of view, and is easier for us to maintain.
 [^2]: Normally, making two fields have the same serialization name won't work in `serde`. In `serde` it is only possible to deserialize a value at most once,

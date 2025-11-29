@@ -12,7 +12,7 @@
 
 ## Overview
 
-[`conf`](https://docs.rs/conf/latest/conf/) is a rewrite of `clap-derive` with a similar proc macro API, but a different architecture and different goals. It uses [`clap`](https://docs.rs/clap/latest/clap/) under the hood to parse CLI arguments and generate help text, but it is not a fork. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`.
+[`conf`](https://docs.rs/conf/latest/conf/) is a rewrite of `clap-derive` with a similar proc macro API, but a different architecture and different goals. It uses [`clap`](https://docs.rs/clap/4.5.8/clap/) under the hood to parse CLI arguments and generate help text, but it is not a fork. It offers some powerful features and support that `clap-derive` does not, which help with the configuration of large projects. But it also doesn't offer some features of `clap`.
 
 The features that you get for this bargain are:
 
@@ -34,7 +34,7 @@ The features that you get for this bargain are:
 In addition to `args` and `env`, `conf` supports consuming config content in any [`serde`](https://docs.rs/serde/latest/serde/)-compatible format, such as JSON, YAML, TOML, etc., as a hierarchical config layer.
 The same commitment to "All the errors and not just one of them" holds. There are several advantages of this integrated approach:
 
-* Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/latest/clap/) for CLI argument parsing only, and then folding the
+* Other popular approaches to hierarchical config include using [`clap`](https://docs.rs/clap/4.5.8/clap/) for CLI argument parsing only, and then folding the
   results of that into a library like [`figment`](https://docs.rs/figment/latest/figment) or [`config`](https://docs.rs/config/latest/config), which can also manage `env`, files, and compositing it all together.
   * However, typically this creates a maintanence burden, because if a required field could be read via `clap` or could be read from `env` or a config file, it needs to be `Option<T>`
     for `clap` and `T` in the final config structure, so you end up needing to maintain two or three parallel structures.
@@ -52,7 +52,7 @@ In general, `conf` works with other libraries via dependency injection, and only
 
 ------
 
-`conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/latest/clap/) and the earlier [`struct-opt`](https://docs.rs/structopt/latest/structopt/) which I used for years. They are both great and became popular for a reason.
+`conf` is heavily influenced by [`clap-derive`](https://docs.rs/clap/4.5.8/clap/) and the earlier [`struct-opt`](https://docs.rs/structopt/latest/structopt/) which I used for years. They are both great and became popular for a reason.
 
 Where there is overlap, `conf` tries to stay extremely close to `clap-derive` syntax and behavior, in most cases, for familiarity and ease of migrating a large project.
 In some cases, there are small deviations from the behavior of `clap-derive` to either help avoid mistakes, or to make the defaults closer to a good [12-factor app](https://12factor.net/config) behavior.
@@ -79,7 +79,7 @@ First add `conf` to the dependencies in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-conf = "0.2"
+conf = "0.4"
 ```
 
 Then, create a `struct` which represents the configuration data your application needs to read on startup.
@@ -119,7 +119,7 @@ Additionally, if parsing fails for some reason, it will display a helpful error 
 
 (The `Conf` trait offers a few variants of this function, which you can read about in the docs.)
 
-Generally, the CLI interface and help text that is generated is meant to conform to POSIX and GNU conventions. Read more in [`clap` docu](https://docs.rs/clap/latest/clap/) about this.
+Generally, the CLI interface and help text that is generated is meant to conform to POSIX and GNU conventions. Read more in [`clap` docu](https://docs.rs/clap/4.5.8/clap/) about this.
 
 ## A tour
 
@@ -133,9 +133,10 @@ A field in your struct can be read from a few sources:
 
 Such attributes can be combined by separating them with commas, for example `#[arg(long, env, default_value="x")]` means the field has an assocated long option, an associated environment variable, and a default value if both of these are omitted.
 
-Your field can have any type as long as it implements `FromStr`, and this will be used to parse it.
+Your field can have any type as long as it implements `FromStr`, and this will be used to parse it. You can also specify an alternative parsing function using the `value_parser` attribute.
+
 The type `bool` is special and results in a "flag" being generated rather than a "parameter", which expects no string parameter to be passed during parsing.
-`Option<T>` is also special, and indicates that the value is optional rather than required. You can also specify an alternative parsing function using `value_parser`.
+`Option<T>` is also special, and indicates that the value is optional rather than required.
 
 So far this is almost exactly the same `clap-derive`. Where it gets more interesting is the `flatten` option.
 
@@ -510,8 +511,8 @@ We'll offer just three points of guidance around this tool.
 
 ### Argument groups and constraints
 
-`clap` has support for the concept of "argument groups" ([`ArgGroup`](https://docs.rs/clap/latest/clap/struct.ArgGroup.html)) and also "dependencies" among [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html)'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
-`clap` [provides](https://docs.rs/clap/latest/clap/struct.Arg.html#method.conflicts_with) [many](https://docs.rs/clap/latest/clap/struct.Arg.html#method.exclusive) [functions](https://docs.rs/clap/latest/clap/struct.Arg.html#method.overrides_with) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_if_eq) [`Arg`](https://docs.rs/clap/latest/clap/struct.Arg.html) [and](https://docs.rs/clap/latest/clap/struct.Arg.html#method.requires_if) [on](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required_unless_present) [`ArgGroup`](https://docs.rs/clap/latest/clap/struct.ArgGroup.html#method.conflicts_with) which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
+`clap` has support for the concept of "argument groups" ([`ArgGroup`](https://docs.rs/clap/4.5.8/clap/struct.ArgGroup.html)) and also "dependencies" among [`Arg`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html)'s. This is used to create additional conditions that must be satisfied for the config to be valid, and error messages if it is invalid.
+`clap` [provides](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.conflicts_with) [many](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.exclusive) [functions](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.overrides_with) [on](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.required_if_eq) [`Arg`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html) [and](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.requires_if) [on](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.required_unless_present) [`ArgGroup`](https://docs.rs/clap/4.5.8/clap/struct.ArgGroup.html#method.conflicts_with) which can be used to define various kinds of constraints, such as conditional dependency or mutual exclusion, between `Arg`'s or `ArgGroup`'s.
 
 The main reason to use these features in `clap` is that it will generate nicely formatted errors if these constraints are violated, and then you don't have to worry about handling the situation in your application code.
 
@@ -705,7 +706,7 @@ If you think that this crate is a good fit for you, the suggested way to use it 
 
 ### When should clap-derive be preferred to this crate?
 
-This crate defines itself somewhat differently from [`clap-derive`](https://docs.rs/clap/latest/clap/) and has different features and goals.
+This crate defines itself somewhat differently from [`clap-derive`](https://docs.rs/clap/4.5.8/clap/) and has different features and goals.
 
 * `clap-derive` is meant to be an alternative to the clap builder API, and exposes essentially all of the features of the builder.
 * `clap` itself is primarily a CLI argument parser [per maintainers](https://github.com/clap-rs/clap/discussions/5432), and many simple features around `env` support, like, arguments that can only be read from `env`, are considered out of scope.
