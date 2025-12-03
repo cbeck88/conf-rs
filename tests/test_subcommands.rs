@@ -640,3 +640,132 @@ fn test_named_fields_display_name_in_errors() {
         "Error message should NOT contain mangled name '__ConstraintCommand_Choose', got: {error_string}"
     );
 }
+
+// Test flattening structs that contain subcommands
+
+#[derive(Subcommands, Debug, PartialEq)]
+enum InnerCommand {
+    Start,
+    Stop,
+}
+
+#[derive(Conf, Debug)]
+struct InnerConfig {
+    #[arg(long)]
+    verbose: bool,
+
+    #[conf(subcommands)]
+    command: InnerCommand,
+}
+
+#[derive(Conf, Debug)]
+struct OuterConfig {
+    #[arg(long)]
+    global_flag: bool,
+
+    #[conf(flatten)]
+    inner: InnerConfig,
+}
+
+#[test]
+fn test_flatten_with_subcommands() {
+    // Test that subcommands from flattened struct work
+    let result =
+        OuterConfig::try_parse_from::<&str, &str, &str>(vec![".", "start"], vec![]).unwrap();
+    assert!(!result.global_flag);
+    assert!(!result.inner.verbose);
+    assert_eq!(result.inner.command, InnerCommand::Start);
+
+    // Test with flags at both levels
+    let result = OuterConfig::try_parse_from::<&str, &str, &str>(
+        vec![".", "--global-flag", "--verbose", "stop"],
+        vec![],
+    )
+    .unwrap();
+    assert!(result.global_flag);
+    assert!(result.inner.verbose);
+    assert_eq!(result.inner.command, InnerCommand::Stop);
+}
+
+#[test]
+fn test_flatten_with_subcommands_missing_subcommand() {
+    // Test that missing subcommand produces appropriate error
+    let result = OuterConfig::try_parse_from::<&str, &str, &str>(vec!["."], vec![]);
+    assert!(result.is_err());
+}
+
+// Test flattening with prefix and subcommands
+// Note: prefix affects long_prefix and env_prefix, but NOT subcommand names.
+// This keeps the implementation simple since flattening subcommands is rare.
+
+#[derive(Conf, Debug)]
+struct PrefixedOuterConfig {
+    #[arg(long)]
+    global_flag: bool,
+
+    #[conf(flatten, prefix)]
+    inner: InnerConfig,
+}
+
+#[test]
+fn test_flatten_with_prefix_and_subcommands() {
+    // `prefix` sets long_prefix and env_prefix, but subcommands keep their original names
+    // So --verbose becomes --inner-verbose, but subcommand "start" stays "start"
+    let result = PrefixedOuterConfig::try_parse_from::<&str, &str, &str>(
+        vec![".", "--inner-verbose", "start"],
+        vec![],
+    )
+    .unwrap();
+    assert!(!result.global_flag);
+    assert!(result.inner.verbose);
+    assert_eq!(result.inner.command, InnerCommand::Start);
+
+    // Test the other subcommand
+    let result =
+        PrefixedOuterConfig::try_parse_from::<&str, &str, &str>(vec![".", "stop"], vec![]).unwrap();
+    assert_eq!(result.inner.command, InnerCommand::Stop);
+}
+
+// Test that colliding subcommand names from multiple flattened structs cause a runtime error
+
+#[derive(Subcommands, Debug, PartialEq)]
+enum FirstCommand {
+    Start,
+    Stop,
+}
+
+#[derive(Conf, Debug)]
+struct FirstConfig {
+    #[conf(subcommands)]
+    command: FirstCommand,
+}
+
+#[derive(Subcommands, Debug, PartialEq)]
+enum SecondCommand {
+    Start, // Collides with FirstCommand::Start
+    Restart,
+}
+
+#[derive(Conf, Debug)]
+struct SecondConfig {
+    #[conf(subcommands)]
+    command: SecondCommand,
+}
+
+#[derive(Conf, Debug)]
+struct CollidingSubcommandsConfig {
+    #[conf(flatten)]
+    first: FirstConfig,
+    #[conf(flatten)]
+    second: SecondConfig,
+}
+
+#[test]
+#[should_panic(expected = "command name `start` is duplicated")]
+fn test_colliding_subcommands_panic() {
+    // Clap panics at runtime when two subcommands have the same name
+    let _ = CollidingSubcommandsConfig::try_parse_from::<&str, &str, &str>(
+        vec![".", "start"],
+        vec![],
+    );
+}

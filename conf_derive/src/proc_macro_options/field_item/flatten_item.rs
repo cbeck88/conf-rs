@@ -322,25 +322,35 @@ impl FlattenItem {
         }))
     }
 
-    // Flatten fields don't add subcommands to the conf structure, because we don't support that
-    // right now. But we need to catch it and flag an error.
+    // Flatten fields forward subcommands from the flattened type.
+    // For flatten-optional, we don't support subcommands because `any_program_options_appeared`
+    // doesn't yet handle subcommand selection as a trigger for the optional group.
     pub fn gen_push_subcommands(
         &self,
-        _subcommands_ident: &Ident,
+        subcommands_ident: &Ident,
         parsed_env_ident: &Ident,
     ) -> Result<TokenStream, syn::Error> {
         let inner_type: &Type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
-        let type_name = quote! { inner_type }.to_string();
-        let panic_message = format!(
-            "It is not supported to declare subcommands in a flattened structure '{type_name}', only \
-          at top level. (Needs design work around prefixing.)"
-        );
 
-        Ok(quote! {
-            if !<#inner_type as conf::Conf>::get_subcommands(#parsed_env_ident)?.is_empty() {
-              panic!(#panic_message);
-            }
-        })
+        if self.is_optional_type.is_some() {
+            // For flatten-optional, we don't support subcommands yet
+            let field_name = self.field_name.to_string();
+            let panic_message = format!(
+                "Subcommands in flatten-optional field '{}' are not supported, see github issue #23",
+                field_name
+            );
+
+            Ok(quote! {
+                if !<#inner_type as ::conf::Conf>::get_subcommands(#parsed_env_ident)?.is_empty() {
+                    panic!(#panic_message);
+                }
+            })
+        } else {
+            // For non-optional flatten, forward subcommands from the flattened type
+            Ok(quote! {
+                #subcommands_ident.extend(<#inner_type as ::conf::Conf>::get_subcommands(#parsed_env_ident)?);
+            })
+        }
     }
 
     // Body of a function taking a &ConfContext returning
