@@ -87,6 +87,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
   * [no_help_flag](#struct-no-help-flag)
   * [about](#struct-about)
   * [name](#struct-name)
+  * [display_name](#struct-display-name)
   * [env_prefix](#struct-env-prefix)
   * [serde](#struct-serde)
     * [allow_unknown_fields](#struct-serde-allow-unknown-fields)
@@ -1501,6 +1502,12 @@ works on that struct. Attributes that are not "top-level only" will still have a
    If it is not set, it defaults to the value of `CARGO_PKG_NAME` when the proc macro is being expanded, which is the same default as `clap-derive`.
 
    *Note*: This matches the behavior of `clap` very closely.
+
+*  <a name="struct-display-name"></a> `display_name` (string argument)
+
+   example: `#[conf(display_name = "MyConfig")]`
+
+   Sets a custom name for this struct to be used in error messages. If not set, error messages use the struct's type name.
 
 *  <a name="struct-env-prefix"></a> `env_prefix` (string argument)
 

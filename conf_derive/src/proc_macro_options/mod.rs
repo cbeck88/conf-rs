@@ -71,7 +71,7 @@ impl GenConfStruct {
 
     /// Generate Conf::get_name implementation
     fn get_name_impl(&self) -> Result<TokenStream, Error> {
-        let struct_name = self.struct_item.get_ident().to_string();
+        let struct_name = self.struct_item.get_display_name();
 
         Ok(quote! {
             fn get_name() -> &'static str {

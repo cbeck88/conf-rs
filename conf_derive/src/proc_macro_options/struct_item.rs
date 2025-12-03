@@ -82,6 +82,8 @@ pub struct StructItem {
     pub struct_ident: Ident,
     pub about: Option<LitStr>,
     pub name: Option<LitStr>,
+    /// Override the name shown in error messages. Defaults to struct_ident if not set.
+    pub display_name: Option<LitStr>,
     pub no_help_flag: bool,
     pub env_prefix: Option<LitStr>,
     pub serde: Option<StructSerdeItem>,
@@ -99,6 +101,7 @@ impl StructItem {
             struct_ident: struct_ident.clone(),
             about: None,
             name: None,
+            display_name: None,
             no_help_flag: false,
             env_prefix: None,
             serde: None,
@@ -127,6 +130,12 @@ impl StructItem {
                         set_once(
                             &path,
                             &mut result.name,
+                            Some(parse_required_value::<LitStr>(meta)?),
+                        )
+                    } else if path.is_ident("display_name") {
+                        set_once(
+                            &path,
+                            &mut result.display_name,
                             Some(parse_required_value::<LitStr>(meta)?),
                         )
                     } else if path.is_ident("env_prefix") {
@@ -192,6 +201,15 @@ impl StructItem {
         &self.struct_ident
     }
 
+    /// Get the display name for this struct (used in error messages).
+    /// Returns the display_name if set, otherwise the struct identifier.
+    pub fn get_display_name(&self) -> String {
+        self.display_name
+            .as_ref()
+            .map(|lit_str| lit_str.value())
+            .unwrap_or_else(|| self.struct_ident.to_string())
+    }
+
     /// Generate a conf::ParserConfig expression, based on top-level options in this struct
     pub fn gen_parser_config(&self) -> Result<TokenStream, Error> {
         // This default if name is not explicitly set matches what clap-derive does.
@@ -251,7 +269,7 @@ impl StructItem {
         fields: &[FieldItem],
     ) -> Result<TokenStream, Error> {
         let struct_ident = &self.struct_ident;
-        let struct_name = self.struct_ident.to_string();
+        let struct_name = self.get_display_name();
         let mut predicate_evaluations = Vec::<TokenStream>::new();
         let mut fields_helper = FieldsHelper::new(instance, conf_context_ident, fields);
 

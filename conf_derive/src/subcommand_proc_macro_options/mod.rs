@@ -40,11 +40,53 @@ impl GenSubcommandsEnum {
         })
     }
 
-    /// Generate a Subcommands impl for this enum
-    pub fn gen_subcommands_impl(&self, generics: &Generics) -> Result<TokenStream, syn::Error> {
+    /// Generate hidden structs for variants with named fields.
+    /// Uses mangled names to avoid shadowing types referenced in field types.
+    ///
+    /// TODO: These generated structs don't include generics from the parent enum, so
+    /// named-field variants cannot reference generic type parameters in their field types.
+    /// Fixing this properly is non-trivial: we'd need to determine which generics are
+    /// actually used by each variant's fields and compute the correct subset of generics
+    /// and where clauses for each generated struct.
+    fn gen_named_field_structs(&self) -> TokenStream {
+        let structs: Vec<TokenStream> = self
+            .variants
+            .iter()
+            .filter_map(|var| {
+                var.get_named_fields().map(|fields| {
+                    let struct_name = var.get_generated_struct_name();
+                    let display_name = var.get_display_name();
+                    // Add #[conf(serde)] if enum has serde AND this variant isn't skipped
+                    let serde_attr = if self.enum_item.serde && !var.get_serde_skip() {
+                        quote! { #[conf(serde)] }
+                    } else {
+                        quote! {}
+                    };
+                    // Add passthrough attributes (one_of_fields, validation_predicate, etc.)
+                    let passthrough_attrs = var.gen_passthrough_conf_attrs();
+                    quote! {
+                        #[derive(::conf::Conf)]
+                        #[allow(non_camel_case_types)]
+                        #[conf(display_name = #display_name)]
+                        #passthrough_attrs
+                        #serde_attr
+                        struct #struct_name #fields
+                    }
+                })
+            })
+            .collect();
+
+        quote! { #(#structs)* }
+    }
+
+    /// Generate all code for the Subcommands derive macro.
+    /// Everything is wrapped in `const _: () = { ... }` to provide an anonymous namespace.
+    pub fn gen_all(&self, generics: &Generics) -> Result<TokenStream, syn::Error> {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let ident = self.enum_item.get_ident();
+
+        let named_field_structs = self.gen_named_field_structs();
 
         let subcommands_fns = vec![
             self.get_parsers_impl()?,
@@ -53,7 +95,7 @@ impl GenSubcommandsEnum {
             self.debug_asserts_impl()?,
         ];
 
-        Ok(quote! {
+        let subcommands_impl = quote! {
           #[automatically_derived]
           #[allow(
             unused_qualifications,
@@ -61,6 +103,18 @@ impl GenSubcommandsEnum {
           impl #impl_generics ::conf::Subcommands for #ident #ty_generics #where_clause {
             #(#subcommands_fns)*
           }
+        };
+
+        let serde_impl = self.gen_subcommands_serde_impl(generics)?;
+
+        Ok(quote! {
+            const _: () = {
+                #named_field_structs
+
+                #subcommands_impl
+
+                #serde_impl
+            };
         })
     }
 
@@ -143,13 +197,11 @@ impl GenSubcommandsEnum {
         })
     }
 
-    /// Generate a SubcommandsSerde impl for this enum, if requested
-    pub fn maybe_gen_subcommands_serde_impl(
-        &self,
-        generics: &Generics,
-    ) -> Result<Option<TokenStream>, syn::Error> {
+    /// Generate a SubcommandsSerde impl for this enum, if serde is enabled.
+    /// Returns empty TokenStream if serde is not enabled.
+    fn gen_subcommands_serde_impl(&self, generics: &Generics) -> Result<TokenStream, syn::Error> {
         if !self.enum_item.serde {
-            return Ok(None);
+            return Ok(quote! {});
         }
 
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -159,7 +211,7 @@ impl GenSubcommandsEnum {
         let subcommands_serde_items =
             vec![self.gen_serde_names()?, self.gen_from_conf_serde_context()?];
 
-        Ok(Some(quote! {
+        Ok(quote! {
           #[automatically_derived]
           #[allow(
             unused_qualifications,
@@ -167,7 +219,7 @@ impl GenSubcommandsEnum {
           impl #impl_generics ::conf::SubcommandsSerde for #ident #ty_generics #where_clause {
             #(#subcommands_serde_items)*
           }
-        }))
+        })
     }
 
     fn gen_serde_names(&self) -> Result<TokenStream, syn::Error> {

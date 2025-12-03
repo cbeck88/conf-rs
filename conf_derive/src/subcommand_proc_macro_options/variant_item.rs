@@ -3,7 +3,7 @@ use heck::{ToKebabCase, ToSnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Fields, FieldsUnnamed, Ident, LitStr, Type, Variant, meta::ParseNestedMeta,
+    Error, Fields, FieldsNamed, FieldsUnnamed, Ident, LitStr, Type, Variant, meta::ParseNestedMeta,
     spanned::Spanned, token,
 };
 
@@ -57,21 +57,28 @@ impl GetSpan for VariantSerdeItem {
 
 /// Proc macro annotations parsed from a variant within a Subcommands enum
 pub struct VariantItem {
+    enum_name: Ident,
     variant_name: Ident,
-    variant_type: Option<Type>, // None when we have a unit variant, Some otherwise
+    variant_type: Option<Type>, // None when we have a unit variant or named fields, Some otherwise
     is_optional_type: Option<Type>, // Some when we have a single unnamed field which is Option<T>
+    /// For variants with named fields, store the fields for struct generation
+    named_fields: Option<FieldsNamed>,
     command_name: LitStr,
     aliases: Vec<LitStr>,
     serde: Option<VariantSerdeItem>,
     doc_string: Option<String>,
+    /// Struct-level conf attributes to pass through to the generated struct
+    /// (e.g., one_of_fields, validation_predicate, etc.)
+    passthrough_conf_attrs: Vec<TokenStream>,
 }
 
 impl VariantItem {
-    pub fn new(variant: &Variant, _enum_ident: &Ident) -> Result<Self, Error> {
+    pub fn new(variant: &Variant, enum_ident: &Ident) -> Result<Self, Error> {
+        let enum_name = enum_ident.clone();
         let variant_name = variant.ident.clone();
 
-        let (variant_type, is_optional_type) = match variant.fields {
-            Fields::Unit => (None, None),
+        let (variant_type, is_optional_type, named_fields) = match variant.fields {
+            Fields::Unit => (None, None, None),
             Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) => {
                 match unnamed.len() {
                     //0 => (None, None),
@@ -81,7 +88,7 @@ impl VariantItem {
                         let variant_type = field.ty.clone();
                         let is_optional_type = type_is_option(&variant_type)?;
 
-                        (Some(variant_type), is_optional_type)
+                        (Some(variant_type), is_optional_type, None)
                     }
                     n => {
                         return Err(Error::new(
@@ -93,13 +100,9 @@ impl VariantItem {
                     }
                 }
             }
-            Fields::Named(_) => {
-                return Err(Error::new(
-                    variant.fields.span(),
-                    format!(
-                        "Subcommands variant '{variant_name}' must contain zero or one unnamed fields which implement Conf, found named fields"
-                    ),
-                ));
+            Fields::Named(ref named) => {
+                // Store the named fields for later struct generation
+                (None, None, Some(named.clone()))
             }
         };
 
@@ -108,12 +111,15 @@ impl VariantItem {
                 &variant_name.to_string().to_kebab_case(),
                 variant_name.span(),
             ),
+            enum_name,
             variant_name,
             variant_type,
             is_optional_type,
+            named_fields,
             aliases: Vec::new(),
             serde: None,
             doc_string: None,
+            passthrough_conf_attrs: Vec::new(),
         };
 
         let mut command_name_override: Option<LitStr> = None;
@@ -136,6 +142,13 @@ impl VariantItem {
                         Ok(())
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(VariantSerdeItem::new(meta)?))
+                    } else if result.named_fields.is_some() {
+                        // Pass through unrecognized attributes to the generated struct
+                        // (e.g., one_of_fields, validation_predicate, etc.)
+                        // Only valid for named-field variants which generate a struct.
+                        let args: TokenStream = meta.input.parse()?;
+                        result.passthrough_conf_attrs.push(quote! { #path #args });
+                        Ok(())
                     } else {
                         Err(meta.error("unrecognized conf subcommands option"))
                     }
@@ -152,6 +165,26 @@ impl VariantItem {
 
     pub fn get_name(&self) -> &Ident {
         &self.variant_name
+    }
+
+    /// Get a mangled name for the generated struct (for named field variants).
+    /// This uses a prefix to avoid shadowing types that might be referenced in field types.
+    pub fn get_generated_struct_name(&self) -> Ident {
+        Ident::new(
+            &format!("__{}_{}", self.enum_name, self.variant_name),
+            self.variant_name.span(),
+        )
+    }
+
+    /// Get a user-friendly display name for error messages (e.g., "EnumName::VariantName").
+    pub fn get_display_name(&self) -> String {
+        format!("{}::{}", self.enum_name, self.variant_name)
+    }
+
+    /// Generate #[conf(...)] attributes to pass through to the generated struct
+    pub fn gen_passthrough_conf_attrs(&self) -> TokenStream {
+        let attrs = self.passthrough_conf_attrs.iter();
+        quote! { #( #[conf(#attrs)] )* }
     }
 
     pub fn get_command_name(&self) -> &LitStr {
@@ -187,6 +220,11 @@ impl VariantItem {
             .unwrap_or_default()
     }
 
+    /// Returns the named fields if this variant has named fields
+    pub fn get_named_fields(&self) -> Option<&FieldsNamed> {
+        self.named_fields.as_ref()
+    }
+
     pub fn gen_from_conf_context_match_arm(
         &self,
         conf_context_ident: &Ident,
@@ -195,10 +233,26 @@ impl VariantItem {
         let all_names = self.get_all_command_names();
 
         if let Some(ty) = self.variant_type.as_ref() {
+            // Single unnamed field variant
             Ok(quote! {
                 #(#all_names)|* => Ok(Self::#name(<#ty as Conf>::from_conf_context(#conf_context_ident)?))
             })
+        } else if let Some(fields) = &self.named_fields {
+            // Named fields variant - use generated struct, then destructure
+            let struct_name = self.get_generated_struct_name();
+            let field_names: Vec<_> = fields
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap())
+                .collect();
+            Ok(quote! {
+                #(#all_names)|* => {
+                    let __generated = <#struct_name as Conf>::from_conf_context(#conf_context_ident)?;
+                    Ok(Self::#name { #( #field_names: __generated.#field_names ),* })
+                }
+            })
         } else {
+            // Unit variant
             Ok(quote! {
                 #(#all_names)|* => Ok(Self::#name)
             })
@@ -216,6 +270,7 @@ impl VariantItem {
         if self.get_serde_skip() {
             Ok(quote! {})
         } else if let Some(ty) = self.variant_type.as_ref() {
+            // Single unnamed field variant
             let serde_name = self.get_serde_name();
             Ok(quote! {
                 #command_name => {
@@ -230,7 +285,31 @@ impl VariantItem {
                   })??))
                 }
             })
+        } else if let Some(fields) = &self.named_fields {
+            // Named fields variant - use generated struct, then destructure
+            let struct_name = self.get_generated_struct_name();
+            let serde_name = self.get_serde_name();
+            let field_names: Vec<_> = fields
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap())
+                .collect();
+            Ok(quote! {
+                #command_name => {
+                    let document_name = #conf_context_ident.document_name;
+                    let seed = ::conf::ConfSerdeSeed::<#struct_name>::from(ctxt);
+                    let __generated = #next_value_producer_ident.next_value_seed(seed).map_err(|err| {
+                        vec![InnerError::serde(
+                            document_name,
+                            #serde_name,
+                            err
+                        )]
+                    })??;
+                    Ok(Self::#name { #( #field_names: __generated.#field_names ),* })
+                }
+            })
         } else {
+            // Unit variant
             Ok(quote! {
                 #command_name => Ok(Self::#name)
             })
@@ -246,6 +325,7 @@ impl VariantItem {
         let aliases = &self.aliases;
 
         if let Some(ty) = self.variant_type.as_ref() {
+            // Single unnamed field variant
             let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
 
             Ok(quote! {
@@ -258,7 +338,21 @@ impl VariantItem {
                   );
                 }
             })
+        } else if self.named_fields.is_some() {
+            // Named fields variant - use the generated struct
+            let struct_name = self.get_generated_struct_name();
+            Ok(quote! {
+                {
+                    let program_options = <#struct_name as ::conf::Conf>::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
+                    #parsers_ident.push(
+                        <#struct_name as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
+                            .rename(#command_name)
+                            #(.add_alias(#aliases))*
+                    );
+                }
+            })
         } else {
+            // Unit variant
             Ok(quote! {
               #parsers_ident.push(
                 ::conf::Parser::new(::conf::ParserConfig::default(), vec![], &[], #parsed_env_ident)?
@@ -273,6 +367,7 @@ impl VariantItem {
     /// Call both parser_debug_asserts and debug_asserts on the inner Conf type (if any)
     pub fn gen_debug_asserts(&self) -> Result<TokenStream, Error> {
         if let Some(inner_type) = &self.variant_type {
+            // Single unnamed field variant
             let conf_type = if let Some(opt_type) = &self.is_optional_type {
                 opt_type.clone()
             } else {
@@ -282,6 +377,13 @@ impl VariantItem {
             Ok(quote! {
                 <#conf_type as ::conf::Conf>::parser_debug_asserts();
                 <#conf_type as ::conf::Conf>::debug_asserts();
+            })
+        } else if self.named_fields.is_some() {
+            // Named fields variant - use the generated struct
+            let struct_name = self.get_generated_struct_name();
+            Ok(quote! {
+                <#struct_name as ::conf::Conf>::parser_debug_asserts();
+                <#struct_name as ::conf::Conf>::debug_asserts();
             })
         } else {
             // Unit variants don't have an inner Conf type, so nothing to check

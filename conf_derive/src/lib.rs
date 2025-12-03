@@ -51,7 +51,7 @@ fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
 }
 
 /// Derive a `Subcommands` implementation for an item with `#[conf(...)]` attributes
-#[proc_macro_derive(Subcommands, attributes(conf))]
+#[proc_macro_derive(Subcommands, attributes(conf, arg))]
 pub fn subcommands(input: TokenStream1) -> TokenStream1 {
     let input: DeriveInput = parse_macro_input!(input);
     derive_subcommands(&input)
@@ -65,14 +65,7 @@ fn derive_subcommands(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     match &input.data {
         Data::Enum(DataEnum { variants, .. }) => {
             let gener = GenSubcommandsEnum::new(ident, &input.attrs, variants.into_iter())?;
-            let subcommands_impl = gener.gen_subcommands_impl(&input.generics)?;
-            let maybe_serde = gener.maybe_gen_subcommands_serde_impl(&input.generics)?;
-
-            Ok(quote! {
-                #subcommands_impl
-
-                #maybe_serde
-            })
+            gener.gen_all(&input.generics)
         }
 
         _ => Err(Error::new(

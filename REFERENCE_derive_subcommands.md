@@ -54,7 +54,11 @@ pub enum MySubcommands {
 # }
 ```
 
-Each enum variant must have zero or one unnamed fields. If a field is present, it must be a `struct` type which implements [`Conf`](https://docs.rs/conf/latest/conf/trait.Conf.html) [^compat-note-1]. If no field is present (as with `Stat` above), the subcommand takes no additional arguments beyond those defined in the parent struct.
+Each enum variant can be one of:
+
+1. **Unit variant** (no fields) - The subcommand takes no additional arguments.
+2. **Single unnamed field** - The field must be a `struct` type which implements [`Conf`](https://docs.rs/conf/latest/conf/trait.Conf.html).
+3. **Named fields** - The fields are defined inline and support the same `#[arg(...)]` and `#[conf(...)]` attributes as struct fields. Works similarly to [clap's named field variants](https://docs.rs/clap/latest/clap/_derive/index.html#subcommands).
 
 ## Enum-level attributes
 
@@ -183,9 +187,6 @@ Each enum variant must have zero or one unnamed fields. If a field is present, i
 
      Similar to [`#[serde(skip)]`](https://serde.rs/field-attrs.html#skip), this subcommand won't read data from the serde value source.
 
-[^compat-note-1]: This is more restrictive than the corresponding [`clap` system for subcommands](https://docs.rs/clap/4.5.8/clap/_derive/index.html#subcommands), which allows named fields in the enum variants,
-decorated with attributes equivalent to those that appear on struct fields. For now, to do that in `conf`
-you have to declare separate structs. This is equally expressive from the user's point of view, and is easier for us to maintain.
 [^2]: Normally, making two fields have the same serialization name won't work in `serde`. In `serde` it is only possible to deserialize a value at most once,
       so you can't populate two different fields with the same deserializer content. Also it would likely break `Serialize`. In this case, we aren't serializing
       anything, and the enum semantics ensure that we will only deserialize this value at most once.
