@@ -1,0 +1,5 @@
+error: unrecognized conf subcommands option
+  --> tests/ui/subcommand_passthrough_on_unnamed_variant.rs:12:12
+   |
+12 |     #[conf(one_of_fields(a, b))]
+   |            ^^^^^^^^^^^^^

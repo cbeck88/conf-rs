@@ -593,7 +593,8 @@ fn test_field_type_collision() {
     assert_eq!(destination.name, "my-server");
 }
 
-// Test with one_of_fields constraint to trigger an error containing the struct name
+// Test that struct-level conf attributes are properly forwarded to generated structs.
+// Also tests that error messages use the friendly display name.
 #[derive(Subcommands, Debug)]
 #[allow(dead_code)]
 enum ConstraintCommand {
