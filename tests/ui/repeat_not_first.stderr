@@ -1,0 +1,5 @@
+error: `repeat` must be the first conf attribute on this field
+ --> tests/ui/repeat_not_first.rs:5:18
+  |
+5 |     #[conf(long, repeat)]
+  |                  ^^^^^^

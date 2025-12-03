@@ -302,6 +302,10 @@ impl ParameterItem {
                         set_once(&path, &mut result.test, Some(ParameterTestItem::new(meta)?))
                     } else if path.is_ident("pos") {
                         set_once(&path, &mut result.is_positional, Some(path.span()))
+                    } else if path.is_ident("repeat") {
+                        Err(meta.error("`repeat` must be the first conf attribute on this field"))
+                    } else if path.is_ident("flatten") {
+                        Err(meta.error("`flatten` must be the first conf attribute on this field"))
                     } else {
                         Err(meta.error("unrecognized conf parameter option"))
                     }

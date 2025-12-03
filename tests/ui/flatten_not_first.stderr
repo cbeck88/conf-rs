@@ -1,0 +1,5 @@
+error: `flatten` must be the first conf attribute on this field
+  --> tests/ui/flatten_not_first.rs:11:18
+   |
+11 |     #[conf(long, flatten)]
+   |                  ^^^^^^^
