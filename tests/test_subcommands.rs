@@ -734,6 +734,7 @@ enum FirstCommand {
     Stop,
 }
 
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 struct FirstConfig {
     #[conf(subcommands)]
@@ -746,12 +747,14 @@ enum SecondCommand {
     Restart,
 }
 
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 struct SecondConfig {
     #[conf(subcommands)]
     command: SecondCommand,
 }
 
+#[allow(dead_code)]
 #[derive(Conf, Debug)]
 struct CollidingSubcommandsConfig {
     #[conf(flatten)]
@@ -764,8 +767,6 @@ struct CollidingSubcommandsConfig {
 #[should_panic(expected = "command name `start` is duplicated")]
 fn test_colliding_subcommands_panic() {
     // Clap panics at runtime when two subcommands have the same name
-    let _ = CollidingSubcommandsConfig::try_parse_from::<&str, &str, &str>(
-        vec![".", "start"],
-        vec![],
-    );
+    let _ =
+        CollidingSubcommandsConfig::try_parse_from::<&str, &str, &str>(vec![".", "start"], vec![]);
 }
