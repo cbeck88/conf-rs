@@ -324,6 +324,11 @@ impl VariantItem {
         let command_name = &self.command_name;
         let aliases = &self.aliases;
 
+        // Generate .about() call if we have a doc string
+        let about_call = self.doc_string.as_ref().map(|doc| {
+            quote! { .about(#doc) }
+        });
+
         if let Some(ty) = self.variant_type.as_ref() {
             // Single unnamed field variant
             let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
@@ -334,6 +339,7 @@ impl VariantItem {
                   #parsers_ident.push(
                     <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
                       .rename(#command_name)
+                      #about_call
                       #(.add_alias(#aliases))*
                   );
                 }
@@ -347,6 +353,7 @@ impl VariantItem {
                     #parsers_ident.push(
                         <#struct_name as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
                             .rename(#command_name)
+                            #about_call
                             #(.add_alias(#aliases))*
                     );
                 }
@@ -357,6 +364,7 @@ impl VariantItem {
               #parsers_ident.push(
                 ::conf::Parser::new(::conf::ParserConfig::default(), vec![], &[], #parsed_env_ident)?
                   .rename(#command_name)
+                  #about_call
                   #(.add_alias(#aliases))*
               );
             })

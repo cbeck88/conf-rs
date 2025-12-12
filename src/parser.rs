@@ -231,7 +231,11 @@ impl Parser {
             command = command.after_help(after_help_text);
         }
 
-        command.build();
+        // Note: We intentionally do NOT call command.build() here.
+        // build() configures help args based on whether long_about is set.
+        // For subcommand parsers, .about() is called AFTER Parser::new() returns,
+        // so we must defer build() until all configuration is complete.
+        // clap will call build() automatically during try_get_matches_from().
 
         Ok(Self {
             options,
@@ -255,6 +259,17 @@ impl Parser {
     /// Add an alias to a parser. (This is used by subcommands)
     pub fn add_alias(mut self, alias: impl Into<String>) -> Self {
         self.command = self.command.alias(alias.into());
+        self
+    }
+
+    /// Set the about text for a parser. (This is used by subcommands)
+    ///
+    /// The first line becomes the short `about` (shown in command listings),
+    /// and the full text becomes `long_about` (shown in subcommand --help).
+    pub fn about(mut self, about: impl Into<String>) -> Self {
+        let full_text = about.into();
+        let first_line = full_text.lines().next().unwrap_or("").to_string();
+        self.command = self.command.about(first_line).long_about(full_text);
         self
     }
 
