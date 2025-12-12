@@ -80,6 +80,9 @@ pub struct ParserConfig {
     pub no_help_flag: bool,
     /// Optional terminal styling for help text
     pub styles: Option<crate::Styles>,
+    /// Optional version function that returns the version string.
+    /// When set, clap will automatically generate `-V` and `--version` flags.
+    pub version: Option<fn() -> &'static str>,
 }
 
 /// A parser which tries to parse args, matching them to a list of ProgramOptions.
@@ -156,6 +159,9 @@ impl Parser {
         }
         if let Some(ref styles) = parser_config.styles {
             command = command.styles(styles.clone().into_clap_styles());
+        }
+        if let Some(version_fn) = parser_config.version {
+            command = command.version(version_fn());
         }
 
         let mut args = Vec::<Arg>::new();

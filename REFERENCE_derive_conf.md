@@ -85,6 +85,8 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
       * [skip](#subcommands-serde-skip)
 * [Struct-level attributes](#struct-level-attributes)
   * [no_help_flag](#struct-no-help-flag)
+  * [version](#struct-version)
+  * [version_fn](#struct-version-fn)
   * [about](#struct-about)
   * [name](#struct-name)
   * [display_name](#struct-display-name)
@@ -1480,6 +1482,57 @@ works on that struct. Attributes that are not "top-level only" will still have a
    Suppresses the automatically generated help option.
 
    *Note*: Similar to [`disable_help_flag = true`](https://docs.rs/clap/4.5.8/clap/struct.Command.html#method.disable_help_flag) in `clap`, but doesn't propagate to any other structs.
+
+*  <a name="struct-version"></a> `version` (optional string argument) (top-level only)
+
+   example: `#[conf(version)]`, `#[conf(version = "1.2.3")]`
+
+   Enables the `-V` / `--version` flag for the program. When this flag is passed, the version is printed and the program exits immediately (before any argument validation).
+
+   - `#[conf(version)]` - Uses `CARGO_PKG_VERSION` from the crate's `Cargo.toml` at compile time
+   - `#[conf(version = "1.2.3")]` - Uses the specified version string
+
+   This attribute is mutually exclusive with `version_fn`.
+
+   **Example**:
+   ```rust
+   use conf::Conf;
+
+   #[derive(Conf)]
+   #[conf(version)]
+   pub struct Config {
+       #[conf(long, env)]
+       pub server_port: u16,
+   }
+   ```
+
+   With this configuration, `./my_prog --version` will print the version and exit, even if required arguments like `server_port` are missing.
+
+   *Note*: Similar to [`clap::Command::version`](https://docs.rs/clap/4.5.8/clap/struct.Command.html#method.version).
+
+*  <a name="struct-version-fn"></a> `version_fn` (expr argument) (top-level only)
+
+   example: `#[conf(version_fn = my_version_fn)]`
+
+   Enables the `-V` / `--version` flag using a function that returns the version string at runtime. The function must have signature `fn() -> &'static str`.
+
+   This attribute is mutually exclusive with `version`.
+
+   **Example**:
+   ```rust
+   use conf::Conf;
+
+   fn my_version() -> &'static str {
+       "1.0.0-custom"
+   }
+
+   #[derive(Conf)]
+   #[conf(version_fn = my_version)]
+   pub struct Config {
+       #[conf(long, env)]
+       pub server_port: u16,
+   }
+   ```
 
 *  <a name="struct-about"></a> `about` (string argument) (top-level only)
 

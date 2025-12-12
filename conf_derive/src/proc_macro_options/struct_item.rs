@@ -92,6 +92,11 @@ pub struct StructItem {
     pub validation_predicates: Vec<Expr>,
     pub doc_string: Option<String>,
     pub styles: Option<Expr>,
+    /// Version string for `-V`/`--version` flag.
+    /// `Some(None)` means use CARGO_PKG_VERSION, `Some(Some(lit))` means use the literal.
+    pub version: Option<Option<LitStr>>,
+    /// Version function for `-V`/`--version` flag. Mutually exclusive with `version`.
+    pub version_fn: Option<Expr>,
 }
 
 impl StructItem {
@@ -110,6 +115,8 @@ impl StructItem {
             validation_predicates: Vec::default(),
             doc_string: None,
             styles: None,
+            version: None,
+            version_fn: None,
         };
 
         for attr in attrs {
@@ -186,11 +193,35 @@ impl StructItem {
                             &mut result.styles,
                             Some(parse_required_value::<Expr>(meta)?),
                         )
+                    } else if path.is_ident("version") {
+                        set_once(
+                            &path,
+                            &mut result.version,
+                            Some(if meta.input.peek(token::Eq) {
+                                Some(parse_required_value::<LitStr>(meta)?)
+                            } else {
+                                None
+                            }),
+                        )
+                    } else if path.is_ident("version_fn") {
+                        set_once(
+                            &path,
+                            &mut result.version_fn,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else {
                         Err(meta.error("unrecognized conf option"))
                     }
                 })?;
             }
+        }
+
+        // Check mutual exclusivity
+        if result.version.is_some() && result.version_fn.is_some() {
+            return Err(Error::new(
+                result.struct_ident.span(),
+                "version and version_fn are mutually exclusive",
+            ));
         }
 
         Ok(result)
@@ -226,12 +257,20 @@ impl StructItem {
             .or(self.doc_string.clone());
         let about = quote_opt(&about_text);
         let styles = quote_opt(&self.styles);
+        let version = match (&self.version, &self.version_fn) {
+            (Some(None), None) => quote! { Some(|| env!("CARGO_PKG_VERSION")) },
+            (Some(Some(lit)), None) => quote! { Some(|| #lit) },
+            (None, Some(expr)) => quote! { Some(#expr) },
+            (None, None) => quote! { None },
+            (Some(_), Some(_)) => unreachable!("version and version_fn are mutually exclusive"),
+        };
         Ok(quote! {
             conf::ParserConfig {
                 about: #about,
                 name: #name,
                 no_help_flag: #no_help_flag,
                 styles: #styles,
+                version: #version,
             }
         })
     }
