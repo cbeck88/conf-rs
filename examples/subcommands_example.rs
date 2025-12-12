@@ -39,7 +39,10 @@ pub struct ModelServiceConfig {
 /// Subcommands that can be used with this service
 #[derive(Subcommands, Debug)]
 pub enum Command {
+    /// Run the migrations
+    /// The second line of a docstring is ignored in the help output.
     RunMigrations(MigrationConfig),
+    /// Show the pending migrations
     ShowPendingMigrations(MigrationConfig),
 }
 

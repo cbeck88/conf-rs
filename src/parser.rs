@@ -268,6 +268,12 @@ impl Parser {
         self.command
     }
 
+    /// Set the short description shown in the help output
+    pub fn about(mut self, about: impl Into<String>) -> Self {
+        self.command = self.command.about(about.into());
+        self
+    }
+
     /// Parse from raw os args (or something that looks like std::env::args_os but could be test
     /// data)
     pub(crate) fn parse<T>(

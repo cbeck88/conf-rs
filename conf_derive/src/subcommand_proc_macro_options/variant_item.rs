@@ -324,6 +324,23 @@ impl VariantItem {
         let command_name = &self.command_name;
         let aliases = &self.aliases;
 
+        // Turn first line of doc string into a summary for clap's "about"
+        let about_lit: Option<LitStr> = self.doc_string.as_ref().and_then(|s| {
+            let first_line = s.lines().map(|l| l.trim()).find(|l| !l.is_empty())?;
+            let truncated: String = first_line.chars().take(200).collect();
+            if truncated.is_empty() {
+                None
+            } else {
+                Some(LitStr::new(&truncated, self.variant_name.span()))
+            }
+        });
+
+        let about_ts = if let Some(about) = about_lit.as_ref() {
+            quote! { .about(#about) }
+        } else {
+            quote! {}
+        };
+
         if let Some(ty) = self.variant_type.as_ref() {
             // Single unnamed field variant
             let inner_type = self.is_optional_type.as_ref().unwrap_or(ty);
@@ -334,6 +351,7 @@ impl VariantItem {
                   #parsers_ident.push(
                     <#inner_type as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
                       .rename(#command_name)
+                      #about_ts
                       #(.add_alias(#aliases))*
                   );
                 }
@@ -347,6 +365,7 @@ impl VariantItem {
                     #parsers_ident.push(
                         <#struct_name as ::conf::Conf>::get_parser(#parsed_env_ident, program_options)?
                             .rename(#command_name)
+                            #about_ts
                             #(.add_alias(#aliases))*
                     );
                 }
@@ -357,6 +376,7 @@ impl VariantItem {
               #parsers_ident.push(
                 ::conf::Parser::new(::conf::ParserConfig::default(), vec![], &[], #parsed_env_ident)?
                   .rename(#command_name)
+                  #about_ts
                   #(.add_alias(#aliases))*
               );
             })
