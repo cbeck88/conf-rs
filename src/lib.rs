@@ -17,6 +17,8 @@
 pub mod readme;
 
 mod builder;
+#[cfg(feature = "completion")]
+pub mod completion;
 mod conf_context;
 mod error;
 mod find_parameter;
