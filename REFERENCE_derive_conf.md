@@ -1508,6 +1508,8 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    With this configuration, `./my_prog --version` will print the version and exit, even if required arguments like `server_port` are missing.
 
+   The output format is `{name} {version}`, where `name` is the value from the `name` attribute (defaulting to `CARGO_PKG_NAME`).
+
    *Note*: Similar to [`clap::Command::version`](https://docs.rs/clap/4.5.8/clap/struct.Command.html#method.version).
 
 *  <a name="struct-version-fn"></a> `version_fn` (expr argument) (top-level only)
