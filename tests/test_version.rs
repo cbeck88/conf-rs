@@ -3,6 +3,7 @@ use conf::Conf;
 /// Test with #[conf(version)] - uses CARGO_PKG_VERSION
 #[derive(Conf, Debug)]
 #[conf(version)]
+#[allow(dead_code)]
 struct ConfigWithVersion {
     #[conf(long, env)]
     some_value: Option<String>,
@@ -11,6 +12,7 @@ struct ConfigWithVersion {
 /// Test with #[conf(version = "1.2.3")] - explicit version
 #[derive(Conf, Debug)]
 #[conf(version = "1.2.3")]
+#[allow(dead_code)]
 struct ConfigWithExplicitVersion {
     #[conf(long, env)]
     some_value: Option<String>,
@@ -23,6 +25,7 @@ fn my_version_fn() -> &'static str {
 
 #[derive(Conf, Debug)]
 #[conf(version_fn = my_version_fn)]
+#[allow(dead_code)]
 struct ConfigWithVersionFn {
     #[conf(long, env)]
     some_value: Option<String>,
@@ -31,6 +34,7 @@ struct ConfigWithVersionFn {
 /// Test that --version causes early exit even with required args missing
 #[derive(Conf, Debug)]
 #[conf(version)]
+#[allow(dead_code)]
 struct ConfigWithRequiredArg {
     #[conf(long, env)]
     required_value: String,
@@ -101,6 +105,7 @@ fn test_version_fn() {
 fn test_no_version_flag_without_attribute() {
     // Config without version attribute should not have --version flag
     #[derive(Conf, Debug)]
+    #[allow(dead_code)]
     struct ConfigNoVersion {
         #[conf(long, env)]
         some_value: Option<String>,

@@ -64,7 +64,7 @@ fn test_signed_integer_accepts_negative_values() {
             "--int-value",
             "-2",
             "--float-value",
-            "3.14",
+            "3.25",
             "--int-list",
             "1",
             "--float-list",
@@ -74,14 +74,14 @@ fn test_signed_integer_accepts_negative_values() {
     )
     .unwrap();
     assert_eq!(result.int_value, -2);
-    assert_eq!(result.float_value, 3.14);
+    assert_eq!(result.float_value, 3.25);
 
     // Test parameter with negative value using = syntax
     let result = SignedTypes::try_parse_from::<&str, &str, &str>(
         vec![
             ".",
             "--int-value=-2",
-            "--float-value=3.14",
+            "--float-value=3.25",
             "--int-list=1",
             "--float-list=2.0",
         ],
@@ -89,7 +89,7 @@ fn test_signed_integer_accepts_negative_values() {
     )
     .unwrap();
     assert_eq!(result.int_value, -2);
-    assert_eq!(result.float_value, 3.14);
+    assert_eq!(result.float_value, 3.25);
 }
 
 #[test]
@@ -177,14 +177,14 @@ fn test_repeat_signed_floats_accept_negative_values() {
             "--float-list",
             "-2.5",
             "--float-list",
-            "3.14",
+            "3.25",
             "--float-list",
             "-1.0",
         ],
         vec![],
     )
     .unwrap();
-    assert_eq!(result.float_list, vec![-2.5, 3.14, -1.0]);
+    assert_eq!(result.float_list, vec![-2.5, 3.25, -1.0]);
 
     // Test with = syntax
     let result = SignedTypes::try_parse_from::<&str, &str, &str>(
@@ -194,13 +194,13 @@ fn test_repeat_signed_floats_accept_negative_values() {
             "--float-value=0.0",
             "--int-list=1",
             "--float-list=-2.5",
-            "--float-list=3.14",
+            "--float-list=3.25",
             "--float-list=-1.0",
         ],
         vec![],
     )
     .unwrap();
-    assert_eq!(result.float_list, vec![-2.5, 3.14, -1.0]);
+    assert_eq!(result.float_list, vec![-2.5, 3.25, -1.0]);
 }
 
 #[test]
@@ -280,11 +280,11 @@ fn test_explicit_allow_negative_numbers_on_string() {
 
     // Should work with floats too
     let result = ExplicitAllowNegativeNumbers::try_parse_from::<&str, &str, &str>(
-        vec![".", "--value", "-3.14", "--values=1"],
+        vec![".", "--value", "-3.25", "--values=1"],
         vec![],
     )
     .unwrap();
-    assert_eq!(result.value, "-3.14");
+    assert_eq!(result.value, "-3.25");
 
     // But should still reject things that don't look like numbers
     assert_error_contains_text!(
