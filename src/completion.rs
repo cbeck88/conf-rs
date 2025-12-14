@@ -1,7 +1,5 @@
 //! Shell completion via clap_complete.
 //! Requires the Cargo "completion" feature to be enabled.
-#![cfg(feature = "completion")]
-
 use crate::{Conf, ParsedEnv};
 
 use clap::Command as ClapCommand;
