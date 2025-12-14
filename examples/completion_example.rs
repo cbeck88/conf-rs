@@ -80,8 +80,8 @@ pub struct MigrationConfig {
 
 fn main() {
     match Cli::parse().cmd {
-        CliCommand::Completion(_args) => {
-            conf::completion::write_completion::<Cli, _>(Shell::Bash, None, &mut std::io::stdout())
+        CliCommand::Completion(args) => {
+            conf::completion::write_completion::<Cli, _>(args.shell, None, &mut std::io::stdout())
                 .expect("Expected to output shell script");
         }
         CliCommand::Run(_cfg) => {
