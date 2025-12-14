@@ -1,12 +1,86 @@
 //! Shell completion via clap_complete.
 //! Requires the Cargo "completion" feature to be enabled.
+
 use crate::{Conf, ParsedEnv};
-
 use clap::Command as ClapCommand;
-pub use clap_complete::aot::Shell;
-use clap_complete::generate;
+use clap_complete::{aot::Shell as ClapShell, generate};
+use std::{fmt, io, str::FromStr};
 
-use std::io;
+/// Shell names that provide autocompletion support
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Shell {
+    /// Bourne Again shell (bash)
+    Bash,
+    /// Elvish shell
+    Elvish,
+    /// Friendly Interactive Shell (fish)
+    Fish,
+    /// PowerShell
+    PowerShell,
+    /// Z shell (zsh)
+    Zsh,
+}
+
+impl Shell {
+    #[inline]
+    fn to_clap(self) -> ClapShell {
+        match self {
+            Shell::Bash => ClapShell::Bash,
+            Shell::Elvish => ClapShell::Elvish,
+            Shell::Fish => ClapShell::Fish,
+            Shell::PowerShell => ClapShell::PowerShell,
+            Shell::Zsh => ClapShell::Zsh,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Error in case the specified shell name is not parsed correctly
+pub struct ParseShellError {
+    input: String,
+}
+
+impl fmt::Display for ParseShellError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid shell {:?} (expected: bash, elvish, fish, powershell, zsh)",
+            self.input
+        )
+    }
+}
+
+impl std::error::Error for ParseShellError {}
+
+impl FromStr for Shell {
+    type Err = ParseShellError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = s.trim().to_ascii_lowercase();
+        match v.as_str() {
+            "bash" => Ok(Shell::Bash),
+            "elvish" => Ok(Shell::Elvish),
+            "fish" => Ok(Shell::Fish),
+            "powershell" => Ok(Shell::PowerShell),
+            "zsh" => Ok(Shell::Zsh),
+            _ => Err(ParseShellError {
+                input: s.to_string(),
+            }),
+        }
+    }
+}
+
+impl fmt::Display for Shell {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Shell::Bash => "bash",
+            Shell::Elvish => "elvish",
+            Shell::Fish => "fish",
+            Shell::PowerShell => "powershell",
+            Shell::Zsh => "zsh",
+        })
+    }
+}
 
 /// Internal: retrieve the clap::Command to give to clap_complete.
 fn get_clap_command<C: Conf>() -> ClapCommand {
@@ -34,7 +108,7 @@ pub fn write_completion<C: Conf, W: std::io::Write>(
         None => cmd.get_name().to_string(),
     };
 
-    generate(shell, &mut cmd, name, out);
+    generate(shell.to_clap(), &mut cmd, name, out);
     Ok(())
 }
 
