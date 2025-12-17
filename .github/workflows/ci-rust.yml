@@ -70,6 +70,32 @@ jobs:
     - name: Check dirty git
       uses: ./.github/actions/check-dirty-git
 
+  # builds and tests rust code, with --all-features, with --deny warnings. tests for dirty git
+  build-and-test-rust-all-features:
+    runs-on: ubuntu-latest
+
+    env:
+      RUSTFLAGS: --deny warnings
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rustup update
+      run: rustup update
+    - name: Show cargo version
+      run: cargo --version
+    - name: rust build caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: . -> target
+        key: all-features
+        save-if: ${{ github.ref == 'refs/heads/develop' }}
+    - name: Build Rust
+      run: cargo check --all-features --verbose --locked
+    - name: Test Rust
+      run: cargo test --all-features --verbose --locked
+    - name: Check dirty git
+      uses: ./.github/actions/check-dirty-git
+
   # lints and checks formatting of rust code
   lint-rust:
     runs-on: ubuntu-latest
