@@ -21,7 +21,7 @@ include = [
 
 [package]
 name = "conf"
-version = "0.4.4"
+version = "0.4.5"
 description = "A derive-based config parser for CLI args, env, and structured config files"
 categories = ["command-line-interface"]
 keywords = [
@@ -54,12 +54,12 @@ name = "figment"
 required-features = ["serde"]
 
 [dependencies]
-conf_derive = { path = "./conf_derive", version = "0.4.4" }
+conf_derive = { path = "./conf_derive", version = "0.4.5" }
 clap = { version = "4.5.8", features = ["string"] }
 clap_lex = { version = "0.7" }
 anstyle = "1"
 serde = { version = "1", optional = true }
-clap_complete = {version = "4.5.61", optional = true}
+clap_complete = { version = "4.5.61", optional = true }
 
 [features]
 default = ["serde"]
