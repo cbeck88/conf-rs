@@ -7,6 +7,7 @@ use clap_complete::{aot::Shell as ClapShell, generate};
 use std::{fmt, io, str::FromStr};
 
 /// Shell names that provide autocompletion support
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Shell {
     /// Bourne Again shell (bash)
