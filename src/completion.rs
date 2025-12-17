@@ -118,7 +118,7 @@ mod shell_serde {
             D: Deserializer<'de>,
         {
             let s = <&str>::deserialize(deserializer)?;
-            Shell::from_str(s).map_err(|e| de::Error::custom(e))
+            Shell::from_str(s).map_err(de::Error::custom)
         }
     }
 }
