@@ -45,6 +45,14 @@ name = "completions"
 path = "examples/completion_example.rs"
 required-features = ["completion"]
 
+[[example]]
+name = "serde_basic"
+required-features = ["serde"]
+
+[[example]]
+name = "figment"
+required-features = ["serde"]
+
 [dependencies]
 conf_derive = { path = "./conf_derive", version = "0.4.4" }
 clap = { version = "4.5.8", features = ["string"] }
