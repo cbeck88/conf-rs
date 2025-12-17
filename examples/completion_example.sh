@@ -9,15 +9,15 @@ set -euo pipefail
 
 exec bash --noprofile --rcfile <(cat <<'EOF'
 PS1="## $ "
-source <(cargo run --features completion --example completion_example completion bash)
-alias completion_example='cargo run --features completion --example completion_example'
+source <(cargo run --features completion --example completions completion bash)
+alias completions='cargo run --features completion --example completions'
 
 echo "## Entering sub-shell."
 echo "## Test 'completion_example' and its TAB completion."
 echo "## When done, press Ctrl-D, or type 'exit'."
 echo
-echo "## $ completion_example help"
-(set -x; completion_example help)
+echo "## $ completions help"
+completions help
 echo
 EOF
 ) -i
