@@ -22,6 +22,37 @@ pub enum Shell {
 }
 
 impl Shell {
+    /// help text to show the list of completions
+    pub const EXPECTED: &'static str = "bash, elvish, fish, powershell, zsh";
+
+    #[inline]
+    /// convert option to string name
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Shell::Bash => "bash",
+            Shell::Elvish => "elvish",
+            Shell::Fish => "fish",
+            Shell::PowerShell => "powershell",
+            Shell::Zsh => "zsh",
+        }
+    }
+
+    /// Parse a shell name (case-insensitive, trims whitespace).
+    #[inline]
+    pub fn parse(s: &str) -> Result<Self, ParseShellError> {
+        let v = s.trim().to_ascii_lowercase();
+        match v.as_str() {
+            "bash" => Ok(Shell::Bash),
+            "elvish" => Ok(Shell::Elvish),
+            "fish" => Ok(Shell::Fish),
+            "powershell" => Ok(Shell::PowerShell),
+            "zsh" => Ok(Shell::Zsh),
+            _ => Err(ParseShellError {
+                input: s.to_string(),
+            }),
+        }
+    }
+
     #[inline]
     fn to_clap(self) -> ClapShell {
         match self {
@@ -44,8 +75,9 @@ impl fmt::Display for ParseShellError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "invalid shell {:?} (expected: bash, elvish, fish, powershell, zsh)",
-            self.input
+            "invalid shell {:?} (expected: {})",
+            self.input,
+            Shell::EXPECTED
         )
     }
 }
@@ -56,29 +88,38 @@ impl FromStr for Shell {
     type Err = ParseShellError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let v = s.trim().to_ascii_lowercase();
-        match v.as_str() {
-            "bash" => Ok(Shell::Bash),
-            "elvish" => Ok(Shell::Elvish),
-            "fish" => Ok(Shell::Fish),
-            "powershell" => Ok(Shell::PowerShell),
-            "zsh" => Ok(Shell::Zsh),
-            _ => Err(ParseShellError {
-                input: s.to_string(),
-            }),
-        }
+        Shell::parse(s)
     }
 }
 
 impl fmt::Display for Shell {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Shell::Bash => "bash",
-            Shell::Elvish => "elvish",
-            Shell::Fish => "fish",
-            Shell::PowerShell => "powershell",
-            Shell::Zsh => "zsh",
-        })
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+mod shell_serde {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
+    impl Serialize for Shell {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_str(self.as_str())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Shell {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let s = <&str>::deserialize(deserializer)?;
+            Shell::from_str(s).map_err(de::Error::custom)
+        }
     }
 }
 
