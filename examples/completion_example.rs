@@ -6,9 +6,11 @@ use http::Uri as Url;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+const BIN_NAME: &str = "completions";
+
 /// Top-level CLI wrapper
 #[derive(Conf, Debug)]
-#[conf(name = "completion_example")]
+#[conf(name = "completions")]
 pub struct Cli {
     #[conf(subcommands)]
     pub cmd: CliCommand,
@@ -81,8 +83,12 @@ pub struct MigrationConfig {
 fn main() {
     match Cli::parse().cmd {
         CliCommand::Completion(args) => {
-            conf::completion::write_completion::<Cli, _>(args.shell, None, &mut std::io::stdout())
-                .expect("Expected to output shell script");
+            conf::completion::write_completion::<Cli, _>(
+                args.shell,
+                Some(BIN_NAME),
+                &mut std::io::stdout(),
+            )
+            .expect("Expected to output shell script");
         }
         CliCommand::Run(_cfg) => {
             // Your normal execution path goes here
