@@ -42,7 +42,7 @@ jobs:
     - name: Test Rust
       run: cargo test --all --verbose --locked
     - name: Check dirty git
-      uses: ./.github/actions/check-dirty-git
+      uses: cbeck88/check-dirty-git@v1
 
   # builds and tests rust code, with --no-default-features, with --deny warnings. tests for dirty git
   build-and-test-rust-no-default-features:
@@ -68,7 +68,7 @@ jobs:
     - name: Test Rust
       run: cargo test --no-default-features --verbose --locked
     - name: Check dirty git
-      uses: ./.github/actions/check-dirty-git
+      uses: cbeck88/check-dirty-git@v1
 
   # builds and tests rust code, with --all-features, with --deny warnings. tests for dirty git
   build-and-test-rust-all-features:
@@ -94,7 +94,7 @@ jobs:
     - name: Test Rust
       run: cargo test --all-features --verbose --locked
     - name: Check dirty git
-      uses: ./.github/actions/check-dirty-git
+      uses: cbeck88/check-dirty-git@v1
 
   # lints and checks formatting of rust code
   lint-rust:
