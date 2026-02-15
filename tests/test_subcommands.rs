@@ -827,3 +827,47 @@ fn test_nested_optionals_in_subcommand() {
     assert_eq!(cmd.maybe.as_ref().unwrap().user, "user");
     assert_eq!(cmd.maybe.as_ref().unwrap().pass, "pass");
 }
+
+#[derive(Conf, Debug)]
+#[allow(dead_code)]
+struct NestedCli {
+    #[conf(subcommands)]
+    command: NestedCommands,
+}
+
+#[derive(Subcommands, Debug)]
+#[allow(dead_code)]
+enum NestedCommands {
+    Nested(Cli),
+}
+
+#[test]
+fn test_nested_optionals_in_nested_subcommand() {
+    let config = NestedCli::parse_from::<&'static str, &'static str, &'static str>(
+        vec!["my-binary", "nested", "first"],
+        vec![("MAYBE_USER", "USER"), ("MAYBE_PASS", "PASS")],
+    );
+
+    let NestedCommands::Nested(cli) = config.command;
+    let Commands::First(cmd) = cli.command;
+
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "USER");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "PASS");
+
+    let config = NestedCli::parse_from::<&'static str, &'static str, &'static str>(
+        vec![
+            "my-binary",
+            "nested",
+            "first",
+            "--maybe-user=user",
+            "--maybe-pass=pass",
+        ],
+        vec![],
+    );
+
+    let NestedCommands::Nested(cli) = config.command;
+    let Commands::First(cmd) = cli.command;
+
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "user");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "pass");
+}
