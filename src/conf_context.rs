@@ -492,9 +492,9 @@ impl<'a> ConfContext<'a> {
             (
                 name,
                 ConfContext {
+                    program_options: args.parser.get_program_options(),
                     args,
                     env: self.env,
-                    program_options: self.program_options,
                     id_prefix: self.id_prefix.clone(),
                     flattened_optional_debug_info: self.flattened_optional_debug_info.clone(),
                     config_logger: self.config_logger,

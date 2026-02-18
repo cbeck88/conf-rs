@@ -770,3 +770,104 @@ fn test_colliding_subcommands_panic() {
     let _ =
         CollidingSubcommandsConfig::try_parse_from::<&str, &str, &str>(vec![".", "start"], vec![]);
 }
+
+// Test that nested optional configs in subcommand are parsed
+
+#[derive(Conf, Debug)]
+#[allow(dead_code)]
+struct Cli {
+    #[conf(subcommands)]
+    command: Commands,
+}
+
+#[derive(Subcommands, Debug)]
+#[allow(dead_code)]
+enum Commands {
+    First(First),
+}
+
+#[derive(Conf, Debug)]
+#[allow(dead_code)]
+struct First {
+    #[conf(flatten, prefix)]
+    maybe: Option<NestedOptional>,
+}
+
+#[derive(Conf, Debug)]
+#[allow(dead_code)]
+struct NestedOptional {
+    #[conf(long, env)]
+    user: String,
+    #[conf(long, env)]
+    pass: String,
+}
+
+#[test]
+fn test_nested_optionals_in_subcommand() {
+    let config = Cli::parse_from::<&'static str, &'static str, &'static str>(
+        vec!["my-binary", "first"],
+        vec![("MAYBE_USER", "USER"), ("MAYBE_PASS", "PASS")],
+    );
+
+    let Commands::First(cmd) = config.command;
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "USER");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "PASS");
+
+    let config = Cli::parse_from::<&'static str, &'static str, &'static str>(
+        vec![
+            "my-binary",
+            "first",
+            "--maybe-user=user",
+            "--maybe-pass=pass",
+        ],
+        vec![],
+    );
+
+    let Commands::First(cmd) = config.command;
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "user");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "pass");
+}
+
+#[derive(Conf, Debug)]
+#[allow(dead_code)]
+struct NestedCli {
+    #[conf(subcommands)]
+    command: NestedCommands,
+}
+
+#[derive(Subcommands, Debug)]
+#[allow(dead_code)]
+enum NestedCommands {
+    Nested(Cli),
+}
+
+#[test]
+fn test_nested_optionals_in_nested_subcommand() {
+    let config = NestedCli::parse_from::<&'static str, &'static str, &'static str>(
+        vec!["my-binary", "nested", "first"],
+        vec![("MAYBE_USER", "USER"), ("MAYBE_PASS", "PASS")],
+    );
+
+    let NestedCommands::Nested(cli) = config.command;
+    let Commands::First(cmd) = cli.command;
+
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "USER");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "PASS");
+
+    let config = NestedCli::parse_from::<&'static str, &'static str, &'static str>(
+        vec![
+            "my-binary",
+            "nested",
+            "first",
+            "--maybe-user=user",
+            "--maybe-pass=pass",
+        ],
+        vec![],
+    );
+
+    let NestedCommands::Nested(cli) = config.command;
+    let Commands::First(cmd) = cli.command;
+
+    assert_eq!(cmd.maybe.as_ref().unwrap().user, "user");
+    assert_eq!(cmd.maybe.as_ref().unwrap().pass, "pass");
+}
