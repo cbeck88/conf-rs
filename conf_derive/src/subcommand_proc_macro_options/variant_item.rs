@@ -102,7 +102,37 @@ impl VariantItem {
             }
             Fields::Named(ref named) => {
                 // Store the named fields for later struct generation
-                (None, None, Some(named.clone()))
+                // Since the generated struct will not contain any derive from the orignal enum,
+                // we should keep only the conf and subcommands attributes (directly or indirectly via cfg_attr).
+                let mut named = named.clone();
+                for field in named.named.iter_mut() {
+                    field.attrs = field
+                        .attrs
+                        .iter()
+                        .filter(|attr| {
+                            attr.path().get_ident().is_some_and(|ident| {
+                                if ident == "conf" || ident == "subcommands" || ident == "arg" {
+                                    true
+                                } else if ident == "cfg_attr" {
+                                    let mut is_conf_attr = false;
+                                    let _ = attr.parse_nested_meta(|meta| {
+                                        Ok(is_conf_attr |=
+                                            meta.path.get_ident().is_some_and(|ident| {
+                                                ident == "conf"
+                                                    || ident == "subcommands"
+                                                    || ident == "arg"
+                                            }))
+                                    });
+                                    is_conf_attr
+                                } else {
+                                    false
+                                }
+                            })
+                        })
+                        .map(ToOwned::to_owned)
+                        .collect();
+                }
+                (None, None, Some(named))
             }
         };
 
