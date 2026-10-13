@@ -116,12 +116,13 @@ impl VariantItem {
                                 } else if ident == "cfg_attr" {
                                     let mut is_conf_attr = false;
                                     let _ = attr.parse_nested_meta(|meta| {
-                                        Ok(is_conf_attr |=
+                                        is_conf_attr |=
                                             meta.path.get_ident().is_some_and(|ident| {
                                                 ident == "conf"
                                                     || ident == "subcommands"
                                                     || ident == "arg"
-                                            }))
+                                            });
+                                        Ok(())
                                     });
                                     is_conf_attr
                                 } else {
