@@ -16,6 +16,8 @@ pub struct Cli {
     pub cmd: CliCommand,
 }
 
+// This is parsed once at startup, so the size difference between variants doesn't matter.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommands, Debug)]
 pub enum CliCommand {
     /// Run the service
