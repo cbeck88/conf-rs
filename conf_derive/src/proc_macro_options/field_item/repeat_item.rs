@@ -121,6 +121,7 @@ pub struct RepeatItem {
     aliases: Option<LitStrArray>,
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
+    value_name: Option<LitStr>,
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
     env_delimiter: Option<LitChar>,
@@ -159,6 +160,7 @@ impl RepeatItem {
             aliases: None,
             env_name: None,
             env_aliases: None,
+            value_name: None,
             value_parser: None,
             value_parser_os: None,
             env_delimiter: None,
@@ -207,6 +209,12 @@ impl RepeatItem {
                             &path,
                             &mut result.env_aliases,
                             Some(parse_required_value::<LitStrArray>(meta)?),
+                        )
+                    } else if path.is_ident("value_name") {
+                        set_once(
+                            &path,
+                            &mut result.value_name,
+                            Some(parse_required_value::<LitStr>(meta)?),
                         )
                     } else if path.is_ident("value_parser") {
                         set_once(
@@ -433,6 +441,7 @@ impl RepeatItem {
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
+        let value_name = quote_opt_cow(&self.value_name);
         let allow_hyphen_values = self.allow_hyphen_values;
         let allow_negative_numbers = self.allow_negative_numbers;
         let secret = quote_opt(&self.secret);
@@ -465,6 +474,7 @@ impl RepeatItem {
               allow_hyphen_values: #allow_hyphen_values,
               allow_negative_numbers: #allow_negative_numbers,
               default_if_missing: None,
+              value_name: #value_name,
               secret: #secret,
               is_positional: #is_positional,
               has_serde_source: #has_serde_source,
