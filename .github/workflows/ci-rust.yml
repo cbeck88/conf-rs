@@ -115,7 +115,7 @@ jobs:
     - name: Format
       run: cargo fmt -- --check
     - name: Clippy
-      run: cargo clippy --all --all-features -- -D warnings
+      run: cargo clippy --all --all-targets --all-features -- -D warnings
 
   semver-checks:
     runs-on: ubuntu-latest
