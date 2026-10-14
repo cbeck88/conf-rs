@@ -102,36 +102,15 @@ impl VariantItem {
             }
             Fields::Named(ref named) => {
                 // Store the named fields for later struct generation
-                // Since the generated struct will not contain any derive from the orignal enum,
-                // we should keep only the conf and subcommands attributes (directly or indirectly via cfg_attr).
+                // The generated struct only derives Conf, so drop helper attributes that belong
+                // to other derives on the enum (serde, dummy, ...). Keep docs, since they become help text.
                 let mut named = named.clone();
                 for field in named.named.iter_mut() {
-                    field.attrs = field
-                        .attrs
-                        .iter()
-                        .filter(|attr| {
-                            attr.path().get_ident().is_some_and(|ident| {
-                                if ident == "conf" || ident == "subcommands" || ident == "arg" {
-                                    true
-                                } else if ident == "cfg_attr" {
-                                    let mut is_conf_attr = false;
-                                    let _ = attr.parse_nested_meta(|meta| {
-                                        is_conf_attr |=
-                                            meta.path.get_ident().is_some_and(|ident| {
-                                                ident == "conf"
-                                                    || ident == "subcommands"
-                                                    || ident == "arg"
-                                            });
-                                        Ok(())
-                                    });
-                                    is_conf_attr
-                                } else {
-                                    false
-                                }
-                            })
-                        })
-                        .map(ToOwned::to_owned)
-                        .collect();
+                    field.attrs.retain(|attr| {
+                        ["conf", "arg", "doc"]
+                            .iter()
+                            .any(|n| attr.path().is_ident(n))
+                    });
                 }
                 (None, None, Some(named))
             }
