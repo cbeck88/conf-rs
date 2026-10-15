@@ -167,7 +167,6 @@ pub struct ParameterItem {
     test: Option<ParameterTestItem>,
     doc_string: Option<String>,
     is_positional: Option<Span>,
-    struct_generics: NestedGenerics,
 }
 
 impl ParameterItem {
@@ -204,7 +203,6 @@ impl ParameterItem {
             test: None,
             doc_string: None,
             is_positional: None,
-            struct_generics: struct_item.generics.clone(),
         };
 
         for attr in &field.attrs {
@@ -496,13 +494,11 @@ impl ParameterItem {
             || self.is_positional.is_some()
     }
 
-    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
-        let NestedGenerics {
-            decl: g_decl,
-            turbofish: g_turbofish,
-            where_clause: g_where,
-            ..
-        } = &self.struct_generics;
+    pub fn gen_program_option_node(
+        &self,
+        generics: &NestedGenerics,
+    ) -> Result<Option<TokenStream>, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let is_required = self.is_optional_type.is_none()
             && self.default_value.is_none()
             && self.default_value_expr.is_none();
@@ -634,14 +630,10 @@ impl ParameterItem {
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
         if_no_conf_context_val: &dyn Fn(ExprRequest) -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
-        let NestedGenerics {
-            decl: g_decl,
-            turbofish: g_turbofish,
-            where_clause: g_where,
-            ..
-        } = &self.struct_generics;
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
@@ -751,13 +743,9 @@ impl ParameterItem {
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), syn::Error> {
-        let NestedGenerics {
-            decl: g_decl,
-            turbofish: g_turbofish,
-            where_clause: g_where,
-            ..
-        } = &self.struct_generics;
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         // If there's no CLI or env source, this parameter wasn't registered with clap,
         // so we handle it specially
         if !self.has_cli_or_env_source() {
@@ -779,7 +767,11 @@ impl ParameterItem {
                     }
                 };
 
-                return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val);
+                return self.gen_initializer_helper(
+                    conf_context_ident,
+                    generics,
+                    &if_no_conf_context_val,
+                );
             } else if let Some(default_value_expr) = &self.default_value_expr {
                 // Serde-only field with default expression: bypass value parser
                 let field_type = &self.field_type;
@@ -874,7 +866,7 @@ impl ParameterItem {
                 quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
             }
         };
-        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+        self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided document value.
@@ -890,6 +882,7 @@ impl ParameterItem {
         conf_context_ident: &Ident,
         doc_name: &Ident,
         doc_val: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
         // If there's no CLI or env source, this parameter wasn't registered with clap,
         // so we just return the doc value directly
@@ -949,7 +942,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+                self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
             } else {
                 let if_no_conf_context_val = |_| {
                     quote! {
@@ -966,7 +959,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+                self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
             }
         } else if use_value_parser {
             // When use_value_parser is true, then #doc_val has type String.
@@ -982,7 +975,7 @@ impl ParameterItem {
                     },
                 }
             };
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
             // To pick this value for the field, we just return it.
@@ -997,20 +990,19 @@ impl ParameterItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         }
     }
 
     /// Generate debug assertions for this parameter
     /// If there's a default_value and a value_parser/value_parser_os, test that the default parses
     /// If there's a default_value_expr, test that it evaluates without panicking
-    pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
-        let NestedGenerics {
-            decl: g_decl,
-            turbofish: g_turbofish,
-            where_clause: g_where,
-            ..
-        } = &self.struct_generics;
+    pub fn gen_debug_asserts(
+        &self,
+        struct_ident: &Ident,
+        generics: &NestedGenerics,
+    ) -> Result<TokenStream, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         // Check if skip_default_value is set. This might be useful when the value_parser has
         // side-effects or reads files from the file-system that might not be there during the test.
         if let Some(test_item) = &self.test {

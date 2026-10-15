@@ -3,8 +3,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use std::{borrow::Borrow, fmt::Display};
 use syn::{
-    Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Lifetime, LifetimeParam, Lit,
-    LitChar, LitStr, Meta, Path, PathArguments, Token, Type, bracketed, meta::ParseNestedMeta,
+    Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Ident, Lifetime, LifetimeParam,
+    Lit, LitChar, LitStr, Meta, Path, PathArguments, Token, Type, bracketed, meta::ParseNestedMeta,
     parenthesized, parse::Parse, punctuated::Punctuated, spanned::Spanned,
 };
 
@@ -366,54 +366,50 @@ pub fn prepend_generic_lifetimes<R: Borrow<Lifetime>>(
     generics
 }
 
-/// Tokens needed to re-declare a struct's generics on a helper item (fn or struct) nested inside
-/// one of our generated impls. Nested items can't see the outer impl's generic parameters (E0401),
-/// so each helper has to declare its own copy, and its call site passes them back explicitly.
+/// The struct's generics, in the forms our generated code needs.
+///
+/// Helper items (fns and structs) nested inside our generated impls can't see the impl's generic
+/// parameters (E0401), so each helper re-declares its own copy, and its call site passes them back
+/// explicitly. Lifetime params aren't supported here (explicit lifetime args on a helper whose
+/// lifetimes are late-bound are E0794), which is fine since derive(Conf) rejects them.
 #[derive(Clone)]
 pub struct NestedGenerics {
+    /// The struct's generics as written
+    pub raw: Generics,
     /// e.g. `<T: FromStr, const N: usize>`, for declaring the helper
     pub decl: TokenStream,
-    /// e.g. `T: FromStr, const N: usize`, for appending to other generic params
-    pub params: TokenStream,
     /// e.g. `::<T, N>`, for calling the helper
     pub turbofish: TokenStream,
-    /// e.g. `<T, N>`, for naming the helper (or the struct) as a type
+    /// e.g. `<T, N>`, for naming the struct (or a helper struct) as a type
     pub ty: TokenStream,
     /// The struct's where clause, if any
     pub where_clause: TokenStream,
-    /// e.g. `::core::marker::PhantomData<fn() -> (T,)>`, for a helper struct that must use every
-    /// type parameter
+    /// e.g. `::core::marker::PhantomData<fn() -> MyStruct<T, N>>`, for a helper struct that must
+    /// use every generic param
     pub phantom: TokenStream,
 }
 
 impl NestedGenerics {
-    pub fn new(generics: &Generics) -> Self {
+    pub fn new(struct_ident: &Ident, generics: &Generics) -> Self {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let turbofish = ty_generics.as_turbofish();
-        let type_params = generics.type_params().map(|tp| &tp.ident);
-        let params = generics.params.iter().map(|p| match p {
-            // Strip defaults, which aren't allowed on impls
-            GenericParam::Type(tp) => {
-                let mut tp = tp.clone();
-                tp.eq_token = None;
-                tp.default = None;
-                quote! { #tp }
-            }
-            GenericParam::Const(cp) => {
-                let mut cp = cp.clone();
-                cp.eq_token = None;
-                cp.default = None;
-                quote! { #cp }
-            }
-            GenericParam::Lifetime(lp) => quote! { #lp },
-        });
         Self {
-            params: quote! { #(#params),* },
+            raw: generics.clone(),
             decl: quote! { #impl_generics },
             turbofish: quote! { #turbofish },
             ty: quote! { #ty_generics },
             where_clause: quote! { #where_clause },
-            phantom: quote! { ::core::marker::PhantomData<fn() -> (#(#type_params,)*)> },
+            phantom: quote! { ::core::marker::PhantomData<fn() -> #struct_ident #ty_generics> },
         }
+    }
+
+    /// True if the struct has any generic params
+    pub fn is_empty(&self) -> bool {
+        self.raw.params.is_empty()
+    }
+
+    /// The parts needed to declare and call a nested helper fn: `(decl, turbofish, where_clause)`
+    pub fn fn_parts(&self) -> (&TokenStream, &TokenStream, &TokenStream) {
+        (&self.decl, &self.turbofish, &self.where_clause)
     }
 }

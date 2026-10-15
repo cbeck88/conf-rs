@@ -26,8 +26,8 @@ fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
 
     // Generic structs aren't supported yet (see #48), so give a clear error up front rather
     // than a confusing one from inside the expansion. The generated code already re-declares
-    // the struct's generics on its nested helpers, but generics still need tests, docs, and
-    // some design decisions before they can be enabled.
+    // type and const params on its nested helpers, but enabling them still needs tests and docs.
+    // Lifetime params aren't handled (explicit lifetime args on the helpers would be E0794).
     if !input.generics.params.is_empty() {
         return Err(Error::new_spanned(
             &input.generics,
@@ -42,9 +42,9 @@ fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
         }) => {
             let gener =
                 GenConfStruct::new(ident, &input.vis, &input.generics, &input.attrs, fields)?;
-            let conf_impl = gener.gen_conf_impl(&input.generics)?;
-            let maybe_serde = gener.maybe_gen_conf_serde_impl(&input.generics)?;
-            let maybe_test = gener.maybe_gen_test_fn(&input.generics)?;
+            let conf_impl = gener.gen_conf_impl()?;
+            let maybe_serde = gener.maybe_gen_conf_serde_impl()?;
+            let maybe_test = gener.maybe_gen_test_fn()?;
 
             Ok(quote! {
                 #conf_impl

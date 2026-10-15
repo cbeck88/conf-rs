@@ -1793,3 +1793,23 @@ fn test_serde_less_than_pub_structs() {
     let restricted_visibility::CrateCommand::Go { speed } = result.command;
     assert_eq!(speed, 8);
 }
+
+// Generic structs' serde machines get a hidden `__phantom__` field. Non-generic structs must not,
+// so that a user field with that name still works.
+#[derive(Conf, Debug)]
+#[conf(serde)]
+struct PhantomNamedFieldConfig {
+    #[arg(long)]
+    __phantom__: u32,
+}
+
+#[test]
+fn test_serde_field_named_phantom() {
+    let result = PhantomNamedFieldConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"__phantom__": 5}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.__phantom__, 5);
+}

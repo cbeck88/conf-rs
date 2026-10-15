@@ -128,11 +128,10 @@ pub struct RepeatItem {
     serde: Option<RepeatSerdeItem>,
     description: Option<String>,
     is_positional: Option<Span>,
-    struct_generics: NestedGenerics,
 }
 
 impl RepeatItem {
-    pub fn new(field: &Field, struct_item: &StructItem) -> Result<Self, Error> {
+    pub fn new(field: &Field, _struct_item: &StructItem) -> Result<Self, Error> {
         let field_name = field
             .ident
             .clone()
@@ -167,7 +166,6 @@ impl RepeatItem {
             serde: None,
             description: None,
             is_positional: None,
-            struct_generics: struct_item.generics.clone(),
         };
 
         for attr in &field.attrs {
@@ -537,14 +535,10 @@ impl RepeatItem {
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
         if_no_conf_context_val: &dyn Fn() -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
-        let NestedGenerics {
-            decl: g_decl,
-            turbofish: g_turbofish,
-            where_clause: g_where,
-            ..
-        } = &self.struct_generics;
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
@@ -682,6 +676,7 @@ impl RepeatItem {
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), syn::Error> {
         // If there's no CLI or env source, this repeat wasn't registered with clap,
         // so we just return the default value (empty Vec)
@@ -707,7 +702,7 @@ impl RepeatItem {
                 return Ok(Default::default());
             }
         };
-        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+        self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided doc val
@@ -720,6 +715,7 @@ impl RepeatItem {
         conf_context_ident: &Ident,
         doc_name: &Ident,
         doc_val: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
         // If there's no CLI or env source, this repeat wasn't registered with clap,
         // so we just use the serde value directly
@@ -815,7 +811,7 @@ impl RepeatItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else if use_value_parser {
             // When use_value_parser is enabled and no args/env found, use document value.
             // The value_parser will be run on each element from the document.
@@ -829,7 +825,7 @@ impl RepeatItem {
                 },
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else {
             // When use_value_parser is not enabled and no args/env found, return doc value directly.
             let id = self.field_name.to_string();
@@ -843,7 +839,7 @@ impl RepeatItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         }
     }
 
