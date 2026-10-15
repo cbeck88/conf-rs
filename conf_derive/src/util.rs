@@ -4,8 +4,8 @@ use quote::{ToTokens, quote};
 use std::{borrow::Borrow, fmt::Display};
 use syn::{
     Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Ident, Lifetime, LifetimeParam,
-    Lit, LitChar, LitStr, Meta, Path, PathArguments, Token, Type, bracketed, meta::ParseNestedMeta,
-    parenthesized, parse::Parse, punctuated::Punctuated, spanned::Spanned,
+    Lit, LitChar, LitStr, Meta, Path, PathArguments, Token, Type, bracketed, ext::IdentExt,
+    meta::ParseNestedMeta, parenthesized, parse::Parse, punctuated::Punctuated, spanned::Spanned,
 };
 
 /// Helper for determining if a type is likely bool
@@ -342,6 +342,17 @@ impl<T: Parse + ToTokens> GetSpan for List<T> {
     fn get_span(&self) -> Span {
         self.elements.span()
     }
+}
+
+/// The name of the local variable that holds a field's value (or state machine) in generated code.
+///
+/// This isn't just the field name: an expression in some field's attributes like
+/// `default(retries())` would then refer to our local instead of the user's `retries` fn.
+pub fn field_local_ident(field_name: &Ident) -> Ident {
+    Ident::new(
+        &format!("__field_{}__", field_name.unraw()),
+        Span::call_site(),
+    )
 }
 
 /// Make a lifetime from a string

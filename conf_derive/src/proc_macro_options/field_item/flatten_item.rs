@@ -442,8 +442,9 @@ impl FlattenItem {
         nvp_type: &Ident,
         errors_ident: &Ident,
     ) -> Result<SerdeStrategy, Error> {
-        let field_name = &self.field_name;
-        let field_name_str = field_name.to_string();
+        let field_name_str = self.field_name.to_string();
+        // The local holding this field's state machine
+        let field_name = &field_local_ident(&self.field_name);
         let field_type = &self.field_type;
         let serde_name_str = self.get_serde_name();
         let serde_aliases = self.get_serde_aliases();

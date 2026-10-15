@@ -221,7 +221,7 @@ impl GenConfStruct {
             .fields
             .iter()
             .map(|field| -> Result<TokenStream, Error> {
-                let field_name = field.get_field_name();
+                let field_name = field.get_local_ident();
                 let initializer = field.gen_initialize_from_conf_context_and_push_errors(
                     &conf_context_ident,
                     &errors_ident,
@@ -271,10 +271,11 @@ impl GenConfStruct {
             .iter()
             .map(|field| field.get_field_name())
             .collect();
+        let field_locals: Vec<Ident> = self.fields.iter().map(|f| f.get_local_ident()).collect();
 
         let return_value: TokenStream = quote! {
-            match (#(#field_names),*) {
-                (#(Some(#field_names)),*) => #struct_ident { #(#field_names),* },
+            match (#(#field_locals),*) {
+                (#(Some(#field_locals)),*) => #struct_ident { #(#field_names: #field_locals),* },
                 _ => panic!("Internal error: no errors encountered but struct was incomplete")
             }
         };
@@ -438,7 +439,10 @@ impl GenConfStruct {
         let visitor_generics = prepend_generic_lifetimes(&machine_generics, [&de]);
         let (impl_visitor_generics, _, _) = visitor_generics.split_for_impl();
 
+        // The machine's fields are named like the struct's fields, but are bound to locals with
+        // different names (see field_local_ident).
         let field_names: Vec<&Ident> = self.fields.iter().map(|f| f.get_field_name()).collect();
+        let field_locals: Vec<Ident> = self.fields.iter().map(|f| f.get_local_ident()).collect();
         let serde_strategies = self
             .fields
             .iter()
@@ -523,7 +527,7 @@ impl GenConfStruct {
             .iter()
             .zip(serde_strategies.iter())
             .map(|(field, strat)| {
-                let n = field.get_field_name();
+                let n = field.get_local_ident();
                 Ok(if strat.state_machine_type.is_some() {
                     quote! {
                         let #n = match #n.finalize() {
@@ -560,13 +564,13 @@ impl GenConfStruct {
 
             impl #impl_machine_generics From<ConfSerdeContext<#ct>> for #machine_ident #machine_ty_generics #machine_where_clause {
                 fn from(#conf_serde_context_ident: ConfSerdeContext<#ct>) -> Self {
-                    #(let #field_names: #field_machine_types = #field_machine_initializers;)*
+                    #(let #field_locals: #field_machine_types = #field_machine_initializers;)*
 
                     Self {
                         #conf_serde_context_ident,
                         #errors_ident: Default::default(),
                         #phantom_init
-                        #(#field_names,)*
+                        #(#field_names: #field_locals,)*
                     }
                 }
             }
@@ -576,7 +580,7 @@ impl GenConfStruct {
 
                 #[allow(unused)]
                 fn wants_key(&self, __key__: &str) -> bool {
-                    #(let #field_names = &self.#field_names;)*
+                    #(let #field_locals = &self.#field_names;)*
 
                     match __key__ {
                         #(#field_match_patterns => true,)*
@@ -591,7 +595,7 @@ impl GenConfStruct {
                         #conf_serde_context_ident,
                         mut #errors_ident,
                         #phantom_bind
-                        #(mut #field_names,)*
+                        #(#field_names: mut #field_locals,)*
                     } = self;
 
                     'match_statement: {
@@ -605,7 +609,7 @@ impl GenConfStruct {
                         #conf_serde_context_ident,
                         #errors_ident,
                         #phantom_bind
-                        #(#field_names,)*
+                        #(#field_names: #field_locals,)*
                     }
                 }
 
@@ -614,7 +618,7 @@ impl GenConfStruct {
                         #conf_serde_context_ident,
                         mut #errors_ident,
                         #phantom_bind
-                        #(#field_names,)*
+                        #(#field_names: #field_locals,)*
                     } = self;
 
                     let #conf_context_ident = &#conf_serde_context_ident.conf_context;

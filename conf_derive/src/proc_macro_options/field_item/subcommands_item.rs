@@ -184,7 +184,8 @@ impl SubcommandsItem {
         nvp_type: &Ident,
         errors_ident: &Ident,
     ) -> Result<SerdeStrategy, Error> {
-        let field_name = self.get_field_name();
+        // The local holding this field's value
+        let field_name = field_local_ident(self.get_field_name());
         let inner_type = self.is_optional_type.as_ref().unwrap_or(&self.field_type);
 
         let val_expr = if self.is_optional_type.is_some() {
