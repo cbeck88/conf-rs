@@ -9,7 +9,7 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, parse_quote};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, Visibility, parse_quote};
 
 mod field_item;
 use field_item::{FieldItem, SerdeKeys, SerdeStrategy};
@@ -298,10 +298,11 @@ impl GenConfStruct {
     /// Generate an impl ConfSerde block for this struct (if requested via attributes)
     /// Also, the requisite DeserializeSeed impl's and such.
     ///
-    /// Takes generics associated to this struct.
+    /// Takes generics and visibility associated to this struct.
     pub fn maybe_gen_conf_serde_impl(
         &self,
         generics: &Generics,
+        vis: &Visibility,
     ) -> Result<Option<TokenStream>, Error> {
         // If serde is not requested, fugeddaboutit
         if self.struct_item.serde.is_none() {
@@ -314,13 +315,19 @@ impl GenConfStruct {
         //
         // In order to hide this type M, we define it in a "private module", and put the impl's there too:
         // const _: () = { ... };
+        //
+        // M must have the same visibility as the struct. M is the associated type ISM of the
+        // struct's ConfSerde impl, and the struct is the associated type Value of M's
+        // InitializationStateMachine impl, so if either is less visible than the other, it's
+        // a private type in a public interface (E0446). A const block is not a module, so the
+        // struct's visibility means the same thing on M inside it.
 
         let struct_ident = self.struct_item.get_ident();
         let struct_ident_str = struct_ident.to_string();
         let expecting_str = format!("Object with schema {struct_ident}");
 
         let machine_ident = Ident::new("__MACHINE__", Span::call_site());
-        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics)?;
+        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics, vis)?;
 
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -387,6 +394,7 @@ impl GenConfStruct {
         &self,
         machine_ident: &Ident,
         generics: &Generics,
+        vis: &Visibility,
     ) -> Result<(TokenStream, TokenStream), Error> {
         let struct_ident = &self.struct_item.struct_ident;
         let struct_ident_str = struct_ident.to_string();
@@ -520,7 +528,7 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            pub struct #machine_ident #machine_ty_generics {
+            #vis struct #machine_ident #machine_ty_generics {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
                 #(#field_names: #field_machine_types),*
