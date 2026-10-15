@@ -29,7 +29,7 @@ fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
             fields: Fields::Named(fields),
             ..
         }) => {
-            let gener = GenConfStruct::new(ident, &input.attrs, fields)?;
+            let gener = GenConfStruct::new(ident, &input.vis, &input.attrs, fields)?;
             let conf_impl = gener.gen_conf_impl(&input.generics)?;
             let maybe_serde = gener.maybe_gen_conf_serde_impl(&input.generics)?;
             let maybe_test = gener.maybe_gen_test_fn(&input.generics)?;

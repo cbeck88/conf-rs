@@ -9,7 +9,7 @@
 use crate::util::{make_lifetime, prepend_generic_lifetimes};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, parse_quote};
+use syn::{Attribute, Error, FieldsNamed, Generics, Ident, LitStr, Type, Visibility, parse_quote};
 
 mod field_item;
 use field_item::{FieldItem, SerdeKeys, SerdeStrategy};
@@ -29,8 +29,13 @@ pub struct GenConfStruct {
 
 impl GenConfStruct {
     /// Parse syn data for a struct with derive(Conf) on it
-    pub fn new(ident: &Ident, attrs: &[Attribute], fields: &FieldsNamed) -> Result<Self, Error> {
-        let struct_item = StructItem::new(ident, attrs)?;
+    pub fn new(
+        ident: &Ident,
+        vis: &Visibility,
+        attrs: &[Attribute],
+        fields: &FieldsNamed,
+    ) -> Result<Self, Error> {
+        let struct_item = StructItem::new(ident, vis, attrs)?;
         let fields = fields
             .named
             .iter()
@@ -314,6 +319,12 @@ impl GenConfStruct {
         //
         // In order to hide this type M, we define it in a "private module", and put the impl's there too:
         // const _: () = { ... };
+        //
+        // M must have the same visibility as the struct. M is the associated type ISM of the
+        // struct's ConfSerde impl, and the struct is the associated type Value of M's
+        // InitializationStateMachine impl, so if either is less visible than the other, it's
+        // a private type in a public interface (E0446). A const block is not a module, so the
+        // struct's visibility means the same thing on M inside it.
 
         let struct_ident = self.struct_item.get_ident();
         let struct_ident_str = struct_ident.to_string();
@@ -389,6 +400,7 @@ impl GenConfStruct {
         generics: &Generics,
     ) -> Result<(TokenStream, TokenStream), Error> {
         let struct_ident = &self.struct_item.struct_ident;
+        let struct_vis = &self.struct_item.struct_vis;
         let struct_ident_str = struct_ident.to_string();
         let serde_opts = self.struct_item.serde.as_ref().unwrap();
 
@@ -520,7 +532,7 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            pub struct #machine_ident #machine_ty_generics {
+            #struct_vis struct #machine_ident #machine_ty_generics {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
                 #(#field_names: #field_machine_types),*

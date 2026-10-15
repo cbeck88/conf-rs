@@ -1549,3 +1549,247 @@ fn test_cli_with_serde_skip() {
     let err_str = result.unwrap_err().to_string();
     assert!(err_str.contains("cli_only") || err_str.contains("unknown field"));
 }
+
+// #[conf(serde)] on a Subcommands enum with a named-field variant. The struct generated for the
+// variant is private, so this hits the same E0446 issue as the less-than-pub structs below.
+// The variant's field also carries both conf's own serde options and attributes for a separate
+// serde::Deserialize derive. Each should only affect its own derive.
+#[derive(conf::Subcommands, Debug, PartialEq, serde::Deserialize)]
+#[conf(serde)]
+pub enum NamedFieldsSerdeCommand {
+    Go {
+        /// Speed to go at
+        #[arg(long, serde(rename = "spd"))]
+        #[serde(rename = "speed_value")]
+        speed: u32,
+    },
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct NamedFieldsSerdeConfig {
+    #[conf(subcommands)]
+    command: NamedFieldsSerdeCommand,
+}
+
+#[test]
+fn test_named_fields_subcommand_conf_serde_and_serde_attrs() {
+    // conf reads the value from the document using the conf(serde(rename)) name
+    let result = NamedFieldsSerdeConfig::conf_builder()
+        .args([".", "go"])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"go": {"spd": 5}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.command, NamedFieldsSerdeCommand::Go { speed: 5 });
+
+    // CLI still takes precedence
+    let result = NamedFieldsSerdeConfig::conf_builder()
+        .args([".", "go", "--speed", "7"])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"go": {"spd": 5}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.command, NamedFieldsSerdeCommand::Go { speed: 7 });
+
+    // serde::Deserialize uses the #[serde(rename)] name
+    assert_eq!(
+        serde_json::from_value::<NamedFieldsSerdeCommand>(json!({"Go": {"speed_value": 5}}))
+            .unwrap(),
+        NamedFieldsSerdeCommand::Go { speed: 5 }
+    );
+
+    // The doc comment is still used as help text
+    let help = NamedFieldsSerdeConfig::conf_builder()
+        .args([".", "go", "--help"])
+        .env::<&str, &str>([])
+        .try_parse()
+        .unwrap_err()
+        .to_string();
+    assert!(
+        help.contains("Speed to go at"),
+        "doc comment missing from help:\n{help}"
+    );
+}
+
+// #[conf(serde)] on a struct that is less than pub. The generated state machine must have the same
+// visibility as the struct, or it fails to compile with E0446 (private type in public interface).
+#[derive(Conf, Debug)]
+#[conf(serde)]
+struct PrivateSerdeConfig {
+    #[arg(long)]
+    speed: u32,
+}
+
+mod restricted_visibility {
+    use conf::Conf;
+
+    pub mod nested {
+        #[derive(conf::Conf, Debug)]
+        #[conf(serde)]
+        pub(crate) struct CrateSerdeConfig {
+            #[arg(long)]
+            pub(crate) speed: u32,
+        }
+
+        #[derive(conf::Conf, Debug)]
+        #[conf(serde)]
+        pub(super) struct SuperSerdeConfig {
+            #[arg(long)]
+            pub(super) speed: u32,
+        }
+
+        #[derive(conf::Conf, Debug)]
+        #[conf(serde)]
+        pub(in crate::restricted_visibility) struct InPathSerdeConfig {
+            #[arg(long)]
+            pub(in crate::restricted_visibility) speed: u32,
+        }
+
+        // Struct items inside a function body are scoped to the function, but their visibility
+        // is still relative to the enclosing module.
+        pub(crate) fn parse_in_fn_body(doc: serde_json::Value) -> u32 {
+            use conf::Conf;
+
+            #[derive(Conf, Debug)]
+            #[conf(serde)]
+            pub(super) struct FnBodySerdeConfig {
+                #[arg(long)]
+                speed: u32,
+            }
+
+            FnBodySerdeConfig::conf_builder()
+                .args(["."])
+                .env::<&str, &str>([])
+                .doc("t.json", doc)
+                .try_parse()
+                .unwrap()
+                .speed
+        }
+    }
+
+    // A private serde struct flattened into a pub one
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    struct PrivateInner {
+        #[arg(long)]
+        speed: u32,
+    }
+
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    pub struct PubOuter {
+        #[conf(flatten)]
+        inner: PrivateInner,
+    }
+
+    impl PubOuter {
+        pub fn speed(&self) -> u32 {
+            self.inner.speed
+        }
+    }
+
+    // A crate-visible Subcommands enum with a named-field variant, in a crate-visible config
+    #[derive(conf::Subcommands, Debug)]
+    #[conf(serde)]
+    pub(crate) enum CrateCommand {
+        Go {
+            #[arg(long)]
+            speed: u32,
+        },
+    }
+
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    pub(crate) struct CrateCli {
+        #[conf(subcommands)]
+        pub(crate) command: CrateCommand,
+    }
+
+    pub(crate) fn parse_super(doc: serde_json::Value) -> u32 {
+        nested::SuperSerdeConfig::conf_builder()
+            .args(["."])
+            .env::<&str, &str>([])
+            .doc("t.json", doc)
+            .try_parse()
+            .unwrap()
+            .speed
+    }
+
+    pub(crate) fn parse_in_path(doc: serde_json::Value) -> u32 {
+        nested::InPathSerdeConfig::conf_builder()
+            .args(["."])
+            .env::<&str, &str>([])
+            .doc("t.json", doc)
+            .try_parse()
+            .unwrap()
+            .speed
+    }
+}
+
+#[derive(conf::Subcommands, Debug)]
+#[conf(serde)]
+enum PrivateSerdeCommand {
+    Go(PrivateSerdeConfig),
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+struct PrivateSerdeCli {
+    #[conf(subcommands)]
+    command: PrivateSerdeCommand,
+}
+
+#[test]
+fn test_serde_less_than_pub_structs() {
+    let result = PrivateSerdeConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"speed": 1}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.speed, 1);
+
+    let result = restricted_visibility::nested::CrateSerdeConfig::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"speed": 2}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.speed, 2);
+
+    assert_eq!(restricted_visibility::parse_super(json!({"speed": 3})), 3);
+
+    let result = PrivateSerdeCli::conf_builder()
+        .args([".", "go"])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"go": {"speed": 4}}))
+        .try_parse()
+        .unwrap();
+    let PrivateSerdeCommand::Go(go) = result.command;
+    assert_eq!(go.speed, 4);
+
+    assert_eq!(restricted_visibility::parse_in_path(json!({"speed": 5})), 5);
+
+    assert_eq!(
+        restricted_visibility::nested::parse_in_fn_body(json!({"speed": 6})),
+        6
+    );
+
+    let result = restricted_visibility::PubOuter::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"inner": {"speed": 7}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.speed(), 7);
+
+    let result = restricted_visibility::CrateCli::conf_builder()
+        .args([".", "go"])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"go": {"speed": 8}}))
+        .try_parse()
+        .unwrap();
+    let restricted_visibility::CrateCommand::Go { speed } = result.command;
+    assert_eq!(speed, 8);
+}

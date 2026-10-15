@@ -3,7 +3,7 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{cmp::Ordering, collections::HashMap};
-use syn::{Attribute, Error, Expr, Ident, LitStr, meta::ParseNestedMeta, token};
+use syn::{Attribute, Error, Expr, Ident, LitStr, Visibility, meta::ParseNestedMeta, token};
 
 /// #[conf(serde(...))] options listed on a struct which has `#[derive(Conf)]`
 pub struct StructSerdeItem {
@@ -80,6 +80,7 @@ impl GetSpan for StructTestItem {
 /// Also assists with code generation related to these, such as for validations
 pub struct StructItem {
     pub struct_ident: Ident,
+    pub struct_vis: Visibility,
     pub about: Option<LitStr>,
     pub name: Option<LitStr>,
     /// Override the name shown in error messages. Defaults to struct_ident if not set.
@@ -101,9 +102,14 @@ pub struct StructItem {
 
 impl StructItem {
     /// Parse conf options out of attributes on a struct
-    pub fn new(struct_ident: &Ident, attrs: &[Attribute]) -> Result<Self, Error> {
+    pub fn new(
+        struct_ident: &Ident,
+        struct_vis: &Visibility,
+        attrs: &[Attribute],
+    ) -> Result<Self, Error> {
         let mut result = Self {
             struct_ident: struct_ident.clone(),
+            struct_vis: struct_vis.clone(),
             about: None,
             name: None,
             display_name: None,
