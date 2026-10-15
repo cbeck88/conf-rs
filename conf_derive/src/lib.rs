@@ -77,7 +77,12 @@ fn derive_subcommands(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
 
     match &input.data {
         Data::Enum(DataEnum { variants, .. }) => {
-            let gener = GenSubcommandsEnum::new(ident, &input.attrs, variants.into_iter())?;
+            let gener = GenSubcommandsEnum::new(
+                ident,
+                &input.generics,
+                &input.attrs,
+                variants.into_iter(),
+            )?;
             gener.gen_all(&input.generics)
         }
 

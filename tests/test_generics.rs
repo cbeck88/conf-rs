@@ -229,3 +229,77 @@ fn test_reference_example() {
     assert_eq!(s.retries, 3);
     assert_eq!(s.db.x, 1);
 }
+
+// Named-field variants of a generic enum can use the enum's generics, including only some of them
+#[derive(Subcommands, Debug)]
+enum NamedGeneric<T, U, C: Conf, const N: usize>
+where
+    T: FromStr<Err: Display>,
+    U: FromStr<Err: Display>,
+{
+    Both {
+        #[arg(long)]
+        a: T,
+        #[arg(long)]
+        b: Option<U>,
+    },
+    OnlyU {
+        #[arg(long)]
+        b: U,
+    },
+    Neither {
+        #[arg(long, default(N))]
+        n: usize,
+        #[arg(skip = N + 1)]
+        n_plus_one: usize,
+    },
+    Flattened {
+        #[arg(flatten, prefix)]
+        inner: C,
+    },
+    Unit,
+}
+
+#[derive(Conf, Debug)]
+struct NamedGenericCli {
+    #[arg(subcommands)]
+    cmd: NamedGeneric<u32, i64, Inner, 3>,
+}
+
+#[test]
+fn test_named_field_variants_generic() {
+    let s = NamedGenericCli::try_parse_from(["prog", "both", "--a", "1", "--b", "2"], no_env())
+        .unwrap();
+    let NamedGeneric::Both { a, b } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!((a, b), (1, Some(2)));
+
+    let s = NamedGenericCli::try_parse_from(["prog", "only-u", "--b", "5"], no_env()).unwrap();
+    let NamedGeneric::OnlyU { b } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!(b, 5);
+
+    let s = NamedGenericCli::try_parse_from(["prog", "neither"], no_env()).unwrap();
+    let NamedGeneric::Neither { n, n_plus_one } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!((n, n_plus_one), (3, 4));
+
+    let s =
+        NamedGenericCli::try_parse_from(["prog", "flattened", "--inner-x", "7"], no_env()).unwrap();
+    let NamedGeneric::Flattened { inner } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!(inner.x, 7);
+
+    let s = NamedGenericCli::try_parse_from(["prog", "unit"], no_env()).unwrap();
+    assert!(matches!(s.cmd, NamedGeneric::Unit));
+
+    // The generated struct's hidden PhantomData field isn't an option
+    let help = NamedGenericCli::try_parse_from(["prog", "neither", "--help"], no_env())
+        .unwrap_err()
+        .to_string();
+    assert!(!help.contains("phantom"), "{help}");
+}

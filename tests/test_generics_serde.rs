@@ -121,3 +121,53 @@ fn test_serde_subcommands_generic() {
     let Cmd::Go(inner) = s.cmd;
     assert_eq!(inner.x, 3);
 }
+
+// Named-field variants of a generic enum, with serde
+#[derive(Subcommands, Debug)]
+#[conf(serde)]
+pub enum SerdeNamedGeneric<T, U>
+where
+    T: FromStr<Err: Display> + for<'de> Deserialize<'de>,
+    U: FromStr<Err: Display> + for<'de> Deserialize<'de>,
+{
+    Both {
+        #[arg(long)]
+        a: T,
+        #[arg(long)]
+        b: U,
+    },
+    OnlyU {
+        #[arg(long)]
+        b: U,
+    },
+}
+
+#[derive(Conf, Debug)]
+#[conf(serde)]
+pub struct SerdeNamedGenericCli {
+    #[arg(subcommands)]
+    pub cmd: SerdeNamedGeneric<u32, String>,
+}
+
+#[test]
+fn test_serde_named_field_variants_generic() {
+    let s = SerdeNamedGenericCli::conf_builder()
+        .args(["prog", "both", "--b", "x"])
+        .doc("doc", json!({ "both": { "a": 5 } }))
+        .try_parse()
+        .unwrap();
+    let SerdeNamedGeneric::Both { a, b } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!((a, b.as_str()), (5, "x"));
+
+    let s = SerdeNamedGenericCli::conf_builder()
+        .args(["prog", "only-u"])
+        .doc("doc", json!({ "only_u": { "b": "y" } }))
+        .try_parse()
+        .unwrap();
+    let SerdeNamedGeneric::OnlyU { b } = s.cmd else {
+        panic!("{s:?}")
+    };
+    assert_eq!(b, "y");
+}
