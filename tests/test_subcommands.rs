@@ -871,3 +871,67 @@ fn test_nested_optionals_in_nested_subcommand() {
     assert_eq!(cmd.maybe.as_ref().unwrap().user, "user");
     assert_eq!(cmd.maybe.as_ref().unwrap().pass, "pass");
 }
+
+#[derive(Subcommands, Debug, PartialEq, serde::Deserialize)]
+#[serde(tag = "type")]
+enum NamedFieldsCommandWithCustomAttributes {
+    A,
+    B {
+        #[arg(long, short)]
+        #[serde(rename = "content")]
+        value: String,
+    },
+    C {
+        #[arg(long, short)]
+        #[serde(rename = "body")]
+        /// This is a named field
+        value: String,
+    },
+}
+
+#[derive(Conf)]
+struct NamedFieldsConfigWithCustomAttributes {
+    #[conf(subcommands)]
+    command: NamedFieldsCommandWithCustomAttributes,
+}
+
+#[test]
+fn test_named_fields_subcommands_with_custom_attributes() {
+    // Test unit variant
+    let result = NamedFieldsConfigWithCustomAttributes::try_parse_from::<&str, &str, &str>(
+        vec![".", "a"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.command, NamedFieldsCommandWithCustomAttributes::A);
+
+    // Test named fields variant
+    let result = NamedFieldsConfigWithCustomAttributes::try_parse_from::<&str, &str, &str>(
+        vec![".", "b", "--value", "test"],
+        vec![],
+    )
+    .unwrap();
+    let expected = NamedFieldsCommandWithCustomAttributes::B {
+        value: "test".into(),
+    };
+    assert_eq!(result.command, expected);
+    assert_eq!(
+        serde_json::from_str::<NamedFieldsCommandWithCustomAttributes>(
+            &serde_json::json!({
+                "type": "B",
+                "content": "test",
+            })
+            .to_string()
+        )
+        .unwrap(),
+        expected
+    );
+
+    // Test doc
+    let parsed_env = conf::ParsedEnv::default();
+    let opts = NamedFieldsConfigWithCustomAttributes::get_subcommands(&parsed_env).unwrap();
+    assert_eq!(
+        opts[2].get_program_options()[0].description.as_deref(),
+        Some("This is a named field")
+    );
+}

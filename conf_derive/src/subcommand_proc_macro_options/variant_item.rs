@@ -102,7 +102,17 @@ impl VariantItem {
             }
             Fields::Named(ref named) => {
                 // Store the named fields for later struct generation
-                (None, None, Some(named.clone()))
+                // The generated struct only derives Conf, so drop helper attributes that belong
+                // to other derives on the enum (serde, dummy, ...). Keep docs, since they become help text.
+                let mut named = named.clone();
+                for field in named.named.iter_mut() {
+                    field.attrs.retain(|attr| {
+                        ["conf", "arg", "doc"]
+                            .iter()
+                            .any(|n| attr.path().is_ident(n))
+                    });
+                }
+                (None, None, Some(named))
             }
         };
 
