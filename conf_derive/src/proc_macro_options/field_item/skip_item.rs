@@ -1,4 +1,3 @@
-use super::StructItem;
 use crate::util::*;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -15,7 +14,7 @@ pub struct SkipItem {
 }
 
 impl SkipItem {
-    pub fn new(field: &Field, _struct_item: &StructItem) -> Result<Self, Error> {
+    pub fn new(field: &Field) -> Result<Self, Error> {
         let field_name = field
             .ident
             .clone()
@@ -59,33 +58,28 @@ impl SkipItem {
         self.field_type.clone()
     }
 
-    pub fn gen_push_subcommands(
-        &self,
-        _subcommands_ident: &Ident,
-        _parsed_env: &Ident,
-    ) -> Result<TokenStream, Error> {
-        Ok(quote! {})
-    }
-
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
+        let field_type = &self.field_type;
         let value = match &self.value {
             Some(expr) => quote! { #expr },
             None => quote! { ::core::default::Default::default() },
         };
+        // The value goes in its own nested fn, like a parameter's default(...), so that the
+        // user's expression can't see our local variables.
         Ok((
             quote! {
+                fn __skip_value__ #g_decl () -> #field_type #g_where {
+                    #value
+                }
                 let _ = #conf_context_ident;
-                Ok(#value)
+                Ok(__skip_value__ #g_turbofish ())
             },
             false,
         ))
-    }
-
-    /// Skipped fields don't need debug assertions
-    pub fn gen_debug_asserts(&self, _struct_ident: &Ident) -> Result<TokenStream, Error> {
-        Ok(quote! {})
     }
 }

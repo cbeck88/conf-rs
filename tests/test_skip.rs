@@ -199,3 +199,23 @@ fn test_reference_example() {
     assert_eq!(s.value, 1);
     assert_eq!(s.retries, 3);
 }
+
+// `Self` can't be used in a skip expression, but the struct's name can
+#[derive(Conf, Debug)]
+struct NamedConst {
+    #[arg(skip = NamedConst::DEFAULT_RETRIES)]
+    retries: u32,
+    #[arg(skip = String::from("guest"))]
+    user: String,
+}
+
+impl NamedConst {
+    const DEFAULT_RETRIES: u32 = 4;
+}
+
+#[test]
+fn test_skip_named_const() {
+    let s = NamedConst::try_parse_from(["prog"], no_env()).unwrap();
+    assert_eq!(s.retries, 4);
+    assert_eq!(s.user, "guest");
+}

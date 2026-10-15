@@ -177,39 +177,40 @@ pub enum FieldItem {
 
 impl FieldItem {
     pub fn new(field: &Field, struct_item: &StructItem) -> Result<Self, Error> {
+        let conf_attrs = field
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("conf") || attr.path().is_ident("arg"))
+            .map(|attr| attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated))
+            .collect::<Result<Vec<_>, Error>>()?;
+
         // A skipped field isn't parsed from anywhere, so `skip` anywhere at the top level of a
         // conf attribute decides the kind, and SkipItem rejects any other options.
-        // (`serde(skip)` and `test(skip)` are nested, so they don't count.)
-        for attr in &field.attrs {
-            if attr.path().is_ident("conf") || attr.path().is_ident("arg") {
-                let nested =
-                    attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
-                if nested.iter().any(|meta| meta.path().is_ident("skip")) {
-                    return Ok(Self::Skip(SkipItem::new(field, struct_item)?));
-                }
-            }
+        // (Nested options like `serde(skip)` don't count.)
+        if conf_attrs
+            .iter()
+            .flatten()
+            .any(|meta| meta.path().is_ident("skip"))
+        {
+            return Ok(Self::Skip(SkipItem::new(field)?));
         }
 
-        // First, inspect the first field attribute.
-        // If the first attribute is 'flag', 'parameter', 'repeat', or 'flatten', then that's how
+        // Next, inspect the first option of each conf attribute.
+        // If it's 'flag', 'parameter', 'repeat', 'flatten', or 'subcommands', then that's how
         // we're going to handle it.
-        for attr in &field.attrs {
-            if attr.path().is_ident("conf") || attr.path().is_ident("arg") {
-                let nested =
-                    attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
-                if let Some(meta) = nested.first() {
-                    let path = meta.path();
-                    if path.is_ident("flag") {
-                        return Ok(Self::Flag(FlagItem::new(field, struct_item)?));
-                    } else if path.is_ident("parameter") {
-                        return Ok(Self::Parameter(ParameterItem::new(field, struct_item)?));
-                    } else if path.is_ident("repeat") {
-                        return Ok(Self::Repeat(RepeatItem::new(field, struct_item)?));
-                    } else if path.is_ident("flatten") {
-                        return Ok(Self::Flatten(FlattenItem::new(field, struct_item)?));
-                    } else if path.is_ident("subcommands") {
-                        return Ok(Self::Subcommands(SubcommandsItem::new(field, struct_item)?));
-                    }
+        for nested in &conf_attrs {
+            if let Some(meta) = nested.first() {
+                let path = meta.path();
+                if path.is_ident("flag") {
+                    return Ok(Self::Flag(FlagItem::new(field, struct_item)?));
+                } else if path.is_ident("parameter") {
+                    return Ok(Self::Parameter(ParameterItem::new(field, struct_item)?));
+                } else if path.is_ident("repeat") {
+                    return Ok(Self::Repeat(RepeatItem::new(field, struct_item)?));
+                } else if path.is_ident("flatten") {
+                    return Ok(Self::Flatten(FlattenItem::new(field, struct_item)?));
+                } else if path.is_ident("subcommands") {
+                    return Ok(Self::Subcommands(SubcommandsItem::new(field, struct_item)?));
                 }
             }
         }
@@ -285,7 +286,7 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
             Self::Flatten(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
             Self::Subcommands(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
-            Self::Skip(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Skip(_item) => Ok(quote! {}),
         }
     }
 
@@ -306,7 +307,7 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_initializer(conf_context_ident, generics),
             Self::Flatten(item) => item.gen_initializer(conf_context_ident),
             Self::Subcommands(item) => item.gen_initializer(conf_context_ident),
-            Self::Skip(item) => item.gen_initializer(conf_context_ident),
+            Self::Skip(item) => item.gen_initializer(conf_context_ident, generics),
         }
     }
 
@@ -717,7 +718,8 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_debug_asserts(struct_ident),
             Self::Flatten(item) => item.gen_debug_asserts(struct_ident),
             Self::Subcommands(item) => item.gen_debug_asserts(struct_ident),
-            Self::Skip(item) => item.gen_debug_asserts(struct_ident),
+            // Skipped fields don't need debug assertions
+            Self::Skip(_item) => Ok(quote! {}),
         }
     }
 }
