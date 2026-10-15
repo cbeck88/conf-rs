@@ -1,0 +1,17 @@
+error: `skip` can't be combined with other conf attributes, since a skipped field isn't parsed from anywhere
+ --> tests/ui/skip_with_other_attributes.rs:5:12
+  |
+5 |     #[conf(long, skip)]
+  |            ^^^^
+
+error: `skip` can't be combined with other conf attributes, since a skipped field isn't parsed from anywhere
+  --> tests/ui/skip_with_other_attributes.rs:12:12
+   |
+12 |     #[conf(env)]
+   |            ^^^
+
+error: `skip` can only be set once
+  --> tests/ui/skip_with_other_attributes.rs:18:18
+   |
+18 |     #[conf(skip, skip = 1)]
+   |                  ^^^^

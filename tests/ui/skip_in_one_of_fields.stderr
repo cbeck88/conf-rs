@@ -1,0 +1,5 @@
+error: using one_of_fields constraint with a field that has `skip` is invalid, since it isn't a program option.
+ --> tests/ui/skip_in_one_of_fields.rs:4:25
+  |
+4 | #[conf(one_of_fields(a, b))]
+  |                         ^
