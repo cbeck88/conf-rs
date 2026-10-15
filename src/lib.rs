@@ -68,15 +68,16 @@ pub use program_option::{DisplayFn, ParseType, ProgramOption};
 // The serde feature brings in some more types and traits
 #[cfg(feature = "serde")]
 mod conf_serde;
-// The ConfSerde trait and builder are publicly documented
+// The ConfSerde and SubcommandsSerde traits and the builder are publicly documented.
+// (Generic structs may need SubcommandsSerde as a bound.)
 #[cfg(feature = "serde")]
-pub use conf_serde::{ConfSerde, ConfSerdeBuilder};
+pub use conf_serde::{ConfSerde, ConfSerdeBuilder, SubcommandsSerde};
 // These are internals used by the derive macro.
 #[doc(hidden)]
 #[cfg(feature = "serde")]
 pub use conf_serde::{
     ConfSerdeContext, ConfSerdeSeed, IdentString, InitializationStateMachine, NextValueProducer,
-    OptionalStateMachine, PrefixStrippingStateMachine, SubcommandsSerde,
+    OptionalStateMachine, PrefixStrippingStateMachine,
 };
 // Re-export serde crate for the proc macro
 #[doc(hidden)]

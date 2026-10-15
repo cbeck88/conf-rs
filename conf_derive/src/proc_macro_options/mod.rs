@@ -699,7 +699,7 @@ impl GenConfStruct {
         if !self.struct_item.generics.is_empty() {
             return Err(Error::new(
                 ident.span(),
-                "#[conf(test)] cannot be used with generic types yet",
+                "#[conf(test)] cannot be used on a generic struct. Put it on a non-generic struct that uses this one with concrete types, e.g. via flatten.",
             ));
         }
 

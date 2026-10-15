@@ -2,7 +2,7 @@
 
 The `#[derive(Conf)]` macro can only be placed on a `struct` with named fields.
 
-Generic structs (with lifetime, type, or const parameters) are not supported yet.
+The struct may have type and const parameters, but not lifetime parameters. See [Generic structs](#generic-structs).
 
 When using `#[derive(Conf)]`, the result is adjusted by various `#[conf(...)]` attributes that can be applied.
 These are documented here.
@@ -10,6 +10,7 @@ These are documented here.
 The `#[conf(...)]` attributes conform to [Rust’s structured attribute convention](https://doc.rust-lang.org/reference/attributes.html#meta-item-attribute-syntax).
 
 * [Where can conf attributes be used?](#where-can-conf-attributes-be-used)
+* [Generic structs](#generic-structs)
 * [Field-level attributes](#field-level-attributes)
   * [Flag](#flag)
     * [short](#flag-short)
@@ -140,6 +141,60 @@ Such attributes may be allowed to repeat multiple times:
 `#[conf(attr(...), attr(...))]`
 
 In each case like this we'll document what syntax is valid in the parentheses.
+
+## Generic structs
+
+A struct with `#[derive(Conf)]` can have type and const parameters:
+
+```rust
+use conf::Conf;
+use std::{fmt::Display, str::FromStr};
+
+#[derive(Conf)]
+pub struct ServiceConfig<T, D: Conf, const RETRIES: u32 = 3>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    #[conf(long)]
+    pub limit: T,
+
+    #[conf(long, default(RETRIES))]
+    pub retries: u32,
+
+    #[conf(flatten)]
+    pub db: D,
+}
+```
+
+Lifetime parameters are not supported, since parsed values are owned anyway.
+
+**Bounds.** The derive doesn't add any bounds for you. You write whatever bounds the generated code needs on the struct,
+and the compiler tells you if one is missing. Typically:
+
+* A `parameter` or `repeat` field of type `T` (or `Option<T>`, `Vec<T>`) without a `value_parser` needs `T: FromStr` and `<T as FromStr>::Err: Display`.
+* A `default(...)` value of type `T` is shown in help, so it needs `T: Display`, unless the field sets `default_help_str`.
+* A `flatten` field of type `C` (or `Option<C>`) needs `C: Conf`, or `C: ConfSerde` if the struct uses `#[conf(serde)]`.
+* A `subcommands` field of type `S` (or `Option<S>`) needs `S: Subcommands`, or `S: SubcommandsSerde` if the struct uses `#[conf(serde)]`.
+* With `#[conf(serde)]`, a `parameter` or `repeat` field of type `T` needs `T: for<'de> Deserialize<'de>`, unless it uses `deserialize_with` or `skip`.
+
+This is the same approach as `clap`'s derive.
+
+**Type detection.** The derive decides some things from how a field's type is written, before generics are filled in.
+So a field whose type is just `T` is handled the same way, whatever `T` turns out to be:
+
+* If `T` is `bool`, the field is still a `parameter` that takes a value, not a `flag`.
+* If `T` is `Option<_>`, the field is still required.
+* If `T` is a signed number, negative values aren't allowed automatically. Use `allow_negative_numbers`.
+* If `T` is `PathBuf` or `OsString`, values are parsed with `FromStr`, so non-UTF-8 values fail. Use `value_parser_os`.
+
+Write `Option<T>` in the struct to make the field optional.
+
+**Testing.** `#[conf(test)]` can't be used on a generic struct, since it needs concrete types. Put it on a non-generic struct
+that uses the generic one with concrete types, e.g. via `flatten`. That also checks the generic struct.
+
+**Subcommands.** A named-field variant of a generic `#[derive(Subcommands)]` enum can't use the enum's generic parameters yet.
+See the [Subcommands reference](./REFERENCE_derive_subcommands.md).
 
 ## Field-level attributes
 
@@ -1640,6 +1695,8 @@ works on that struct. Attributes that are not "top-level only" will still have a
    - Conflicting short or long flags
    - Invalid default values
    - Positional argument ordering issues
+
+   This can't be used on a generic struct. See [Generic structs](#generic-structs).
 
    **Note**: It is better to put this on the top-level struct that you will actually parse (e.g., the one you call `Conf::parse()` on), rather than on intermediate structs that are flattened into others. This will be more efficient and there shouldn't be any problems that would have been caught
    by testing the intermediate structs.
