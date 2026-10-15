@@ -494,7 +494,11 @@ impl ParameterItem {
             || self.is_positional.is_some()
     }
 
-    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
+    pub fn gen_program_option_node(
+        &self,
+        generics: &NestedGenerics,
+    ) -> Result<Option<TokenStream>, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let is_required = self.is_optional_type.is_none()
             && self.default_value.is_none()
             && self.default_value_expr.is_none();
@@ -524,10 +528,10 @@ impl ParameterItem {
             let inner_type = self.is_optional_type.as_ref().unwrap_or(field_type);
             quote! {
                 Some(::conf::DisplayFn((|f: &mut ::core::fmt::Formatter| {
-                    fn __default_value__() -> #inner_type {
+                    fn __default_value__ #g_decl () -> #inner_type #g_where {
                         #default_value_expr
                     }
-                    ::core::fmt::Display::fmt(&__default_value__(), f)
+                    ::core::fmt::Display::fmt(&__default_value__ #g_turbofish (), f)
                 }) as fn(&mut ::core::fmt::Formatter) -> ::core::fmt::Result))
             }
         } else {
@@ -626,8 +630,10 @@ impl ParameterItem {
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
         if_no_conf_context_val: &dyn Fn(ExprRequest) -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
@@ -655,9 +661,9 @@ impl ParameterItem {
                 // Use OsStr-based value parser
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &::std::ffi::OsStr
-                    ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                    ) -> Result<#inner_type, impl ::core::fmt::Display> #g_where {
                       (#value_parser_expr)(__arg__)
                     }
 
@@ -676,7 +682,7 @@ impl ParameterItem {
                         #if_no_conf_context_val
                       };
                     #conf_context_ident.log_config_event(#id, value_source);
-                    match __value_parser__(val_os) {
+                    match __value_parser__ #g_turbofish (val_os) {
                       #value_parser_ok_arm
                       Err(err) => Err(
                         InnerError::invalid_value_os(
@@ -695,9 +701,9 @@ impl ParameterItem {
                 // Use str-based value parser - ConfContext handles UTF-8 conversion
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &str
-                    ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                    ) -> Result<#inner_type, impl ::core::fmt::Display> #g_where {
                       (#value_parser_expr)(__arg__)
                     }
 
@@ -716,7 +722,7 @@ impl ParameterItem {
                         #if_no_conf_context_val
                       };
                     #conf_context_ident.log_config_event(#id, value_source);
-                    match __value_parser__(val_str) {
+                    match __value_parser__ #g_turbofish (val_str) {
                       #value_parser_ok_arm
                       Err(err) => Err(
                         InnerError::invalid_value(
@@ -737,7 +743,9 @@ impl ParameterItem {
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         // If there's no CLI or env source, this parameter wasn't registered with clap,
         // so we handle it specially
         if !self.has_cli_or_env_source() {
@@ -759,7 +767,11 @@ impl ParameterItem {
                     }
                 };
 
-                return self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val);
+                return self.gen_initializer_helper(
+                    conf_context_ident,
+                    generics,
+                    &if_no_conf_context_val,
+                );
             } else if let Some(default_value_expr) = &self.default_value_expr {
                 // Serde-only field with default expression: bypass value parser
                 let field_type = &self.field_type;
@@ -773,11 +785,11 @@ impl ParameterItem {
                 return Ok((
                     quote! {
                         {
-                            fn __default_value__() -> #inner_type {
+                            fn __default_value__ #g_decl () -> #inner_type #g_where {
                                 #default_value_expr
                             }
                             let _ = #conf_context_ident;
-                            let __default_value_result__ = __default_value__();
+                            let __default_value_result__ = __default_value__ #g_turbofish ();
                             #conf_context_ident.log_config_event(#id, ::conf::ConfValueSource::Default);
                             Ok(#wrap_in_some)
                         }
@@ -828,10 +840,10 @@ impl ParameterItem {
                 let id = self.field_name.to_string();
                 return quote! {
                     {
-                        fn __default_value__() -> #inner_type {
+                        fn __default_value__ #g_decl () -> #inner_type #g_where {
                             #default_value_expr
                         }
-                        let __default_value_result__ = __default_value__();
+                        let __default_value_result__ = __default_value__ #g_turbofish ();
                         #conf_context_ident.log_config_event(#id, ::conf::ConfValueSource::Default);
                         return Ok(#wrap_in_some);
                     }
@@ -854,7 +866,7 @@ impl ParameterItem {
                 quote! { return Err(#conf_context_ident.missing_required_parameter_error(opt)); }
             }
         };
-        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+        self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided document value.
@@ -870,6 +882,7 @@ impl ParameterItem {
         conf_context_ident: &Ident,
         doc_name: &Ident,
         doc_val: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
         // If there's no CLI or env source, this parameter wasn't registered with clap,
         // so we just return the doc value directly
@@ -929,7 +942,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+                self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
             } else {
                 let if_no_conf_context_val = |_| {
                     quote! {
@@ -946,7 +959,7 @@ impl ParameterItem {
                     }
                 };
 
-                self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+                self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
             }
         } else if use_value_parser {
             // When use_value_parser is true, then #doc_val has type String.
@@ -962,7 +975,7 @@ impl ParameterItem {
                     },
                 }
             };
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else {
             // When use_value_parser is false, then #doc_val has type #field_type.
             // To pick this value for the field, we just return it.
@@ -977,14 +990,19 @@ impl ParameterItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         }
     }
 
     /// Generate debug assertions for this parameter
     /// If there's a default_value and a value_parser/value_parser_os, test that the default parses
     /// If there's a default_value_expr, test that it evaluates without panicking
-    pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
+    pub fn gen_debug_asserts(
+        &self,
+        struct_ident: &Ident,
+        generics: &NestedGenerics,
+    ) -> Result<TokenStream, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         // Check if skip_default_value is set. This might be useful when the value_parser has
         // side-effects or reads files from the file-system that might not be there during the test.
         if let Some(test_item) = &self.test {
@@ -1015,28 +1033,28 @@ impl ParameterItem {
                 ValueParserExpr::OsStr(value_parser_expr) => {
                     quote! {
                         {
-                            fn __value_parser__(
+                            fn __value_parser__ #g_decl (
                                 __arg__: &::std::ffi::OsStr
-                            ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                            ) -> Result<#inner_type, impl ::core::fmt::Display> #g_where {
                                 (#value_parser_expr)(__arg__)
                             }
 
                             use ::std::ffi::OsStr;
                             let os_str = OsStr::new(#default_value_str);
-                            if let Err(err) = __value_parser__(os_str) { #do_panic }
+                            if let Err(err) = __value_parser__ #g_turbofish (os_str) { #do_panic }
                         }
                     }
                 }
                 ValueParserExpr::Str(value_parser_expr) => {
                     quote! {
                         {
-                            fn __value_parser__(
+                            fn __value_parser__ #g_decl (
                                 __arg__: &str
-                            ) -> Result<#inner_type, impl ::core::fmt::Display> {
+                            ) -> Result<#inner_type, impl ::core::fmt::Display> #g_where {
                                 (#value_parser_expr)(__arg__)
                             }
 
-                            if let Err(err) = __value_parser__(#default_value_str) { #do_panic }
+                            if let Err(err) = __value_parser__ #g_turbofish (#default_value_str) { #do_panic }
                         }
                     }
                 }
@@ -1051,13 +1069,13 @@ impl ParameterItem {
 
             assertions.push(quote! {
                 {
-                    fn __default_value__() -> #inner_type {
+                    fn __default_value__ #g_decl () -> #inner_type #g_where {
                         #default_value_expr
                     }
 
                     // Evaluate the default expression to ensure it doesn't panic
                     // and type-checks correctly
-                    let _ = __default_value__();
+                    let _ = __default_value__ #g_turbofish ();
                 }
             });
         }

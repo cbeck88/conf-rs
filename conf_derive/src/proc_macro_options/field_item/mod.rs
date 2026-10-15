@@ -1,5 +1,5 @@
 use super::StructItem;
-use crate::util::type_is_bool;
+use crate::util::{NestedGenerics, make_lifetime, prepend_generic_lifetimes, type_is_bool};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -239,10 +239,13 @@ impl FieldItem {
 
     /// Generate a Node<ProgramOption> expression for this field.
     /// Returns None if this field type doesn't contribute to program options (e.g., Subcommands).
-    pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
+    pub fn gen_program_option_node(
+        &self,
+        generics: &NestedGenerics,
+    ) -> Result<Option<TokenStream>, Error> {
         match self {
             Self::Flag(item) => item.gen_program_option_node(),
-            Self::Parameter(item) => item.gen_program_option_node(),
+            Self::Parameter(item) => item.gen_program_option_node(generics),
             Self::Repeat(item) => item.gen_program_option_node(),
             Self::Flatten(item) => item.gen_program_option_node(),
             Self::Subcommands(item) => item.gen_program_option_node(),
@@ -271,11 +274,15 @@ impl FieldItem {
     /// * a TokenStream for initializer expression, which can use `?` to return errors,
     /// * a bool which is true if the error type is `Vec<InnerError>` and false if it is
     ///   `InnerError`
-    fn gen_initializer(&self, conf_context_ident: &Ident) -> Result<(TokenStream, bool), Error> {
+    fn gen_initializer(
+        &self,
+        conf_context_ident: &Ident,
+        generics: &NestedGenerics,
+    ) -> Result<(TokenStream, bool), Error> {
         match self {
             Self::Flag(item) => item.gen_initializer(conf_context_ident),
-            Self::Parameter(item) => item.gen_initializer(conf_context_ident),
-            Self::Repeat(item) => item.gen_initializer(conf_context_ident),
+            Self::Parameter(item) => item.gen_initializer(conf_context_ident, generics),
+            Self::Repeat(item) => item.gen_initializer(conf_context_ident, generics),
             Self::Flatten(item) => item.gen_initializer(conf_context_ident),
             Self::Subcommands(item) => item.gen_initializer(conf_context_ident),
         }
@@ -292,17 +299,24 @@ impl FieldItem {
         conf_context_ident: &Ident,
         doc_name_ident: &Ident,
         doc_val_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
         match self {
             Self::Flag(item) => {
                 item.gen_initializer_with_doc_val(conf_context_ident, doc_name_ident, doc_val_ident)
             }
-            Self::Parameter(item) => {
-                item.gen_initializer_with_doc_val(conf_context_ident, doc_name_ident, doc_val_ident)
-            }
-            Self::Repeat(item) => {
-                item.gen_initializer_with_doc_val(conf_context_ident, doc_name_ident, doc_val_ident)
-            }
+            Self::Parameter(item) => item.gen_initializer_with_doc_val(
+                conf_context_ident,
+                doc_name_ident,
+                doc_val_ident,
+                generics,
+            ),
+            Self::Repeat(item) => item.gen_initializer_with_doc_val(
+                conf_context_ident,
+                doc_name_ident,
+                doc_val_ident,
+                generics,
+            ),
             Self::Flatten(_item) => unimplemented!("uses a custom match arm"),
             Self::Subcommands(_item) => unimplemented!("would have to use a custom match arm"),
         }
@@ -311,8 +325,8 @@ impl FieldItem {
     /// Generate code of the form
     ///
     /// {
-    ///   fn #field_name(conf_context: &...) -> Result<#field_type, InnerError> { .. }
-    ///   match field_name(...) {
+    ///   fn #field_name<generics>(conf_context: &...) -> Result<#field_type, InnerError> { .. }
+    ///   match field_name::<generics>(...) {
     ///     Ok(t) => Some(t),
     ///     Err(err) => { errors.push(err); None },
     ///   }
@@ -328,14 +342,18 @@ impl FieldItem {
     /// * conf_context_ident is a variable of type &ConfContext which is in scope
     /// * errors_ident is a variable of type mut Vec<InnerError> which is in scope, which we can
     ///   push to.
+    /// * generics are the struct's generics, which the nested fn re-declares
     pub fn gen_initialize_from_conf_context_and_push_errors(
         &self,
         conf_context_ident: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_name = self.get_field_name();
         let field_type = self.get_field_type();
-        let (initializer, returns_multiple_errors) = self.gen_initializer(conf_context_ident)?;
+        let (initializer, returns_multiple_errors) =
+            self.gen_initializer(conf_context_ident, generics)?;
         // The initializer is the portion e.g.
         // fn(conf_context: &...) -> Result<T, conf::InnerError> { ... }
         //
@@ -355,12 +373,12 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name(
+            fn #field_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>
-            ) -> Result<#field_type, #error_type> {
+            ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name(#conf_context_ident) {
+            match #field_name #g_turbofish (#conf_context_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -374,10 +392,10 @@ impl FieldItem {
     /// Generate code of the form
     ///
     /// {
-    ///   fn #field_name(c: &ConfContext, d: ...) -> Result<#field_type, Vec<InnerError> {
+    ///   fn #field_name<generics>(c: &ConfContext, d: ...) -> Result<#field_type, Vec<InnerError> {
     ///      ..
     ///   }
-    ///   match #field_name(...) {
+    ///   match #field_name::<generics>(...) {
     ///     Ok(val) => Some(val),
     ///     Err(err) => #errors_ident.extend(err);
     ///   }
@@ -396,18 +414,25 @@ impl FieldItem {
     /// * doc_val_ident is a variable of type #serde_type, which was parsed from serde successfully.
     /// * errors_ident is a variable of type mut Vec<InnerError> which is in scope, which we can
     ///   push to.
+    /// * generics are the struct's generics, which the nested fn re-declares
     pub fn gen_initialize_from_conf_context_and_doc_val_and_push_errors(
         &self,
         conf_context_ident: &Ident,
         doc_name_ident: &Ident,
         doc_val_ident: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_name = self.get_field_name();
         let field_type = self.get_field_type();
         let serde_type = self.get_serde_type();
-        let (initializer, returns_multiple_errors) =
-            self.gen_initializer_with_doc_val(conf_context_ident, doc_name_ident, doc_val_ident)?;
+        let (initializer, returns_multiple_errors) = self.gen_initializer_with_doc_val(
+            conf_context_ident,
+            doc_name_ident,
+            doc_val_ident,
+            generics,
+        )?;
         // The initializer is the portion e.g.
         // fn(conf_context: &..., doc_val: T) -> Result<T, conf::InnerError> { ... }
         //
@@ -428,14 +453,14 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name(
+            fn #field_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>,
               #doc_name_ident: &str,
               #doc_val_ident: #serde_type
-            ) -> Result<#field_type, #error_type> {
+            ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name(&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
+            match #field_name #g_turbofish (&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -466,13 +491,14 @@ impl FieldItem {
         nvp: &Ident,
         nvp_type: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<SerdeStrategy, Error> {
         if self.get_serde_skip() {
             return Ok(SerdeStrategy::skip());
         }
         match self {
             Self::Flag(_) | Self::Parameter(_) | Self::Repeat(_) => {
-                self.gen_simple_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident)
+                self.gen_simple_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident, generics)
             }
             Self::Flatten(item) => item.gen_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident),
             Self::Subcommands(item) => {
@@ -499,6 +525,7 @@ impl FieldItem {
         nvp: &Ident,
         nvp_type: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
         let field_name_str = field_name.to_string();
@@ -507,6 +534,11 @@ impl FieldItem {
         let serde_aliases = self.get_serde_aliases();
         let serde_type = self.get_serde_type();
         let deserialize_with = self.get_serde_deserialize_with();
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
+        let g_ty = &generics.ty;
+        let g_phantom = &generics.phantom;
+        let seed_generics = prepend_generic_lifetimes(&generics.raw, [make_lifetime("'dedede2")]);
+        let (seed_impl_generics, _, _) = seed_generics.split_for_impl();
 
         let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
         let doc_name_ident = Ident::new("__doc_name__", Span::call_site());
@@ -516,14 +548,17 @@ impl FieldItem {
             &doc_name_ident,
             &doc_val_ident,
             errors_ident,
+            generics,
         )?;
 
         // Generate the deserialization call - either using deserialize_with or the default Deserialize impl
         let deserialize_call = if let Some(deserialize_with_path) = deserialize_with {
             quote! {
               {
-                struct __DeserializeWith;
-                impl<'dedede2> ::serde::de::DeserializeSeed<'dedede2> for __DeserializeWith {
+                // Like serde_derive's __DeserializeWith: re-declare the struct's generics, and
+                // use all of them in a PhantomData.
+                struct __DeserializeWith #g_decl (#g_phantom) #g_where;
+                impl #seed_impl_generics ::serde::de::DeserializeSeed<'dedede2> for __DeserializeWith #g_ty #g_where {
                   type Value = #serde_type;
                   fn deserialize<__D>(self, __deserializer: __D) -> ::std::result::Result<Self::Value, __D::Error>
                   where
@@ -532,7 +567,7 @@ impl FieldItem {
                     (#deserialize_with_path)(__deserializer)
                   }
                 }
-                #nvp.next_value_seed(__DeserializeWith)
+                #nvp.next_value_seed(__DeserializeWith #g_turbofish (::core::marker::PhantomData))
               }
             }
         } else {
@@ -641,10 +676,14 @@ impl FieldItem {
     }
 
     /// Generate debug assertions for this field
-    pub fn gen_debug_asserts(&self, struct_ident: &Ident) -> Result<TokenStream, Error> {
+    pub fn gen_debug_asserts(
+        &self,
+        struct_ident: &Ident,
+        generics: &NestedGenerics,
+    ) -> Result<TokenStream, Error> {
         match self {
             Self::Flag(item) => item.gen_debug_asserts(struct_ident),
-            Self::Parameter(item) => item.gen_debug_asserts(struct_ident),
+            Self::Parameter(item) => item.gen_debug_asserts(struct_ident, generics),
             Self::Repeat(item) => item.gen_debug_asserts(struct_ident),
             Self::Flatten(item) => item.gen_debug_asserts(struct_ident),
             Self::Subcommands(item) => item.gen_debug_asserts(struct_ident),

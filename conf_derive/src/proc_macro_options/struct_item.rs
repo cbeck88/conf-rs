@@ -3,7 +3,9 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{cmp::Ordering, collections::HashMap};
-use syn::{Attribute, Error, Expr, Ident, LitStr, Visibility, meta::ParseNestedMeta, token};
+use syn::{
+    Attribute, Error, Expr, Generics, Ident, LitStr, Visibility, meta::ParseNestedMeta, token,
+};
 
 /// #[conf(serde(...))] options listed on a struct which has `#[derive(Conf)]`
 pub struct StructSerdeItem {
@@ -98,6 +100,8 @@ pub struct StructItem {
     pub version: Option<Option<LitStr>>,
     /// Version function for `-V`/`--version` flag. Mutually exclusive with `version`.
     pub version_fn: Option<Expr>,
+    /// The struct's generics, re-declared on helper items nested in generated impls
+    pub generics: NestedGenerics,
 }
 
 impl StructItem {
@@ -105,9 +109,11 @@ impl StructItem {
     pub fn new(
         struct_ident: &Ident,
         struct_vis: &Visibility,
+        generics: &Generics,
         attrs: &[Attribute],
     ) -> Result<Self, Error> {
         let mut result = Self {
+            generics: NestedGenerics::new(struct_ident, generics),
             struct_ident: struct_ident.clone(),
             struct_vis: struct_vis.clone(),
             about: None,
@@ -301,12 +307,11 @@ impl StructItem {
 
     /// Generate tokens that apply any validations to an instance
     ///
-    /// These tokens are the body of a validation function with signature:
+    /// These tokens are the body of a validation closure with signature:
     ///
-    /// fn validation(
-    ///     #instance_ident: &Self,
-    ///     #instance_id_prefix_ident: &str
-    /// ) -> Result<(), Vec<conf::InnerError>>
+    /// |#instance: &StructName<generics>| -> Result<(), Vec<conf::InnerError>>
+    ///
+    /// The closure captures #conf_context_ident.
     pub fn gen_validation_routine(
         &self,
         instance: &Ident,
@@ -394,16 +399,19 @@ impl StructItem {
         }
 
         // Apply user-provided validation predicate, if any
+        let (g_decl, g_turbofish, g_where) = self.generics.fn_parts();
+        let g_ty = &self.generics.ty;
         for user_validation_predicate in self.validation_predicates.iter() {
             predicate_evaluations.push(quote! {
                 {
-                    fn __validation_predicate__(
-                      #instance: & #struct_ident
+                    fn __validation_predicate__ #g_decl (
+                      #instance: & #struct_ident #g_ty
                     ) -> Result<(), impl ::core::fmt::Display>
+                    #g_where
                     {
                         #user_validation_predicate(#instance)
                     }
-                    __validation_predicate__(#instance).map_err(|err|
+                    __validation_predicate__ #g_turbofish (#instance).map_err(|err|
                       ::conf::InnerError::validation(
                         #struct_name,
                         & #conf_context_ident .get_id_prefix(),

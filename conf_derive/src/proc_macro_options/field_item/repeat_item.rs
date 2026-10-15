@@ -535,8 +535,10 @@ impl RepeatItem {
     fn gen_initializer_helper(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
         if_no_conf_context_val: &dyn Fn() -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        let (g_decl, g_turbofish, g_where) = generics.fn_parts();
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
@@ -562,9 +564,9 @@ impl RepeatItem {
                 // OsStr-based value parser
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &::std::ffi::OsStr
-                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> #g_where {
                       (#value_parser_os)(__arg__)
                     }
 
@@ -592,7 +594,7 @@ impl RepeatItem {
                     result.reserve(strs.len());
                     for val_os_str in strs {
                       // Note: val_os_str is already &OsStr, no conversion needed
-                      match __value_parser__(val_os_str) {
+                      match __value_parser__ #g_turbofish (val_os_str) {
                         Ok(val) => result.push(val),
                         Err(err) => errors.push(
                           InnerError::invalid_value_os(
@@ -616,9 +618,9 @@ impl RepeatItem {
                 // String-based value parser - use get_repeat_opt
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &str
-                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> #g_where {
                       (#value_parser)(__arg__)
                     }
 
@@ -644,7 +646,7 @@ impl RepeatItem {
                     let mut errors = Vec::<InnerError>::new();
                     result.reserve(strs.len());
                     for val_str in strs {
-                      match __value_parser__(val_str) {
+                      match __value_parser__ #g_turbofish (val_str) {
                         Ok(val) => result.push(val),
                         Err(err) => errors.push(
                           InnerError::invalid_value(
@@ -674,6 +676,7 @@ impl RepeatItem {
     pub fn gen_initializer(
         &self,
         conf_context_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), syn::Error> {
         // If there's no CLI or env source, this repeat wasn't registered with clap,
         // so we just return the default value (empty Vec)
@@ -699,7 +702,7 @@ impl RepeatItem {
                 return Ok(Default::default());
             }
         };
-        self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+        self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
     }
 
     // Gen initializer with a provided doc val
@@ -712,6 +715,7 @@ impl RepeatItem {
         conf_context_ident: &Ident,
         doc_name: &Ident,
         doc_val: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<(TokenStream, bool), Error> {
         // If there's no CLI or env source, this repeat wasn't registered with clap,
         // so we just use the serde value directly
@@ -807,7 +811,7 @@ impl RepeatItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else if use_value_parser {
             // When use_value_parser is enabled and no args/env found, use document value.
             // The value_parser will be run on each element from the document.
@@ -821,7 +825,7 @@ impl RepeatItem {
                 },
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         } else {
             // When use_value_parser is not enabled and no args/env found, return doc value directly.
             let id = self.field_name.to_string();
@@ -835,7 +839,7 @@ impl RepeatItem {
                 }
             };
 
-            self.gen_initializer_helper(conf_context_ident, &if_no_conf_context_val)
+            self.gen_initializer_helper(conf_context_ident, generics, &if_no_conf_context_val)
         }
     }
 

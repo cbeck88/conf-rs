@@ -32,10 +32,11 @@ impl GenConfStruct {
     pub fn new(
         ident: &Ident,
         vis: &Visibility,
+        generics: &Generics,
         attrs: &[Attribute],
         fields: &FieldsNamed,
     ) -> Result<Self, Error> {
-        let struct_item = StructItem::new(ident, vis, attrs)?;
+        let struct_item = StructItem::new(ident, vis, generics, attrs)?;
         let fields = fields
             .named
             .iter()
@@ -48,9 +49,8 @@ impl GenConfStruct {
     }
 
     /// Generate an impl Conf block for this struct
-    ///
-    /// Takes generics associated to the struct.
-    pub fn gen_conf_impl(&self, generics: &Generics) -> Result<TokenStream, Error> {
+    pub fn gen_conf_impl(&self) -> Result<TokenStream, Error> {
+        let generics = &self.struct_item.generics.raw;
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let ident = self.struct_item.get_ident();
@@ -107,7 +107,7 @@ impl GenConfStruct {
         let field_nodes: Vec<TokenStream> = self
             .fields
             .iter()
-            .map(|field| field.gen_program_option_node())
+            .map(|field| field.gen_program_option_node(&self.struct_item.generics))
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .flatten()
@@ -117,16 +117,15 @@ impl GenConfStruct {
         let struct_transform = self.struct_item.gen_program_options_transform()?;
 
         Ok(quote! {
-            const PROGRAM_OPTIONS: ::conf::lazybuf::LazyBuf<::conf::ProgramOption> = {
-                static NODES: &[::conf::lazybuf::Node<::conf::ProgramOption>] = &[
-                    #(#field_nodes),*
-                ];
-
+            // Note: not a `static`, since a static can't use the struct's generics, but a const's
+            // borrowed array is still promoted to 'static.
+            const PROGRAM_OPTIONS: ::conf::lazybuf::LazyBuf<::conf::ProgramOption> =
                 ::conf::lazybuf::LazyBuf {
-                    buffer: NODES,
+                    buffer: &[
+                        #(#field_nodes),*
+                    ],
                     transform: #struct_transform,
-                }
-            };
+                };
         })
     }
 
@@ -170,6 +169,8 @@ impl GenConfStruct {
         // {
         //   let mut errors = Vec::<conf::InnerError>::new();
         //
+        //   // If the struct is generic, each nested fn like this re-declares its generics, and is
+        //   // called with a turbofish, e.g. a::<T>(&conf_context). See NestedGenerics.
         //   fn a(conf_context: &conf::ConfContext) -> Result<i32, conf::InnerError> {
         //      ..
         //   }
@@ -200,9 +201,10 @@ impl GenConfStruct {
         //     _ => Err(errors),
         //   }?;
         //
-        //   validation_predicate(&return_value).map_err(|err| {
-        //     vec![conf::InnerError::validation(&conf_context.id, err)]
-        //   })?;
+        //   let validation = |instance: &Sample| -> Result<(), Vec<conf::InnerError>> {
+        //     // e.g. check validation predicates, using the captured conf_context
+        //   };
+        //   validation(&return_value)?;
         //
         //   Ok(return_value)
         // }
@@ -223,6 +225,7 @@ impl GenConfStruct {
                 let initializer = field.gen_initialize_from_conf_context_and_push_errors(
                     &conf_context_ident,
                     &errors_ident,
+                    &self.struct_item.generics,
                 )?;
                 Ok(quote! {
                     let #field_name = #initializer;
@@ -233,7 +236,7 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         Ok(quote! {
-            fn from_conf_context<'a>(#conf_context_ident: ::conf::ConfContext<'a>) -> Result<Self, Vec<::conf::InnerError>> {
+            fn from_conf_context(#conf_context_ident: ::conf::ConfContext<'_>) -> Result<Self, Vec<::conf::InnerError>> {
                 let mut #errors_ident = Vec::<::conf::InnerError>::new();
 
                 // Rebind as reference so #conf_context_ident has consistent type &ConfContext
@@ -261,6 +264,7 @@ impl GenConfStruct {
         errors_ident: &Ident,
     ) -> Result<TokenStream, Error> {
         let struct_ident = self.struct_item.get_ident();
+        let struct_ty_generics = &self.struct_item.generics.ty;
 
         let field_names: Vec<&Ident> = self
             .fields
@@ -290,11 +294,12 @@ impl GenConfStruct {
 
             let return_value = #return_value;
 
-            fn validation<'ctxctx>(#instance_ident: & #struct_ident, #conf_context_ident: &::conf::ConfContext<'ctxctx>) -> Result<(), Vec<::conf::InnerError>> {
+            // A closure rather than a nested fn, since a nested fn can't use the struct's generics.
+            let validation = |#instance_ident: & #struct_ident #struct_ty_generics| -> Result<(), Vec<::conf::InnerError>> {
                 #validation_routine
-            }
+            };
 
-            validation(&return_value, #conf_context_ident)?;
+            validation(&return_value)?;
 
             Ok(return_value)
         })
@@ -302,12 +307,9 @@ impl GenConfStruct {
 
     /// Generate an impl ConfSerde block for this struct (if requested via attributes)
     /// Also, the requisite DeserializeSeed impl's and such.
-    ///
-    /// Takes generics associated to this struct.
-    pub fn maybe_gen_conf_serde_impl(
-        &self,
-        generics: &Generics,
-    ) -> Result<Option<TokenStream>, Error> {
+    pub fn maybe_gen_conf_serde_impl(&self) -> Result<Option<TokenStream>, Error> {
+        let generics = &self.struct_item.generics.raw;
+
         // If serde is not requested, fugeddaboutit
         if self.struct_item.serde.is_none() {
             return Ok(None);
@@ -331,7 +333,7 @@ impl GenConfStruct {
         let expecting_str = format!("Object with schema {struct_ident}");
 
         let machine_ident = Ident::new("__MACHINE__", Span::call_site());
-        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics)?;
+        let (machine, struct_keys) = self.gen_machine(&machine_ident)?;
 
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -394,11 +396,8 @@ impl GenConfStruct {
     ///
     /// The first token stream contains the machine definition and impls.
     /// The second token stream is the value for STRUCT_KEYS for this struct.
-    fn gen_machine(
-        &self,
-        machine_ident: &Ident,
-        generics: &Generics,
-    ) -> Result<(TokenStream, TokenStream), Error> {
+    fn gen_machine(&self, machine_ident: &Ident) -> Result<(TokenStream, TokenStream), Error> {
+        let generics = &self.struct_item.generics.raw;
         let struct_ident = &self.struct_item.struct_ident;
         let struct_vis = &self.struct_item.struct_vis;
         let struct_ident_str = struct_ident.to_string();
@@ -408,6 +407,21 @@ impl GenConfStruct {
         let errors_ident = Ident::new("__errors__", Span::call_site());
         let nvp_ident = Ident::new("__nvp__", Span::call_site());
         let nvp_type_ident = Ident::new("NVP__", Span::call_site());
+
+        // A generic struct's machine needs a PhantomData, in case some generic param isn't used
+        // by any field's machine type. Non-generic structs leave it out, so it can't clash with
+        // one of their field names.
+        let (phantom_decl, phantom_init, phantom_bind) = if self.struct_item.generics.is_empty() {
+            Default::default()
+        } else {
+            let phantom_ident = Ident::new("__phantom__", Span::call_site());
+            let phantom_ty = &self.struct_item.generics.phantom;
+            (
+                quote! { #phantom_ident: #phantom_ty, },
+                quote! { #phantom_ident: PhantomData, },
+                quote! { #phantom_ident, },
+            )
+        };
 
         let (_, ty_generics, _) = generics.split_for_impl();
 
@@ -435,6 +449,7 @@ impl GenConfStruct {
                     &nvp_ident,
                     &nvp_type_ident,
                     &errors_ident,
+                    &self.struct_item.generics,
                 )
             })
             .collect::<Result<Vec<SerdeStrategy>, _>>()?;
@@ -521,6 +536,7 @@ impl GenConfStruct {
                         .gen_initialize_from_conf_context_and_push_errors(
                             &conf_context_ident,
                             &errors_ident,
+                            &self.struct_item.generics,
                         )?;
                     quote! {
                         let #n = #n.unwrap_or_else(|| #fallback_initializer);
@@ -532,11 +548,15 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            #struct_vis struct #machine_ident #machine_ty_generics {
+            // Declared with the full generics (bounds, const params) and where clause, not just
+            // the parameter names, so const params stay const and field types that need the
+            // bounds are well-formed.
+            #struct_vis struct #machine_ident #impl_machine_generics #machine_where_clause {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
+                #phantom_decl
                 #(#field_names: #field_machine_types),*
-            };
+            }
 
             impl #impl_machine_generics From<ConfSerdeContext<#ct>> for #machine_ident #machine_ty_generics #machine_where_clause {
                 fn from(#conf_serde_context_ident: ConfSerdeContext<#ct>) -> Self {
@@ -545,6 +565,7 @@ impl GenConfStruct {
                     Self {
                         #conf_serde_context_ident,
                         #errors_ident: Default::default(),
+                        #phantom_init
                         #(#field_names,)*
                     }
                 }
@@ -569,6 +590,7 @@ impl GenConfStruct {
                     let Self {
                         #conf_serde_context_ident,
                         mut #errors_ident,
+                        #phantom_bind
                         #(mut #field_names,)*
                     } = self;
 
@@ -582,6 +604,7 @@ impl GenConfStruct {
                     Self {
                         #conf_serde_context_ident,
                         #errors_ident,
+                        #phantom_bind
                         #(#field_names,)*
                     }
                 }
@@ -590,6 +613,7 @@ impl GenConfStruct {
                     let Self {
                         #conf_serde_context_ident,
                         mut #errors_ident,
+                        #phantom_bind
                         #(#field_names,)*
                     } = self;
 
@@ -631,7 +655,7 @@ impl GenConfStruct {
         let assertions: Vec<TokenStream> = self
             .fields
             .iter()
-            .map(|field| field.gen_debug_asserts(struct_ident))
+            .map(|field| field.gen_debug_asserts(struct_ident, &self.struct_item.generics))
             .collect::<Result<Vec<_>, Error>>()?;
 
         Ok(quote! {
@@ -660,7 +684,7 @@ impl GenConfStruct {
     }
 
     /// Generate a test function (if requested via #[conf(test)] attribute)
-    pub fn maybe_gen_test_fn(&self, generics: &Generics) -> Result<Option<TokenStream>, Error> {
+    pub fn maybe_gen_test_fn(&self) -> Result<Option<TokenStream>, Error> {
         // If test is not requested, don't generate anything
         let test_item = match &self.struct_item.test {
             Some(test_item) => test_item,
@@ -672,7 +696,7 @@ impl GenConfStruct {
 
         // Check if we have generics - if so, we can't easily generate a test
         // because we don't know what concrete types to use
-        if !generics.params.is_empty() {
+        if !self.struct_item.generics.is_empty() {
             return Err(Error::new(
                 ident.span(),
                 "#[conf(test)] cannot be used with generic types yet",
