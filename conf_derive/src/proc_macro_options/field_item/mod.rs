@@ -1,5 +1,5 @@
 use super::StructItem;
-use crate::util::type_is_bool;
+use crate::util::{NestedGenerics, type_is_bool};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -332,7 +332,14 @@ impl FieldItem {
         &self,
         conf_context_ident: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
+        let NestedGenerics {
+            decl: g_decl,
+            turbofish: g_turbofish,
+            where_clause: g_where,
+            ..
+        } = generics;
         let field_name = self.get_field_name();
         let field_type = self.get_field_type();
         let (initializer, returns_multiple_errors) = self.gen_initializer(conf_context_ident)?;
@@ -355,12 +362,12 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name(
+            fn #field_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>
-            ) -> Result<#field_type, #error_type> {
+            ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name(#conf_context_ident) {
+            match #field_name #g_turbofish (#conf_context_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -402,7 +409,14 @@ impl FieldItem {
         doc_name_ident: &Ident,
         doc_val_ident: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
+        let NestedGenerics {
+            decl: g_decl,
+            turbofish: g_turbofish,
+            where_clause: g_where,
+            ..
+        } = generics;
         let field_name = self.get_field_name();
         let field_type = self.get_field_type();
         let serde_type = self.get_serde_type();
@@ -428,14 +442,14 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name(
+            fn #field_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>,
               #doc_name_ident: &str,
               #doc_val_ident: #serde_type
-            ) -> Result<#field_type, #error_type> {
+            ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name(&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
+            match #field_name #g_turbofish (&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -466,13 +480,14 @@ impl FieldItem {
         nvp: &Ident,
         nvp_type: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<SerdeStrategy, Error> {
         if self.get_serde_skip() {
             return Ok(SerdeStrategy::skip());
         }
         match self {
             Self::Flag(_) | Self::Parameter(_) | Self::Repeat(_) => {
-                self.gen_simple_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident)
+                self.gen_simple_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident, generics)
             }
             Self::Flatten(item) => item.gen_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident),
             Self::Subcommands(item) => {
@@ -499,6 +514,7 @@ impl FieldItem {
         nvp: &Ident,
         nvp_type: &Ident,
         errors_ident: &Ident,
+        generics: &NestedGenerics,
     ) -> Result<SerdeStrategy, Error> {
         let field_name = self.get_field_name();
         let field_name_str = field_name.to_string();
@@ -507,6 +523,14 @@ impl FieldItem {
         let serde_aliases = self.get_serde_aliases();
         let serde_type = self.get_serde_type();
         let deserialize_with = self.get_serde_deserialize_with();
+        let NestedGenerics {
+            decl: g_decl,
+            params: g_params,
+            ty: g_ty,
+            turbofish: g_turbofish,
+            where_clause: g_where,
+            phantom: g_phantom,
+        } = generics;
 
         let conf_context_ident = Ident::new("__conf_context__", Span::call_site());
         let doc_name_ident = Ident::new("__doc_name__", Span::call_site());
@@ -516,14 +540,17 @@ impl FieldItem {
             &doc_name_ident,
             &doc_val_ident,
             errors_ident,
+            generics,
         )?;
 
         // Generate the deserialization call - either using deserialize_with or the default Deserialize impl
         let deserialize_call = if let Some(deserialize_with_path) = deserialize_with {
             quote! {
               {
-                struct __DeserializeWith;
-                impl<'dedede2> ::serde::de::DeserializeSeed<'dedede2> for __DeserializeWith {
+                // Like serde_derive's __DeserializeWith: re-declare the struct's generics, and
+                // use every type param in a PhantomData.
+                struct __DeserializeWith #g_decl (#g_phantom) #g_where;
+                impl<'dedede2, #g_params> ::serde::de::DeserializeSeed<'dedede2> for __DeserializeWith #g_ty #g_where {
                   type Value = #serde_type;
                   fn deserialize<__D>(self, __deserializer: __D) -> ::std::result::Result<Self::Value, __D::Error>
                   where
@@ -532,7 +559,7 @@ impl FieldItem {
                     (#deserialize_with_path)(__deserializer)
                   }
                 }
-                #nvp.next_value_seed(__DeserializeWith)
+                #nvp.next_value_seed(__DeserializeWith #g_turbofish (::core::marker::PhantomData))
               }
             }
         } else {

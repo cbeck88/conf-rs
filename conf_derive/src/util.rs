@@ -365,3 +365,55 @@ pub fn prepend_generic_lifetimes<R: Borrow<Lifetime>>(
 
     generics
 }
+
+/// Tokens needed to re-declare a struct's generics on a helper item (fn or struct) nested inside
+/// one of our generated impls. Nested items can't see the outer impl's generic parameters (E0401),
+/// so each helper has to declare its own copy, and its call site passes them back explicitly.
+#[derive(Clone)]
+pub struct NestedGenerics {
+    /// e.g. `<T: FromStr, const N: usize>`, for declaring the helper
+    pub decl: TokenStream,
+    /// e.g. `T: FromStr, const N: usize`, for appending to other generic params
+    pub params: TokenStream,
+    /// e.g. `::<T, N>`, for calling the helper
+    pub turbofish: TokenStream,
+    /// e.g. `<T, N>`, for naming the helper (or the struct) as a type
+    pub ty: TokenStream,
+    /// The struct's where clause, if any
+    pub where_clause: TokenStream,
+    /// e.g. `::core::marker::PhantomData<fn() -> (T,)>`, for a helper struct that must use every
+    /// type parameter
+    pub phantom: TokenStream,
+}
+
+impl NestedGenerics {
+    pub fn new(generics: &Generics) -> Self {
+        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let turbofish = ty_generics.as_turbofish();
+        let type_params = generics.type_params().map(|tp| &tp.ident);
+        let params = generics.params.iter().map(|p| match p {
+            // Strip defaults, which aren't allowed on impls
+            GenericParam::Type(tp) => {
+                let mut tp = tp.clone();
+                tp.eq_token = None;
+                tp.default = None;
+                quote! { #tp }
+            }
+            GenericParam::Const(cp) => {
+                let mut cp = cp.clone();
+                cp.eq_token = None;
+                cp.default = None;
+                quote! { #cp }
+            }
+            GenericParam::Lifetime(lp) => quote! { #lp },
+        });
+        Self {
+            params: quote! { #(#params),* },
+            decl: quote! { #impl_generics },
+            turbofish: quote! { #turbofish },
+            ty: quote! { #ty_generics },
+            where_clause: quote! { #where_clause },
+            phantom: quote! { ::core::marker::PhantomData<fn() -> (#(#type_params,)*)> },
+        }
+    }
+}

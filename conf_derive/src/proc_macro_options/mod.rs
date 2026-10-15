@@ -32,10 +32,11 @@ impl GenConfStruct {
     pub fn new(
         ident: &Ident,
         vis: &Visibility,
+        generics: &Generics,
         attrs: &[Attribute],
         fields: &FieldsNamed,
     ) -> Result<Self, Error> {
-        let struct_item = StructItem::new(ident, vis, attrs)?;
+        let struct_item = StructItem::new(ident, vis, generics, attrs)?;
         let fields = fields
             .named
             .iter()
@@ -117,16 +118,15 @@ impl GenConfStruct {
         let struct_transform = self.struct_item.gen_program_options_transform()?;
 
         Ok(quote! {
-            const PROGRAM_OPTIONS: ::conf::lazybuf::LazyBuf<::conf::ProgramOption> = {
-                static NODES: &[::conf::lazybuf::Node<::conf::ProgramOption>] = &[
-                    #(#field_nodes),*
-                ];
-
+            // Note: not a `static`, since a static can't use the struct's generics, but a const's
+            // borrowed array is still promoted to 'static.
+            const PROGRAM_OPTIONS: ::conf::lazybuf::LazyBuf<::conf::ProgramOption> =
                 ::conf::lazybuf::LazyBuf {
-                    buffer: NODES,
+                    buffer: &[
+                        #(#field_nodes),*
+                    ],
                     transform: #struct_transform,
-                }
-            };
+                };
         })
     }
 
@@ -223,6 +223,7 @@ impl GenConfStruct {
                 let initializer = field.gen_initialize_from_conf_context_and_push_errors(
                     &conf_context_ident,
                     &errors_ident,
+                    &self.struct_item.generics,
                 )?;
                 Ok(quote! {
                     let #field_name = #initializer;
@@ -233,7 +234,7 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         Ok(quote! {
-            fn from_conf_context<'a>(#conf_context_ident: ::conf::ConfContext<'a>) -> Result<Self, Vec<::conf::InnerError>> {
+            fn from_conf_context(#conf_context_ident: ::conf::ConfContext<'_>) -> Result<Self, Vec<::conf::InnerError>> {
                 let mut #errors_ident = Vec::<::conf::InnerError>::new();
 
                 // Rebind as reference so #conf_context_ident has consistent type &ConfContext
@@ -261,6 +262,7 @@ impl GenConfStruct {
         errors_ident: &Ident,
     ) -> Result<TokenStream, Error> {
         let struct_ident = self.struct_item.get_ident();
+        let struct_ty_generics = &self.struct_item.generics.ty;
 
         let field_names: Vec<&Ident> = self
             .fields
@@ -290,11 +292,12 @@ impl GenConfStruct {
 
             let return_value = #return_value;
 
-            fn validation<'ctxctx>(#instance_ident: & #struct_ident, #conf_context_ident: &::conf::ConfContext<'ctxctx>) -> Result<(), Vec<::conf::InnerError>> {
+            // A closure rather than a nested fn, since a nested fn can't use the struct's generics.
+            let validation = |#instance_ident: & #struct_ident #struct_ty_generics| -> Result<(), Vec<::conf::InnerError>> {
                 #validation_routine
-            }
+            };
 
-            validation(&return_value, #conf_context_ident)?;
+            validation(&return_value)?;
 
             Ok(return_value)
         })
@@ -408,6 +411,8 @@ impl GenConfStruct {
         let errors_ident = Ident::new("__errors__", Span::call_site());
         let nvp_ident = Ident::new("__nvp__", Span::call_site());
         let nvp_type_ident = Ident::new("NVP__", Span::call_site());
+        let phantom_ident = Ident::new("__phantom__", Span::call_site());
+        let phantom_ty = &self.struct_item.generics.phantom;
 
         let (_, ty_generics, _) = generics.split_for_impl();
 
@@ -435,6 +440,7 @@ impl GenConfStruct {
                     &nvp_ident,
                     &nvp_type_ident,
                     &errors_ident,
+                    &self.struct_item.generics,
                 )
             })
             .collect::<Result<Vec<SerdeStrategy>, _>>()?;
@@ -521,6 +527,7 @@ impl GenConfStruct {
                         .gen_initialize_from_conf_context_and_push_errors(
                             &conf_context_ident,
                             &errors_ident,
+                            &self.struct_item.generics,
                         )?;
                     quote! {
                         let #n = #n.unwrap_or_else(|| #fallback_initializer);
@@ -532,11 +539,15 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            #struct_vis struct #machine_ident #machine_ty_generics {
+            // Declared with the full generics (bounds, const params) and where clause, not just
+            // the parameter names, so const params stay const and field types that need the
+            // bounds are well-formed.
+            #struct_vis struct #machine_ident #impl_machine_generics #machine_where_clause {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
+                #phantom_ident: #phantom_ty,
                 #(#field_names: #field_machine_types),*
-            };
+            }
 
             impl #impl_machine_generics From<ConfSerdeContext<#ct>> for #machine_ident #machine_ty_generics #machine_where_clause {
                 fn from(#conf_serde_context_ident: ConfSerdeContext<#ct>) -> Self {
@@ -545,6 +556,7 @@ impl GenConfStruct {
                     Self {
                         #conf_serde_context_ident,
                         #errors_ident: Default::default(),
+                        #phantom_ident: PhantomData,
                         #(#field_names,)*
                     }
                 }
@@ -569,6 +581,7 @@ impl GenConfStruct {
                     let Self {
                         #conf_serde_context_ident,
                         mut #errors_ident,
+                        #phantom_ident,
                         #(mut #field_names,)*
                     } = self;
 
@@ -582,6 +595,7 @@ impl GenConfStruct {
                     Self {
                         #conf_serde_context_ident,
                         #errors_ident,
+                        #phantom_ident,
                         #(#field_names,)*
                     }
                 }
@@ -591,6 +605,7 @@ impl GenConfStruct {
                         #conf_serde_context_ident,
                         mut #errors_ident,
                         #(#field_names,)*
+                        ..
                     } = self;
 
                     let #conf_context_ident = &#conf_serde_context_ident.conf_context;

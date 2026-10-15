@@ -128,10 +128,11 @@ pub struct RepeatItem {
     serde: Option<RepeatSerdeItem>,
     description: Option<String>,
     is_positional: Option<Span>,
+    struct_generics: NestedGenerics,
 }
 
 impl RepeatItem {
-    pub fn new(field: &Field, _struct_item: &StructItem) -> Result<Self, Error> {
+    pub fn new(field: &Field, struct_item: &StructItem) -> Result<Self, Error> {
         let field_name = field
             .ident
             .clone()
@@ -166,6 +167,7 @@ impl RepeatItem {
             serde: None,
             description: None,
             is_positional: None,
+            struct_generics: struct_item.generics.clone(),
         };
 
         for attr in &field.attrs {
@@ -537,6 +539,12 @@ impl RepeatItem {
         conf_context_ident: &Ident,
         if_no_conf_context_val: &dyn Fn() -> TokenStream,
     ) -> Result<(TokenStream, bool), syn::Error> {
+        let NestedGenerics {
+            decl: g_decl,
+            turbofish: g_turbofish,
+            where_clause: g_where,
+            ..
+        } = &self.struct_generics;
         let field_type = &self.field_type;
         let id = self.field_name.to_string();
 
@@ -562,9 +570,9 @@ impl RepeatItem {
                 // OsStr-based value parser
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &::std::ffi::OsStr
-                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> #g_where {
                       (#value_parser_os)(__arg__)
                     }
 
@@ -592,7 +600,7 @@ impl RepeatItem {
                     result.reserve(strs.len());
                     for val_os_str in strs {
                       // Note: val_os_str is already &OsStr, no conversion needed
-                      match __value_parser__(val_os_str) {
+                      match __value_parser__ #g_turbofish (val_os_str) {
                         Ok(val) => result.push(val),
                         Err(err) => errors.push(
                           InnerError::invalid_value_os(
@@ -616,9 +624,9 @@ impl RepeatItem {
                 // String-based value parser - use get_repeat_opt
                 quote! {
                   {
-                    fn __value_parser__(
+                    fn __value_parser__ #g_decl (
                       __arg__: &str
-                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> {
+                    ) -> Result<<#field_type as ::conf::InnerTypeHelper>::Ty, impl ::core::fmt::Display> #g_where {
                       (#value_parser)(__arg__)
                     }
 
@@ -644,7 +652,7 @@ impl RepeatItem {
                     let mut errors = Vec::<InnerError>::new();
                     result.reserve(strs.len());
                     for val_str in strs {
-                      match __value_parser__(val_str) {
+                      match __value_parser__ #g_turbofish (val_str) {
                         Ok(val) => result.push(val),
                         Err(err) => errors.push(
                           InnerError::invalid_value(
