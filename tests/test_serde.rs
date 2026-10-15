@@ -1622,6 +1622,8 @@ struct PrivateSerdeConfig {
 }
 
 mod restricted_visibility {
+    use conf::Conf;
+
     pub mod nested {
         #[derive(conf::Conf, Debug)]
         #[conf(serde)]
@@ -1636,11 +1638,86 @@ mod restricted_visibility {
             #[arg(long)]
             pub(super) speed: u32,
         }
+
+        #[derive(conf::Conf, Debug)]
+        #[conf(serde)]
+        pub(in crate::restricted_visibility) struct InPathSerdeConfig {
+            #[arg(long)]
+            pub(in crate::restricted_visibility) speed: u32,
+        }
+
+        // Struct items inside a function body are scoped to the function, but their visibility
+        // is still relative to the enclosing module.
+        pub(crate) fn parse_in_fn_body(doc: serde_json::Value) -> u32 {
+            use conf::Conf;
+
+            #[derive(Conf, Debug)]
+            #[conf(serde)]
+            pub(super) struct FnBodySerdeConfig {
+                #[arg(long)]
+                speed: u32,
+            }
+
+            FnBodySerdeConfig::conf_builder()
+                .args(["."])
+                .env::<&str, &str>([])
+                .doc("t.json", doc)
+                .try_parse()
+                .unwrap()
+                .speed
+        }
+    }
+
+    // A private serde struct flattened into a pub one
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    struct PrivateInner {
+        #[arg(long)]
+        speed: u32,
+    }
+
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    pub struct PubOuter {
+        #[conf(flatten)]
+        inner: PrivateInner,
+    }
+
+    impl PubOuter {
+        pub fn speed(&self) -> u32 {
+            self.inner.speed
+        }
+    }
+
+    // A crate-visible Subcommands enum with a named-field variant, in a crate-visible config
+    #[derive(conf::Subcommands, Debug)]
+    #[conf(serde)]
+    pub(crate) enum CrateCommand {
+        Go {
+            #[arg(long)]
+            speed: u32,
+        },
+    }
+
+    #[derive(conf::Conf, Debug)]
+    #[conf(serde)]
+    pub(crate) struct CrateCli {
+        #[conf(subcommands)]
+        pub(crate) command: CrateCommand,
     }
 
     pub(crate) fn parse_super(doc: serde_json::Value) -> u32 {
-        use conf::Conf;
         nested::SuperSerdeConfig::conf_builder()
+            .args(["."])
+            .env::<&str, &str>([])
+            .doc("t.json", doc)
+            .try_parse()
+            .unwrap()
+            .speed
+    }
+
+    pub(crate) fn parse_in_path(doc: serde_json::Value) -> u32 {
+        nested::InPathSerdeConfig::conf_builder()
             .args(["."])
             .env::<&str, &str>([])
             .doc("t.json", doc)
@@ -1691,4 +1768,28 @@ fn test_serde_less_than_pub_structs() {
         .unwrap();
     let PrivateSerdeCommand::Go(go) = result.command;
     assert_eq!(go.speed, 4);
+
+    assert_eq!(restricted_visibility::parse_in_path(json!({"speed": 5})), 5);
+
+    assert_eq!(
+        restricted_visibility::nested::parse_in_fn_body(json!({"speed": 6})),
+        6
+    );
+
+    let result = restricted_visibility::PubOuter::conf_builder()
+        .args(["."])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"inner": {"speed": 7}}))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.speed(), 7);
+
+    let result = restricted_visibility::CrateCli::conf_builder()
+        .args([".", "go"])
+        .env::<&str, &str>([])
+        .doc("t.json", json!({"go": {"speed": 8}}))
+        .try_parse()
+        .unwrap();
+    let restricted_visibility::CrateCommand::Go { speed } = result.command;
+    assert_eq!(speed, 8);
 }

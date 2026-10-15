@@ -29,8 +29,13 @@ pub struct GenConfStruct {
 
 impl GenConfStruct {
     /// Parse syn data for a struct with derive(Conf) on it
-    pub fn new(ident: &Ident, attrs: &[Attribute], fields: &FieldsNamed) -> Result<Self, Error> {
-        let struct_item = StructItem::new(ident, attrs)?;
+    pub fn new(
+        ident: &Ident,
+        vis: &Visibility,
+        attrs: &[Attribute],
+        fields: &FieldsNamed,
+    ) -> Result<Self, Error> {
+        let struct_item = StructItem::new(ident, vis, attrs)?;
         let fields = fields
             .named
             .iter()
@@ -298,11 +303,10 @@ impl GenConfStruct {
     /// Generate an impl ConfSerde block for this struct (if requested via attributes)
     /// Also, the requisite DeserializeSeed impl's and such.
     ///
-    /// Takes generics and visibility associated to this struct.
+    /// Takes generics associated to this struct.
     pub fn maybe_gen_conf_serde_impl(
         &self,
         generics: &Generics,
-        vis: &Visibility,
     ) -> Result<Option<TokenStream>, Error> {
         // If serde is not requested, fugeddaboutit
         if self.struct_item.serde.is_none() {
@@ -327,7 +331,7 @@ impl GenConfStruct {
         let expecting_str = format!("Object with schema {struct_ident}");
 
         let machine_ident = Ident::new("__MACHINE__", Span::call_site());
-        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics, vis)?;
+        let (machine, struct_keys) = self.gen_machine(&machine_ident, generics)?;
 
         // These generics are used to impl ConfSerde on the user's type.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -394,9 +398,9 @@ impl GenConfStruct {
         &self,
         machine_ident: &Ident,
         generics: &Generics,
-        vis: &Visibility,
     ) -> Result<(TokenStream, TokenStream), Error> {
         let struct_ident = &self.struct_item.struct_ident;
+        let struct_vis = &self.struct_item.struct_vis;
         let struct_ident_str = struct_ident.to_string();
         let serde_opts = self.struct_item.serde.as_ref().unwrap();
 
@@ -528,7 +532,7 @@ impl GenConfStruct {
         let gather_and_validate = self.gather_and_validate(&conf_context_ident, &errors_ident)?;
 
         let machine = quote! {
-            #vis struct #machine_ident #machine_ty_generics {
+            #struct_vis struct #machine_ident #machine_ty_generics {
                 #conf_serde_context_ident: ConfSerdeContext<#ct>,
                 #errors_ident: Vec<InnerError>,
                 #(#field_names: #field_machine_types),*
