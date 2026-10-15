@@ -64,9 +64,9 @@ jobs:
         key: no-default-features
         save-if: ${{ github.ref == 'refs/heads/develop' }}
     - name: Build Rust
-      run: cargo check --no-default-features --verbose --locked
+      run: cargo check --all --no-default-features --verbose --locked
     - name: Test Rust
-      run: cargo test --no-default-features --verbose --locked
+      run: cargo test --all --no-default-features --verbose --locked
     - name: Check dirty git
       uses: cbeck88/check-dirty-git@v1
 
