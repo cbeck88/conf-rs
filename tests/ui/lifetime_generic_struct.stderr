@@ -1,0 +1,11 @@
+error: #[derive(Conf)] does not support lifetime parameters
+ --> tests/ui/lifetime_generic_struct.rs:5:28
+  |
+5 | pub struct LifetimeGeneric<'a> {
+  |                            ^^
+
+error: #[derive(Conf)] does not support lifetime parameters
+  --> tests/ui/lifetime_generic_struct.rs:14:25
+   |
+14 | pub struct MixedGeneric<'a, T: std::str::FromStr> {
+   |                         ^^

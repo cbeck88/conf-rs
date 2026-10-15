@@ -24,14 +24,15 @@ pub fn conf(input: TokenStream1) -> TokenStream1 {
 fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let ident = &input.ident;
 
-    // Generic structs aren't supported yet (see #48), so give a clear error up front rather
-    // than a confusing one from inside the expansion. The generated code already re-declares
-    // type and const params on its nested helpers, but enabling them still needs tests and docs.
-    // Lifetime params aren't handled (explicit lifetime args on the helpers would be E0794).
-    if !input.generics.params.is_empty() {
+    // Config values are parsed into owned data, so a lifetime param can't usefully borrow from
+    // anything. Our nested helper fns also can't re-declare lifetime params, since passing them
+    // back explicitly is an error when they are late-bound (E0794). So give a clear error up
+    // front rather than a confusing one from inside the expansion. Type and const params are
+    // fine (see NestedGenerics).
+    if let Some(lifetime) = input.generics.lifetimes().next() {
         return Err(Error::new_spanned(
-            &input.generics,
-            "#[derive(Conf)] does not support generic structs yet (lifetime, type, or const parameters)",
+            lifetime,
+            "#[derive(Conf)] does not support lifetime parameters",
         ));
     }
 

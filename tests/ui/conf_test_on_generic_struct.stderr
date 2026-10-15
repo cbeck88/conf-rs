@@ -1,0 +1,5 @@
+error: #[conf(test)] cannot be used on a generic struct. Put it on a non-generic struct that uses this one with concrete types, e.g. via flatten.
+ --> tests/ui/conf_test_on_generic_struct.rs:5:12
+  |
+5 | pub struct TestedGeneric<T: std::str::FromStr<Err: std::fmt::Display>> {
+  |            ^^^^^^^^^^^^^
