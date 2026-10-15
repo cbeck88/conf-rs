@@ -245,7 +245,7 @@ impl VariantItem {
         if let Some(ty) = self.variant_type.as_ref() {
             // Single unnamed field variant
             Ok(quote! {
-                #(#all_names)|* => Ok(Self::#name(<#ty as Conf>::from_conf_context(#conf_context_ident)?))
+                #(#all_names)|* => Ok(Self::#name(<#ty as ::conf::Conf>::from_conf_context(#conf_context_ident)?))
             })
         } else if let Some(fields) = &self.named_fields {
             // Named fields variant - use generated struct, then destructure
@@ -257,7 +257,7 @@ impl VariantItem {
                 .collect();
             Ok(quote! {
                 #(#all_names)|* => {
-                    let __generated = <#struct_name as Conf>::from_conf_context(#conf_context_ident)?;
+                    let __generated = <#struct_name as ::conf::Conf>::from_conf_context(#conf_context_ident)?;
                     Ok(Self::#name { #( #field_names: __generated.#field_names ),* })
                 }
             })

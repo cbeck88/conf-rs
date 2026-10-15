@@ -1,0 +1,17 @@
+error: #[derive(Conf)] does not support generic structs yet (lifetime, type, or const parameters)
+ --> tests/ui/generic_struct.rs:5:23
+  |
+5 | pub struct TypeGeneric<T: std::str::FromStr> {
+  |                       ^^^^^^^^^^^^^^^^^^^^^^
+
+error: #[derive(Conf)] does not support generic structs yet (lifetime, type, or const parameters)
+  --> tests/ui/generic_struct.rs:11:27
+   |
+11 | pub struct LifetimeGeneric<'a> {
+   |                           ^^^^
+
+error: #[derive(Conf)] does not support generic structs yet (lifetime, type, or const parameters)
+  --> tests/ui/generic_struct.rs:19:24
+   |
+19 | pub struct ConstGeneric<const N: usize> {
+   |                        ^^^^^^^^^^^^^^^^
