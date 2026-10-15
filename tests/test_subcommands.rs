@@ -889,7 +889,7 @@ enum NamedFieldsCommandWithCustomAttributes {
     },
 }
 
-#[derive(Conf)]
+#[derive(Conf, Debug)]
 struct NamedFieldsConfigWithCustomAttributes {
     #[conf(subcommands)]
     command: NamedFieldsCommandWithCustomAttributes,
@@ -927,11 +927,61 @@ fn test_named_fields_subcommands_with_custom_attributes() {
         expected
     );
 
-    // Test doc
-    let parsed_env = conf::ParsedEnv::default();
-    let opts = NamedFieldsConfigWithCustomAttributes::get_subcommands(&parsed_env).unwrap();
+    // Test that the doc comment is still used as help text
+    let help = NamedFieldsConfigWithCustomAttributes::try_parse_from::<&str, &str, &str>(
+        vec![".", "c", "--help"],
+        vec![],
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        help.contains("This is a named field"),
+        "doc comment missing from help:\n{help}"
+    );
+}
+
+// cfg_attr is expanded by rustc before the derive sees the enum, so attributes inside it
+// should behave exactly like ones written directly, and foreign ones should still be dropped.
+#[derive(Subcommands, Debug, PartialEq, serde::Deserialize)]
+enum CfgAttrCommand {
+    Go {
+        #[cfg_attr(all(), doc = "Speed to go at")]
+        #[cfg_attr(all(), conf(long))]
+        #[cfg_attr(any(), conf(short))]
+        #[cfg_attr(all(), serde(rename = "spd"))]
+        speed: u32,
+    },
+}
+
+#[derive(Conf, Debug)]
+struct CfgAttrConfig {
+    #[conf(subcommands)]
+    command: CfgAttrCommand,
+}
+
+#[test]
+fn test_named_fields_subcommands_with_cfg_attr() {
+    let result =
+        CfgAttrConfig::try_parse_from::<&str, &str, &str>(vec![".", "go", "--speed", "5"], vec![])
+            .unwrap();
+    assert_eq!(result.command, CfgAttrCommand::Go { speed: 5 });
+
+    // The short switch was behind a false cfg_attr, so it doesn't exist
+    assert!(
+        CfgAttrConfig::try_parse_from::<&str, &str, &str>(vec![".", "go", "-s", "5"], vec![])
+            .is_err()
+    );
+
+    let help = CfgAttrConfig::try_parse_from::<&str, &str, &str>(vec![".", "go", "--help"], vec![])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        help.contains("Speed to go at"),
+        "doc comment missing from help:\n{help}"
+    );
+
     assert_eq!(
-        opts[2].get_program_options()[0].description.as_deref(),
-        Some("This is a named field")
+        serde_json::from_str::<CfgAttrCommand>(r#"{"Go": {"spd": 5}}"#).unwrap(),
+        CfgAttrCommand::Go { speed: 5 }
     );
 }
