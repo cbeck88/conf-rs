@@ -11,12 +11,14 @@ mod flag_item;
 mod flatten_item;
 mod parameter_item;
 mod repeat_item;
+mod skip_item;
 mod subcommands_item;
 
 use flag_item::FlagItem;
 use flatten_item::FlattenItem;
 use parameter_item::ParameterItem;
 use repeat_item::RepeatItem;
+use skip_item::SkipItem;
 use subcommands_item::SubcommandsItem;
 
 /// Type of value parser - indicates whether it takes &str or &OsStr
@@ -170,10 +172,24 @@ pub enum FieldItem {
     Repeat(RepeatItem),
     Flatten(FlattenItem),
     Subcommands(SubcommandsItem),
+    Skip(SkipItem),
 }
 
 impl FieldItem {
     pub fn new(field: &Field, struct_item: &StructItem) -> Result<Self, Error> {
+        // A skipped field isn't parsed from anywhere, so `skip` anywhere at the top level of a
+        // conf attribute decides the kind, and SkipItem rejects any other options.
+        // (`serde(skip)` and `test(skip)` are nested, so they don't count.)
+        for attr in &field.attrs {
+            if attr.path().is_ident("conf") || attr.path().is_ident("arg") {
+                let nested =
+                    attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+                if nested.iter().any(|meta| meta.path().is_ident("skip")) {
+                    return Ok(Self::Skip(SkipItem::new(field, struct_item)?));
+                }
+            }
+        }
+
         // First, inspect the first field attribute.
         // If the first attribute is 'flag', 'parameter', 'repeat', or 'flatten', then that's how
         // we're going to handle it.
@@ -223,6 +239,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_field_name(),
             Self::Flatten(item) => item.get_field_name(),
             Self::Subcommands(item) => item.get_field_name(),
+            Self::Skip(item) => item.get_field_name(),
         }
     }
 
@@ -234,6 +251,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_field_type(),
             Self::Flatten(item) => item.get_field_type(),
             Self::Subcommands(item) => item.get_field_type(),
+            Self::Skip(item) => item.get_field_type(),
         }
     }
 
@@ -249,6 +267,8 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_program_option_node(),
             Self::Flatten(item) => item.gen_program_option_node(),
             Self::Subcommands(item) => item.gen_program_option_node(),
+            // A skipped field isn't a program option
+            Self::Skip(_item) => Ok(None),
         }
     }
 
@@ -265,6 +285,7 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
             Self::Flatten(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
             Self::Subcommands(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
+            Self::Skip(item) => item.gen_push_subcommands(subcommands_ident, parsed_env),
         }
     }
 
@@ -285,6 +306,7 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_initializer(conf_context_ident, generics),
             Self::Flatten(item) => item.gen_initializer(conf_context_ident),
             Self::Subcommands(item) => item.gen_initializer(conf_context_ident),
+            Self::Skip(item) => item.gen_initializer(conf_context_ident),
         }
     }
 
@@ -319,6 +341,7 @@ impl FieldItem {
             ),
             Self::Flatten(_item) => unimplemented!("uses a custom match arm"),
             Self::Subcommands(_item) => unimplemented!("would have to use a custom match arm"),
+            Self::Skip(_item) => unimplemented!("skipped fields don't read from serde"),
         }
     }
 
@@ -504,6 +527,7 @@ impl FieldItem {
             Self::Subcommands(item) => {
                 item.gen_serde_strategy(ct, ctxt, nvp, nvp_type, errors_ident)
             }
+            Self::Skip(_) => unreachable!("get_serde_skip is always true for skipped fields"),
         }
     }
 
@@ -628,6 +652,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_serde_name(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
+            Self::Skip(_item) => unimplemented!(),
         }
     }
 
@@ -639,6 +664,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_serde_aliases(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
+            Self::Skip(_item) => unimplemented!(),
         }
     }
 
@@ -650,6 +676,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_serde_deserialize_with(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
+            Self::Skip(_item) => unimplemented!(),
         }
     }
 
@@ -661,6 +688,7 @@ impl FieldItem {
             Self::Repeat(item) => item.get_serde_type(),
             Self::Flatten(_item) => unimplemented!(),
             Self::Subcommands(_item) => unimplemented!(),
+            Self::Skip(_item) => unimplemented!(),
         }
     }
 
@@ -672,6 +700,8 @@ impl FieldItem {
             Self::Repeat(item) => item.get_serde_skip(),
             Self::Flatten(item) => item.get_serde_skip(),
             Self::Subcommands(item) => item.get_serde_skip(),
+            // A skipped field never reads from serde
+            Self::Skip(_item) => true,
         }
     }
 
@@ -687,6 +717,7 @@ impl FieldItem {
             Self::Repeat(item) => item.gen_debug_asserts(struct_ident),
             Self::Flatten(item) => item.gen_debug_asserts(struct_ident),
             Self::Subcommands(item) => item.gen_debug_asserts(struct_ident),
+            Self::Skip(item) => item.gen_debug_asserts(struct_ident),
         }
     }
 }

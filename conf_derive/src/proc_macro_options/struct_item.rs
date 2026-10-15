@@ -487,6 +487,14 @@ impl<'a> FieldsHelper<'a> {
         let field_type = field_item.get_field_type();
         let instance = &self.instance;
 
+        if let FieldItem::Skip(_) = field_item {
+            return Err(Error::new(
+                ident.span(),
+                "using one_of_fields constraint with a field that has `skip` is invalid, \
+                    since it isn't a program option.",
+            ));
+        }
+
         if let FieldItem::Parameter(item) = field_item {
             if item.get_default_value().is_some() {
                 return Err(Error::new(

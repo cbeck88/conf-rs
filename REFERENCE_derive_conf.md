@@ -86,6 +86,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
   * [Subcommands](#subcommands)
     * [serde](#subcommands-serde)
       * [skip](#subcommands-serde-skip)
+  * [Skip](#skip)
 * [Struct-level attributes](#struct-level-attributes)
   * [no_help_flag](#struct-no-help-flag)
   * [version](#struct-version)
@@ -169,6 +170,8 @@ where
 
 Lifetime parameters are not supported, since parsed values are owned anyway.
 
+If a type parameter is only used in a `PhantomData` field, mark that field [`skip`](#skip).
+
 **Bounds.** The derive doesn't add any bounds for you. You write whatever bounds the generated code needs on the struct,
 and the compiler tells you if one is missing. Typically:
 
@@ -207,8 +210,11 @@ When `derive(Conf)` encounters a field, the first thing it must determine *what 
 * **Repeat**: A repeat field represents a list of values. It has special parsing -- it is allowed to be specified multiple times on the command-line, and the results are parsed separately and aggregated into a `Vec`. This is similar to what `clap` calls a multi-option, and what `clap-derive` does by default if the field type is a `Vec`. For example, `./my_prog --can-repeat value1 --can-repeat value2`.
 * **Flatten**: A flatten field doesn't correspond to an option, but to a collection of options that come from another `Conf` structure, and may be adjusted before being merged in.
 * **Subcommands**: A subcommands field doesn't correspond to an option, but to a collection of subcommands defined by a `Subcommands` enum. When a subcommand is used, any values parsed by the subcommand parser appear at the associated enum variant.
+* **Skip**: A skipped field isn't parsed from anywhere. It's initialized with `Default::default()` or a given expression.
 
-If the *first attribute* is `flag`, `parameter`, `repeat`, `flatten`, or `subcommands`, then `conf` will handle the field that way.
+If any attribute is `skip`, then the field is skipped. (This is not the same as `serde(skip)`.)
+
+Otherwise, if the *first attribute* is `flag`, `parameter`, `repeat`, `flatten`, or `subcommands`, then `conf` will handle the field that way.
 
 If none of these is found, then the *type* of the field is used to classify it [^1].
 
@@ -1525,6 +1531,46 @@ See also the [`Subcommands`] trait and proc-macro documentation.
 
 *  At most one `subcommands` field can appear in a given struct.
 *  `subcommands` fields are only valid at top-level, and cannot be used in a struct that is flattened.
+
+### Skip
+
+A `skip` field works like [`#[arg(skip)]`](https://docs.rs/clap/4.5.8/clap/_derive/index.html#arg-attributes) in `clap-derive`.
+It isn't a program option: it isn't read from args, env, or a serde document, and it doesn't appear in help.
+
+```rust
+use conf::Conf;
+use std::marker::PhantomData;
+
+#[derive(Conf)]
+pub struct MyConfig<Tag> {
+    #[conf(long)]
+    pub value: u32,
+
+    // Initialized with Default::default()
+    #[conf(skip)]
+    pub _tag: PhantomData<Tag>,
+
+    // Initialized with this expression
+    #[conf(skip = 3)]
+    pub retries: u32,
+}
+```
+
+*  <a name="skip"></a> `skip` (optional expr argument)
+
+   example: `#[conf(skip)]`, `#[conf(skip = vec![1, 2])]`
+
+   Without an argument, the field is initialized with `Default::default()`, so its type must implement `Default`.
+   With an argument, the field is initialized with that expression. The expression can use the struct's generic
+   parameters, but not its other fields.
+
+   This is different from `serde(skip)`, which only stops a field from being read from a serde document.
+   With `#[conf(serde)]`, a document containing a skipped field's name is an unknown field error, just like for `serde(skip)`.
+
+**Restrictions**:
+
+*  `skip` can't be combined with any other attribute on the same field.
+*  A skipped field can't be used in `one_of_fields`, `at_most_one_of_fields`, or `at_least_one_of_fields`.
 
 ## Struct-level attributes
 
