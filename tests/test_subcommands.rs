@@ -985,3 +985,84 @@ fn test_named_fields_subcommands_with_cfg_attr() {
         CfgAttrCommand::Go { speed: 5 }
     );
 }
+
+// Generic Subcommands enums are supported (unlike generic Conf structs), including alongside
+// named-field variants that don't use the generic parameter.
+#[derive(Subcommands, Debug, PartialEq)]
+enum GenericCommand<T: Conf> {
+    Run(T),
+    Stop {
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Conf, Debug, PartialEq)]
+struct GenericRunArgs {
+    #[arg(long)]
+    jobs: u32,
+}
+
+#[derive(Conf, Debug)]
+struct GenericCommandConfig {
+    #[conf(subcommands)]
+    command: GenericCommand<GenericRunArgs>,
+}
+
+#[test]
+fn test_generic_subcommands_enum() {
+    let result = GenericCommandConfig::try_parse_from::<&str, &str, &str>(
+        vec![".", "run", "--jobs", "4"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        result.command,
+        GenericCommand::Run(GenericRunArgs { jobs: 4 })
+    );
+
+    let result = GenericCommandConfig::try_parse_from::<&str, &str, &str>(
+        vec![".", "stop", "--force"],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(result.command, GenericCommand::Stop { force: true });
+}
+
+// The Subcommands derive must not rely on the Conf trait being imported where it is used.
+mod subcommands_without_conf_import {
+    #[derive(conf::Conf, Debug, PartialEq)]
+    pub struct Args {
+        #[arg(long)]
+        pub jobs: u32,
+    }
+
+    #[derive(conf::Subcommands, Debug, PartialEq)]
+    pub enum Command {
+        Run(Args),
+        Stop {
+            #[arg(long)]
+            force: bool,
+        },
+    }
+
+    #[derive(conf::Conf, Debug)]
+    pub struct Config {
+        #[conf(subcommands)]
+        pub command: Command,
+    }
+}
+
+#[test]
+fn test_subcommands_without_conf_import() {
+    use subcommands_without_conf_import::{Args, Command, Config};
+
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec![".", "run", "--jobs", "2"], vec![])
+            .unwrap();
+    assert_eq!(result.command, Command::Run(Args { jobs: 2 }));
+
+    let result =
+        Config::try_parse_from::<&str, &str, &str>(vec![".", "stop", "--force"], vec![]).unwrap();
+    assert_eq!(result.command, Command::Stop { force: true });
+}

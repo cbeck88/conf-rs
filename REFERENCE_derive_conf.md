@@ -1,6 +1,8 @@
 # `derive Conf` proc-macro reference
 
-The `#[derive(Conf)]` macro can only be placed on a `struct`.
+The `#[derive(Conf)]` macro can only be placed on a `struct` with named fields.
+
+Generic structs (with lifetime, type, or const parameters) are not supported yet.
 
 When using `#[derive(Conf)]`, the result is adjusted by various `#[conf(...)]` attributes that can be applied.
 These are documented here.
@@ -1641,8 +1643,6 @@ works on that struct. Attributes that are not "top-level only" will still have a
 
    **Note**: It is better to put this on the top-level struct that you will actually parse (e.g., the one you call `Conf::parse()` on), rather than on intermediate structs that are flattened into others. This will be more efficient and there shouldn't be any problems that would have been caught
    by testing the intermediate structs.
-
-   **Note**: This attribute cannot be used on structs with generic type parameters. If you need this, please open an issue to discuss.
 
 
 [^1]: Actually, the *tokens* of the type are used, so e.g. it must be `bool` and not an alias for `bool`.

@@ -24,6 +24,16 @@ pub fn conf(input: TokenStream1) -> TokenStream1 {
 fn derive_conf(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let ident = &input.ident;
 
+    // The generated code doesn't handle generic parameters yet (e.g. it declares helper fns
+    // inside impls, which can't see the struct's generics), so give a clear error up front
+    // rather than a confusing one from inside the expansion.
+    if !input.generics.params.is_empty() {
+        return Err(Error::new_spanned(
+            &input.generics,
+            "#[derive(Conf)] does not support generic structs yet (lifetime, type, or const parameters)",
+        ));
+    }
+
     match &input.data {
         Data::Struct(DataStruct {
             fields: Fields::Named(fields),
