@@ -644,6 +644,8 @@ A parameter represents a single value that can be parsed from a string.
 
    For `Option<T>` fields, the expression must produce type `T` (not `Option<T>`).
 
+   The expression can't use `Self`. Write the struct's name instead, e.g. `default(MyConfig::DEFAULT_RETRIES)`.
+
    Unlike `default_value`, the `default` expression completely bypasses the `value_parser`.
 
    **Help text**: When using `default`, the help text that documents the default value is generated
@@ -1562,7 +1564,12 @@ pub struct MyConfig<Tag> {
 
    Without an argument, the field is initialized with `Default::default()`, so its type must implement `Default`.
    With an argument, the field is initialized with that expression. The expression can use the struct's generic
-   parameters, but not its other fields.
+   parameters, but not its other fields. It can't use `Self` either; write the struct's name instead, e.g.
+   `skip = MyConfig::DEFAULT_RETRIES`.
+
+   Unlike in `clap-derive`, the expression isn't converted with `.into()`, so it must have the field's type.
+   For example, a `String` field needs `skip = String::from("guest")`, not `skip = "guest"`.
+   In return, integer literals like `skip = 3` work for any integer type.
 
    This is different from `serde(skip)`, which only stops a field from being read from a serde document.
    With `#[conf(serde)]`, a document containing a skipped field's name is an unknown field error, just like for `serde(skip)`.
