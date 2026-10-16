@@ -24,6 +24,7 @@ fn tr(key: &str) -> String {
         ("fr", "run.about") => "Lancer la chose\n\nLa lance longtemps.".into(),
         ("en", "stop.about") => "Stop the thing".into(),
         ("en", "edit.about") => "Edit the thing".into(),
+        ("en", "inspect.about") => "Inspect the thing\n\nShows everything about it.".into(),
         _ => format!("<missing {key}>"),
     }
 }
@@ -126,6 +127,12 @@ enum Command {
         #[conf(long)]
         file: String,
     },
+    // Named fields, a multi-line about, and no doc comment
+    #[conf(about = tr("inspect.about"))]
+    Inspect {
+        #[conf(long)]
+        verbose: bool,
+    },
     /// Uses the doc string
     Status,
 }
@@ -144,11 +151,12 @@ fn variant_about_expr_in_command_list() {
 Usage: prog [COMMAND]
 
 Commands:
-  run     Run the thing
-  stop    Stop the thing
-  edit    Edit the thing
-  status  Uses the doc string
-  help    Print this message or the help of the given subcommand(s)
+  run      Run the thing
+  stop     Stop the thing
+  edit     Edit the thing
+  inspect  Inspect the thing
+  status   Uses the doc string
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -179,12 +187,23 @@ fn variant_about_expr_in_subcommand_help() {
     let help = help_of::<Cli>(&["prog", "edit", "--help"]);
     assert!(help.starts_with("Edit the thing\n"), "{help}");
     assert!(!help.contains("developers"), "{help}");
+
+    // The command list shows only the first line (see variant_about_expr_in_command_list),
+    // and the subcommand's own help shows all of it
+    let help = help_of::<Cli>(&["prog", "inspect", "--help"]);
+    assert!(
+        help.starts_with("Inspect the thing\n\nShows everything about it.\n"),
+        "{help}"
+    );
 }
 
 #[test]
 fn variant_about_expr_still_parses() {
     let cli = Cli::try_parse_from(["prog", "edit", "--file", "a.txt"], no_env()).unwrap();
     assert!(matches!(cli.command, Command::Edit { file } if file == "a.txt"));
+
+    let cli = Cli::try_parse_from(["prog", "inspect", "--verbose"], no_env()).unwrap();
+    assert!(matches!(cli.command, Command::Inspect { verbose: true }));
 
     let cli = Cli::try_parse_from(["prog", "run", "--fast"], no_env()).unwrap();
     assert!(matches!(cli.command, Command::Run(RunArgs { fast: true })));
