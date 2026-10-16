@@ -1,10 +1,13 @@
 use super::StructItem;
-use crate::util::{NestedGenerics, make_lifetime, prepend_generic_lifetimes, type_is_bool};
+use crate::util::{
+    NestedGenerics, field_local_ident, make_lifetime, prepend_generic_lifetimes, type_is_bool,
+};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Expr, Field, Ident, Lifetime, LitStr, Meta, Path, Token, Type, punctuated::Punctuated,
+    Error, Expr, Field, Ident, Lifetime, LitStr, Meta, Path, Token, Type, ext::IdentExt,
+    punctuated::Punctuated,
 };
 
 mod flag_item;
@@ -346,11 +349,26 @@ impl FieldItem {
         }
     }
 
+    /// The name of the local variable that holds this field's value (or state machine) in
+    /// generated code. See `field_local_ident`.
+    pub fn get_local_ident(&self) -> Ident {
+        field_local_ident(self.get_field_name())
+    }
+
+    /// The name of the nested fn that initializes this field.
+    ///
+    /// This isn't just the field name: an expression in the field's attributes like
+    /// `default(retries())` on a field named `retries` would then call our fn instead of the user's.
+    fn get_initializer_fn_name(&self) -> Ident {
+        let field_name = self.get_field_name().unraw();
+        Ident::new(&format!("__init_{field_name}__"), Span::call_site())
+    }
+
     /// Generate code of the form
     ///
     /// {
-    ///   fn #field_name<generics>(conf_context: &...) -> Result<#field_type, InnerError> { .. }
-    ///   match field_name::<generics>(...) {
+    ///   fn __init_#field_name__<generics>(conf_context: &...) -> Result<#field_type, InnerError> { .. }
+    ///   match __init_#field_name__::<generics>(...) {
     ///     Ok(t) => Some(t),
     ///     Err(err) => { errors.push(err); None },
     ///   }
@@ -374,7 +392,7 @@ impl FieldItem {
         generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
         let (g_decl, g_turbofish, g_where) = generics.fn_parts();
-        let field_name = self.get_field_name();
+        let fn_name = self.get_initializer_fn_name();
         let field_type = self.get_field_type();
         let (initializer, returns_multiple_errors) =
             self.gen_initializer(conf_context_ident, generics)?;
@@ -397,12 +415,12 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name #g_decl (
+            fn #fn_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>
             ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name #g_turbofish (#conf_context_ident) {
+            match #fn_name #g_turbofish (#conf_context_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -416,10 +434,10 @@ impl FieldItem {
     /// Generate code of the form
     ///
     /// {
-    ///   fn #field_name<generics>(c: &ConfContext, d: ...) -> Result<#field_type, Vec<InnerError> {
+    ///   fn __init_#field_name__<generics>(c: &ConfContext, d: ...) -> Result<#field_type, Vec<InnerError> {
     ///      ..
     ///   }
-    ///   match #field_name::<generics>(...) {
+    ///   match __init_#field_name__::<generics>(...) {
     ///     Ok(val) => Some(val),
     ///     Err(err) => #errors_ident.extend(err);
     ///   }
@@ -448,7 +466,7 @@ impl FieldItem {
         generics: &NestedGenerics,
     ) -> Result<TokenStream, Error> {
         let (g_decl, g_turbofish, g_where) = generics.fn_parts();
-        let field_name = self.get_field_name();
+        let fn_name = self.get_initializer_fn_name();
         let field_type = self.get_field_type();
         let serde_type = self.get_serde_type();
         let (initializer, returns_multiple_errors) = self.gen_initializer_with_doc_val(
@@ -477,14 +495,14 @@ impl FieldItem {
 
         Ok(quote! {
           {
-            fn #field_name #g_decl (
+            fn #fn_name #g_decl (
               #conf_context_ident: &::conf::ConfContext<'_>,
               #doc_name_ident: &str,
               #doc_val_ident: #serde_type
             ) -> Result<#field_type, #error_type> #g_where {
               #initializer
             }
-            match #field_name #g_turbofish (&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
+            match #fn_name #g_turbofish (&#conf_context_ident, #doc_name_ident, #doc_val_ident) {
               Ok(val) => Some(val),
               Err(errs) => {
                 #errors_ident.#extend_fn(errs);
@@ -552,8 +570,9 @@ impl FieldItem {
         errors_ident: &Ident,
         generics: &NestedGenerics,
     ) -> Result<SerdeStrategy, Error> {
-        let field_name = self.get_field_name();
-        let field_name_str = field_name.to_string();
+        let field_name_str = self.get_field_name().to_string();
+        // The local holding this field's value
+        let field_name = self.get_local_ident();
 
         let serde_name_str = self.get_serde_name();
         let serde_aliases = self.get_serde_aliases();

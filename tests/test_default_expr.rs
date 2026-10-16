@@ -154,3 +154,71 @@ fn test_help_with_literal_default() {
     assert!(help.contains("42"));
     assert!(help.contains("My value field"));
 }
+
+// Functions with the same names as the fields that use them
+fn retries() -> u32 {
+    5
+}
+
+fn jobs() -> u32 {
+    2
+}
+
+fn port(s: &str) -> Result<u16, std::num::ParseIntError> {
+    s.parse::<u16>().map(|p| p + 1)
+}
+
+/// An expression in a field's attributes can call a function with the same name as that field, or
+/// as an earlier field
+#[test]
+fn test_expr_calls_fn_named_like_field() {
+    #[derive(Conf, Debug)]
+    struct Config {
+        #[conf(long, default(retries()))]
+        retries: u32,
+        #[conf(long, default(retries() * 2))]
+        more_retries: u32,
+        #[conf(skip = jobs())]
+        jobs: u32,
+        #[conf(long, value_parser = port, default_value = "80")]
+        port: u16,
+        #[conf(long)]
+        r#type: Option<String>,
+    }
+
+    let result = Config::try_parse_from::<&str, &str, &str>(vec!["test_app"], vec![]).unwrap();
+    assert_eq!(result.retries, 5);
+    assert_eq!(result.more_retries, 10);
+    assert_eq!(result.jobs, 2);
+    assert_eq!(result.port, 81);
+    assert_eq!(result.r#type, None);
+}
+
+/// The same, on the serde code path
+#[cfg(feature = "serde")]
+#[test]
+fn test_expr_calls_fn_named_like_field_serde() {
+    #[derive(Conf, Debug)]
+    #[conf(serde)]
+    struct Config {
+        #[conf(long, default(retries()))]
+        retries: u32,
+        #[conf(long, default(retries() * 2))]
+        more_retries: u32,
+        #[conf(long, value_parser = port, serde(use_value_parser))]
+        port: u16,
+        #[conf(skip = jobs())]
+        jobs: u32,
+    }
+
+    let result = Config::conf_builder()
+        .args(["test_app"])
+        .env::<&str, &str>([])
+        .doc("doc", serde_json::json!({ "port": "80" }))
+        .try_parse()
+        .unwrap();
+    assert_eq!(result.retries, 5);
+    assert_eq!(result.more_retries, 10);
+    assert_eq!(result.port, 81);
+    assert_eq!(result.jobs, 2);
+}
