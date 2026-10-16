@@ -367,6 +367,10 @@ impl Parser {
                 arg = arg.num_args(1..);
             }
 
+            if let Some(value_name) = option.value_name.as_ref() {
+                arg = arg.value_name(value_name.clone().into_owned());
+            }
+
             // Build help text (env is allowed for positional args!)
             let help_text = build_help_text(option, env);
             if !help_text.is_empty() {
@@ -468,6 +472,10 @@ impl Parser {
                     .value_parser(ValueParser::os_string())
             }
         };
+
+        if let Some(value_name) = option.value_name.as_ref() {
+            arg = arg.value_name(value_name.clone().into_owned());
+        }
 
         // Set the help heading.
         // If there is a short-form or long-form set, then it is listed as a "flag" or "option" as

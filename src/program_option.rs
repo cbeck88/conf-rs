@@ -83,6 +83,9 @@ pub struct ProgramOption {
     /// Default value used when the switch appears on the command-line without a value.
     /// Only applies to parameters with short/long forms, not positional arguments.
     pub default_if_missing: Option<CowStr>,
+    /// Placeholder name for this option's value in help text (clap's `value_name`).
+    /// If not set, clap falls back to the id.
+    pub value_name: Option<CowStr>,
     /// If set, then the user has specified that this is (or is not) a secret value, explicitly.
     pub secret: Option<bool>,
     /// Whether this is a positional argument (has no short/long form, accepts value by position)
@@ -141,6 +144,7 @@ impl ProgramOption {
             allow_hyphen_values,
             allow_negative_numbers,
             default_if_missing,
+            value_name,
             secret,
             is_positional,
             has_serde_source,
@@ -210,6 +214,7 @@ impl ProgramOption {
             allow_hyphen_values,
             allow_negative_numbers,
             default_if_missing,
+            value_name,
             secret,
             is_positional,
             has_serde_source,
