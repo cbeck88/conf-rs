@@ -32,7 +32,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [aliases](#parameter-aliases)
     * [env_aliases](#parameter-env-aliases)
     * [default_value](#parameter-default-value)
-    * [default_help_str](#parameter-default-help-str)
+    * [default_value_help_str](#parameter-default-value-help-str)
     * [value_parser](#parameter-value-parser)
     * [value_parser_os](#parameter-value-parser-os)
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
@@ -176,7 +176,7 @@ If a type parameter is only used in a `PhantomData` field, mark that field [`ski
 and the compiler tells you if one is missing. Typically:
 
 * A `parameter` or `repeat` field of type `T` (or `Option<T>`, `Vec<T>`) without a `value_parser` needs `T: FromStr` and `<T as FromStr>::Err: Display`.
-* A `default(...)` value of type `T` is shown in help, so it needs `T: Display`, unless the field sets `default_help_str`.
+* A `default(...)` value of type `T` is shown in help, so it needs `T: Display`, unless the field sets `default_value_help_str`.
 * A `flatten` field of type `C` (or `Option<C>`) needs `C: Conf`, or `C: ConfSerde` if the struct uses `#[conf(serde)]`.
 * A `subcommands` field of type `S` (or `Option<S>`) needs `S: Subcommands`, or `S: SubcommandsSerde` if the struct uses `#[conf(serde)]`.
 * With `#[conf(serde)]`, a `parameter` or `repeat` field of type `T` needs `T: for<'de> Deserialize<'de>`, unless it uses `deserialize_with` or `skip`.
@@ -503,11 +503,14 @@ A parameter represents a single value that can be parsed from a string.
 
    *Note*: This behavior is the same as in `clap-derive`.
 
-*  <a name="parameter-default-help-str"></a> `default_help_str` (string argument)
+*  <a name="parameter-default-value-help-str"></a><a name="parameter-default-help-str"></a> `default_value_help_str` (string argument)
 
-   example: `#[arg(default_value = "actual_value", default_help_str = "displayed in help")]`
+   example: `#[arg(default_value = "actual_value", default_value_help_str = "displayed in help")]`
 
-   Overrides the use of `default_value` in the help text. This allows displaying a different string in `--help` than the actual default value used for initialization.
+   Overrides how the default value is shown in the help text, i.e. the `[default: ...]` part. This allows displaying a different string in `--help` than the actual default value used for initialization.
+   It only changes how the default value is described. The rest of the help text still comes from the doc comment.
+
+   `default_help_str` is an older name for this attribute, and still works.
 
    **Example**:
    ```rust
@@ -515,11 +518,11 @@ A parameter represents a single value that can be parsed from a string.
    #[derive(Conf)]
    struct Config {
        /// API endpoint URL
-       #[conf(long, default_value = "https://api.example.com/v2/data", default_help_str = "<default endpoint>")]
+       #[conf(long, default_value = "https://api.example.com/v2/data", default_value_help_str = "<default endpoint>")]
        api_url: String,
 
        /// Connection timeout
-       #[conf(long, default_value = "30", default_help_str = "30 seconds")]
+       #[conf(long, default_value = "30", default_value_help_str = "30 seconds")]
        timeout: u32,
    }
    ```
@@ -650,7 +653,7 @@ A parameter represents a single value that can be parsed from a string.
 
    **Help text**: When using `default`, the help text that documents the default value is generated
    using the `Display` trait applied to the default value. If the type doesn't implement `Display`, then
-   `default_help_str` must be provided instead.
+   `default_value_help_str` must be provided instead.
 
    **Examples**:
 

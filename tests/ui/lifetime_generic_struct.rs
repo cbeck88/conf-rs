@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 pub struct LifetimeGeneric<'a> {
     #[conf(long)]
     pub value: u32,
-    #[conf(default, default_help_str = "none")]
+    #[conf(default, default_value_help_str = "none")]
     pub marker: PhantomData<&'a ()>,
 }
 
@@ -14,7 +14,7 @@ pub struct LifetimeGeneric<'a> {
 pub struct MixedGeneric<'a, T: std::str::FromStr> {
     #[conf(long)]
     pub value: T,
-    #[conf(default, default_help_str = "none")]
+    #[conf(default, default_value_help_str = "none")]
     pub marker: PhantomData<&'a ()>,
 }
 

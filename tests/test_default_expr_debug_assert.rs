@@ -8,10 +8,10 @@ pub struct ConfigWithDefaultExpr {
     #[conf(long, default(42))]
     value: i32,
 
-    #[conf(long, default, default_help_str = "0")]
+    #[conf(long, default, default_value_help_str = "0")]
     with_default_trait: i32,
 
-    #[conf(long, default(10 + 5), default_help_str = "15")]
+    #[conf(long, default(10 + 5), default_value_help_str = "15")]
     computed: i32,
 }
 
@@ -20,7 +20,7 @@ pub struct ConfigWithDefaultExpr {
 #[conf(test)]
 #[allow(dead_code)]
 pub struct ConfigWithDefaultExprOption {
-    #[conf(long, default(42), default_help_str = "42")]
+    #[conf(long, default(42), default_value_help_str = "42")]
     value: Option<i32>,
 }
 
@@ -32,7 +32,7 @@ pub struct ConfigWithComplexDefaultExpr {
     #[conf(
         long,
         default(vec![1, 2, 3]),
-        default_help_str = "vec![1, 2, 3]",
+        default_value_help_str = "vec![1, 2, 3]",
         value_parser = |s: &str| {
             s.split(',')
                 .map(|n| n.trim().parse::<i32>())

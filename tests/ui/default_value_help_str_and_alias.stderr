@@ -1,0 +1,11 @@
+error: default_value_help_str cannot be specified twice (default_help_str is an alias for it)
+ --> tests/ui/default_value_help_str_and_alias.rs:5:73
+  |
+5 |     #[conf(long, default_value = "x", default_value_help_str = "first", default_help_str = "second")]
+  |                                                                         ^^^^^^^^^^^^^^^^
+
+error: Earlier specified here
+ --> tests/ui/default_value_help_str_and_alias.rs:5:64
+  |
+5 |     #[conf(long, default_value = "x", default_value_help_str = "first", default_help_str = "second")]
+  |                                                                ^^^^^^^

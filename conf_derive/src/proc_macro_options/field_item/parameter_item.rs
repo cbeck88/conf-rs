@@ -159,7 +159,7 @@ pub struct ParameterItem {
     env_aliases: Option<LitStrArray>,
     default_value: Option<LitStr>,
     default_value_expr: Option<Expr>,
-    default_help_str: Option<LitStr>,
+    default_value_help_str: Option<LitStr>,
     default_if_missing: Option<LitStr>,
     value_parser: Option<Expr>,
     value_parser_os: Option<Expr>,
@@ -195,7 +195,7 @@ impl ParameterItem {
             env_aliases: None,
             default_value: None,
             default_value_expr: None,
-            default_help_str: None,
+            default_value_help_str: None,
             default_if_missing: None,
             value_parser: None,
             value_parser_os: None,
@@ -248,9 +248,22 @@ impl ParameterItem {
                     } else if path.is_ident("default_value") {
                         let val = meta.value()?.parse::<LitStr>()?;
                         set_once(&path, &mut result.default_value, Some(val))
-                    } else if path.is_ident("default_help_str") {
+                    } else if path.is_ident("default_value_help_str")
+                        || path.is_ident("default_help_str")
+                    {
+                        // default_help_str is the old name, kept as an alias
                         let val = meta.value()?.parse::<LitStr>()?;
-                        set_once(&path, &mut result.default_help_str, Some(val))
+                        if let Some(earlier) = result.default_value_help_str.as_ref() {
+                            let mut error = Error::new(
+                                path.span(),
+                                "default_value_help_str cannot be specified twice \
+                                (default_help_str is an alias for it)",
+                            );
+                            error.combine(Error::new(earlier.span(), "Earlier specified here"));
+                            return Err(error);
+                        }
+                        result.default_value_help_str = Some(val);
+                        Ok(())
                     } else if path.is_ident("default_if_missing") {
                         let val = meta.value()?.parse::<LitStr>()?;
                         set_once(&path, &mut result.default_if_missing, Some(val))
@@ -361,19 +374,19 @@ impl ParameterItem {
             ));
         }
 
-        // Validate default_help_str without default_value or default_value_expr
-        if result.default_help_str.is_some()
+        // Validate default_value_help_str without default_value or default_value_expr
+        if result.default_value_help_str.is_some()
             && result.default_value.is_none()
             && result.default_value_expr.is_none()
             && result.is_optional_type.is_none()
         {
             return Err(Error::new(
                 field.span(),
-                "default_help_str is provided but there is no default that it is documenting",
+                "default_value_help_str is provided but there is no default that it is documenting",
             ));
         }
 
-        // Note: If default_value_expr is used without default_help_str, we generate code that
+        // Note: If default_value_expr is used without default_value_help_str, we generate code that
         // calls Display::fmt on the default value. If the type doesn't implement Display,
         // this will fail at compile time with a clear error message from rustc.
 
@@ -509,8 +522,8 @@ impl ParameterItem {
         let env_form = quote_opt_cow(&self.env_name);
 
         // Generate function pointer for default help text
-        let default_help_str = if let Some(help_str_lit) = &self.default_help_str {
-            // Explicit default_help_str provided - generate function that writes the literal
+        let default_help_str = if let Some(help_str_lit) = &self.default_value_help_str {
+            // Explicit default_value_help_str provided - generate function that writes the literal
             let help_str = help_str_lit.value();
             quote! {
                 Some(::conf::DisplayFn((|f: &mut ::core::fmt::Formatter| f.write_str(#help_str)) as fn(&mut ::core::fmt::Formatter) -> ::core::fmt::Result))

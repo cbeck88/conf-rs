@@ -7,11 +7,11 @@ fn test_default_help_str_overrides_default_value() {
     #[allow(unused)]
     #[derive(Conf, Debug)]
     struct TestConfig {
-        /// A field with both default_value and default_help_str
+        /// A field with both default_value and default_value_help_str
         #[conf(
             long,
             default_value = "actual_default",
-            default_help_str = "shown in help"
+            default_value_help_str = "shown in help"
         )]
         field_with_both: String,
 
@@ -19,14 +19,14 @@ fn test_default_help_str_overrides_default_value() {
         #[conf(long, default_value = "just_default")]
         field_with_default_only: String,
 
-        /// A field with only default_help_str (no default_value)
-        #[conf(long, default_help_str = "help string only")]
+        /// A field with only default_value_help_str (no default_value)
+        #[conf(long, default_value_help_str = "help string only")]
         field_help_only: Option<String>,
     }
 
     let opts = TestConfig::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
 
-    // Check field_with_both - should use default_help_str
+    // Check field_with_both - should use default_value_help_str
     let opt1 = opts.iter().find(|o| o.id == "field_with_both").unwrap();
     assert_eq!(
         format_default_help_str(opt1.default_help_str).as_deref(),
@@ -43,7 +43,7 @@ fn test_default_help_str_overrides_default_value() {
         Some("just_default")
     );
 
-    // Check field_help_only - should use default_help_str
+    // Check field_help_only - should use default_value_help_str
     let opt3 = opts.iter().find(|o| o.id == "field_help_only").unwrap();
     assert_eq!(
         format_default_help_str(opt3.default_help_str).as_deref(),
@@ -56,7 +56,11 @@ fn test_default_help_str_in_actual_help() {
     #[allow(unused)]
     #[derive(Conf, Debug)]
     struct TestConfig {
-        #[conf(long, default_value = "real_val", default_help_str = "display_val")]
+        #[conf(
+            long,
+            default_value = "real_val",
+            default_value_help_str = "display_val"
+        )]
         my_field: String,
     }
 
@@ -68,7 +72,7 @@ fn test_default_help_str_in_actual_help() {
     // The help should show the display_val, not the real_val
     assert!(
         help.contains("display_val"),
-        "Help should contain default_help_str value"
+        "Help should contain default_value_help_str value"
     );
 }
 
@@ -79,7 +83,7 @@ fn test_default_value_still_works_for_initialization() {
         #[conf(
             long,
             default_value = "actual_default",
-            default_help_str = "shown in help"
+            default_value_help_str = "shown in help"
         )]
         field: String,
     }
@@ -88,4 +92,21 @@ fn test_default_value_still_works_for_initialization() {
 
     // Should use the actual default_value for initialization, not the help string
     assert_eq!(result.field, "actual_default");
+}
+
+#[test]
+fn test_default_help_str_alias() {
+    #[allow(unused)]
+    #[derive(Conf, Debug)]
+    struct TestConfig {
+        // default_help_str is the old name of default_value_help_str
+        #[conf(long, default_value = "real_val", default_help_str = "display_val")]
+        my_field: String,
+    }
+
+    let opts = TestConfig::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
+    assert_eq!(
+        format_default_help_str(opts[0].default_help_str).as_deref(),
+        Some("display_val")
+    );
 }
