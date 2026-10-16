@@ -7,7 +7,7 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Attribute, Error, Generics, Ident, Variant};
+use syn::{Attribute, Error, Generics, Ident, Variant, parse_quote};
 
 mod enum_item;
 use enum_item::EnumItem;
@@ -23,37 +23,62 @@ use variant_item::VariantItem;
 pub struct GenSubcommandsEnum {
     enum_item: EnumItem,
     variants: Vec<VariantItem>,
+    generics: Generics,
 }
 
 impl GenSubcommandsEnum {
     /// Parse syn data for an enum with `#[derive(Subcommands)]` on it
     pub fn new<'a>(
         ident: &Ident,
+        generics: &Generics,
         attrs: &[Attribute],
         variants: impl Iterator<Item = &'a Variant>,
     ) -> Result<Self, Error> {
+        let variants = variants
+            .map(|var| VariantItem::new(var, ident, generics))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Named-field variants become generated structs with derive(Conf), which get all of the
+        // enum's generics, and derive(Conf) doesn't support lifetime params.
+        if let Some(lifetime) = generics.lifetimes().next() {
+            if variants.iter().any(|var| var.get_named_fields().is_some()) {
+                return Err(Error::new_spanned(
+                    lifetime,
+                    "#[derive(Subcommands)] doesn't support lifetime parameters on an enum with named-field variants",
+                ));
+            }
+        }
+
         Ok(Self {
             enum_item: EnumItem::new(ident, attrs)?,
-            variants: variants
-                .map(|var| VariantItem::new(var, ident))
-                .collect::<Result<Vec<_>, _>>()?,
+            variants,
+            generics: generics.clone(),
         })
     }
 
     /// Generate hidden structs for variants with named fields.
     /// Uses mangled names to avoid shadowing types referenced in field types.
     ///
-    /// TODO: These generated structs don't include generics from the parent enum, so
-    /// named-field variants cannot reference generic type parameters in their field types.
-    /// Fixing this properly is non-trivial: we'd need to determine which generics are
-    /// actually used by each variant's fields and compute the correct subset of generics
-    /// and where clauses for each generated struct.
+    /// If the enum is generic, each struct gets all of the enum's generics and where clause, plus
+    /// a skipped PhantomData field, since its fields might not use every type param. (Working out
+    /// which generics and where predicates each variant actually needs isn't worth it.)
     fn gen_named_field_structs(&self) -> TokenStream {
+        let (impl_generics, _, where_clause) = self.generics.split_for_impl();
+        let type_params = self.generics.type_params().map(|tp| &tp.ident);
+        let phantom_field: Option<syn::Field> = (!self.generics.params.is_empty()).then(|| {
+            parse_quote! {
+                #[conf(skip)]
+                __variant_phantom__: ::core::marker::PhantomData<fn() -> (#(#type_params,)*)>
+            }
+        });
+
         let structs: Vec<TokenStream> = self
             .variants
             .iter()
             .filter_map(|var| {
                 var.get_named_fields().map(|fields| {
+                    let mut fields = fields.clone();
+                    fields.named.extend(phantom_field.clone());
                     let struct_name = var.get_generated_struct_name();
                     let display_name = var.get_display_name();
                     // Add #[conf(serde)] if enum has serde AND this variant isn't skipped
@@ -70,7 +95,7 @@ impl GenSubcommandsEnum {
                         #[conf(display_name = #display_name)]
                         #passthrough_attrs
                         #serde_attr
-                        struct #struct_name #fields
+                        struct #struct_name #impl_generics #where_clause #fields
                     }
                 })
             })

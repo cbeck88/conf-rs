@@ -59,7 +59,9 @@ Each enum variant can be one of:
 1. **Unit variant** (no fields) - The subcommand takes no additional arguments.
 2. **Single unnamed field** - The field must be a `struct` type which implements [`Conf`](https://docs.rs/conf/latest/conf/trait.Conf.html).
 3. **Named fields** - The fields are defined inline and support the same `#[arg(...)]` and `#[conf(...)]` attributes as struct fields. Works similarly to [clap's named field variants](https://docs.rs/clap/latest/clap/_derive/index.html#subcommands).
-   The enum may be generic, but the types of named fields can't use its generic parameters yet. Use a single unnamed field for that, e.g. `Run(T)`.
+   If the enum is generic, named fields can use its type and const parameters. The bounds the fields need go on the enum,
+   as for a [generic struct](./REFERENCE_derive_conf.md#generic-structs). An enum with named-field variants can't have
+   lifetime parameters.
 
 ## Enum-level attributes
 

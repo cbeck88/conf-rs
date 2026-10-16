@@ -3,8 +3,8 @@ use heck::{ToKebabCase, ToSnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Fields, FieldsNamed, FieldsUnnamed, Ident, LitStr, Type, Variant, meta::ParseNestedMeta,
-    spanned::Spanned, token,
+    Error, Fields, FieldsNamed, FieldsUnnamed, Generics, Ident, LitStr, Type, Variant,
+    meta::ParseNestedMeta, spanned::Spanned, token,
 };
 
 /// #[conf(serde(...))] options listed on a field of Flatten kind
@@ -58,6 +58,8 @@ impl GetSpan for VariantSerdeItem {
 /// Proc macro annotations parsed from a variant within a Subcommands enum
 pub struct VariantItem {
     enum_name: Ident,
+    /// The enum's generics, e.g. `<T, N>`, which the generated struct for named fields also has
+    enum_ty_generics: TokenStream,
     variant_name: Ident,
     variant_type: Option<Type>, // None when we have a unit variant or named fields, Some otherwise
     is_optional_type: Option<Type>, // Some when we have a single unnamed field which is Option<T>
@@ -73,8 +75,14 @@ pub struct VariantItem {
 }
 
 impl VariantItem {
-    pub fn new(variant: &Variant, enum_ident: &Ident) -> Result<Self, Error> {
+    pub fn new(
+        variant: &Variant,
+        enum_ident: &Ident,
+        enum_generics: &Generics,
+    ) -> Result<Self, Error> {
         let enum_name = enum_ident.clone();
+        let (_, enum_ty_generics, _) = enum_generics.split_for_impl();
+        let enum_ty_generics = quote! { #enum_ty_generics };
         let variant_name = variant.ident.clone();
 
         let (variant_type, is_optional_type, named_fields) = match variant.fields {
@@ -122,6 +130,7 @@ impl VariantItem {
                 variant_name.span(),
             ),
             enum_name,
+            enum_ty_generics,
             variant_name,
             variant_type,
             is_optional_type,
@@ -184,6 +193,13 @@ impl VariantItem {
             &format!("__{}_{}", self.enum_name, self.variant_name),
             self.variant_name.span(),
         )
+    }
+
+    /// The generated struct's type, with the enum's generics (for named field variants)
+    pub fn get_generated_struct_type(&self) -> TokenStream {
+        let struct_name = self.get_generated_struct_name();
+        let enum_ty_generics = &self.enum_ty_generics;
+        quote! { #struct_name #enum_ty_generics }
     }
 
     /// Get a user-friendly display name for error messages (e.g., "EnumName::VariantName").
@@ -249,7 +265,7 @@ impl VariantItem {
             })
         } else if let Some(fields) = &self.named_fields {
             // Named fields variant - use generated struct, then destructure
-            let struct_name = self.get_generated_struct_name();
+            let struct_name = self.get_generated_struct_type();
             let field_names: Vec<_> = fields
                 .named
                 .iter()
@@ -297,7 +313,7 @@ impl VariantItem {
             })
         } else if let Some(fields) = &self.named_fields {
             // Named fields variant - use generated struct, then destructure
-            let struct_name = self.get_generated_struct_name();
+            let struct_name = self.get_generated_struct_type();
             let serde_name = self.get_serde_name();
             let field_names: Vec<_> = fields
                 .named
@@ -356,7 +372,7 @@ impl VariantItem {
             })
         } else if self.named_fields.is_some() {
             // Named fields variant - use the generated struct
-            let struct_name = self.get_generated_struct_name();
+            let struct_name = self.get_generated_struct_type();
             Ok(quote! {
                 {
                     let program_options = <#struct_name as ::conf::Conf>::PROGRAM_OPTIONS.iter().collect::<Vec<_>>();
@@ -398,7 +414,7 @@ impl VariantItem {
             })
         } else if self.named_fields.is_some() {
             // Named fields variant - use the generated struct
-            let struct_name = self.get_generated_struct_name();
+            let struct_name = self.get_generated_struct_type();
             Ok(quote! {
                 <#struct_name as ::conf::Conf>::parser_debug_asserts();
                 <#struct_name as ::conf::Conf>::debug_asserts();

@@ -196,8 +196,8 @@ Write `Option<T>` in the struct to make the field optional.
 **Testing.** `#[conf(test)]` can't be used on a generic struct, since it needs concrete types. Put it on a non-generic struct
 that uses the generic one with concrete types, e.g. via `flatten`. That also checks the generic struct.
 
-**Subcommands.** A named-field variant of a generic `#[derive(Subcommands)]` enum can't use the enum's generic parameters yet.
-See the [Subcommands reference](./REFERENCE_derive_subcommands.md).
+**Subcommands.** A `#[derive(Subcommands)]` enum can be generic in the same way, and its named-field variants can use
+the enum's type and const parameters. See the [Subcommands reference](./REFERENCE_derive_subcommands.md).
 
 ## Field-level attributes
 
