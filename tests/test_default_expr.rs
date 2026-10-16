@@ -5,7 +5,7 @@ use conf::Conf;
 fn test_default_no_parens() {
     #[derive(Conf, Debug)]
     struct Config {
-        #[conf(long, default, default_help_str = "0")]
+        #[conf(long, default, default_value_help_str = "0")]
         value: i32,
     }
 
@@ -45,7 +45,7 @@ fn test_default_with_literal() {
 fn test_default_with_expression() {
     #[derive(Conf, Debug)]
     struct Config {
-        #[conf(long, default(10 + 5), default_help_str = "15")]
+        #[conf(long, default(10 + 5), default_value_help_str = "15")]
         value: i32,
     }
 
@@ -71,7 +71,7 @@ fn test_default_bypasses_value_parser() {
         #[conf(
             long,
             default(MyType("from_default".to_string())),
-            default_help_str = "MyType(\"from_default\")",
+            default_value_help_str = "MyType(\"from_default\")",
             value_parser = |s: &str| Ok::<_, String>(MyType(format!("parsed_{}", s)))
         )]
         my_value: MyType,
@@ -93,7 +93,7 @@ fn test_default_bypasses_value_parser() {
 fn test_default_with_option() {
     #[derive(Conf, Debug)]
     struct Config {
-        #[conf(long, default(42), default_help_str = "42")]
+        #[conf(long, default(42), default_value_help_str = "42")]
         value: Option<i32>,
     }
 
