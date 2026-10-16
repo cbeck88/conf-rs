@@ -1,0 +1,16 @@
+error[E0277]: the trait bound `String: From<{integer}>` is not satisfied
+ --> tests/ui/about_expr_wrong_type.rs:4:16
+  |
+4 | #[conf(about = 5)]
+  |                ^ the trait `From<{integer}>` is not implemented for `String`
+  |
+  = help: `String` implements trait `From<T>`:
+            From<&String>
+            From<&mut str>
+            From<&str>
+            From<Box<str>>
+            From<Cow<'_, str>>
+            From<char>
+            From<clap_builder::builder::str::Str>
+            From<clap_builder::util::id::Id>
+  = note: required for `{integer}` to implement `Into<String>`
