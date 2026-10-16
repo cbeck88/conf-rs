@@ -13,6 +13,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
 * [Variant-level attributes](#variant-level-attributes)
     * [name](#variant-name)
     * [alias](#variant-alias)
+    * [about](#variant-about)
     * [serde](#variant-serde)
       * [rename](#variant-serde-rename)
       * [alias](#variant-serde-alias)
@@ -140,6 +141,41 @@ Each enum variant can be one of:
    ```
 
    In this example, the subcommand can be invoked as `./my_prog migrate`, `./my_prog mig`, or `./my_prog m`.
+
+*  <a name="variant-about"></a> `about` (expr argument)
+
+   example: `#[conf(about = "Run the migrations")]`, `#[conf(about = tr("migrate.about"))]`
+
+   Set the help text for this subcommand. The first line is shown in the list of commands in the parent's help,
+   and the whole text is shown at the top of the subcommand's own `--help`.
+
+   If this attribute is not present, the doc comment on the variant is used.
+
+   The value can be a string literal, or any expression that converts `Into<String>`, such as a call to a function
+   that returns a `String` or `&'static str`. The expression is evaluated at runtime, each time the parser is built,
+   so it can be computed then, e.g. translated according to the user's locale. It can't use `Self`, the enum's
+   generic parameters, or any local variables.
+
+   **Example**:
+   ```rust
+   # use conf::{Conf, Subcommands};
+   # #[derive(Conf)]
+   # pub struct MigrateConfig {}
+   // Stand-in for a lookup in your i18n library
+   fn tr(key: &str) -> String {
+       match key {
+           "migrate.about" => "Run the migrations".into(),
+           _ => key.into(),
+       }
+   }
+
+   #[derive(Subcommands)]
+   pub enum Command {
+       /// This doc comment is for developers. Users see the translated about string.
+       #[conf(about = tr("migrate.about"))]
+       Migrate(MigrateConfig),
+   }
+   ```
 
 *  <a name="variant-serde"></a> `serde` (optional additional attributes)
 

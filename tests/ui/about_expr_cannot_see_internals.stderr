@@ -1,0 +1,7 @@
+error[E0434]: can't capture dynamic environment in a fn item
+ --> tests/ui/about_expr_cannot_see_internals.rs:9:20
+  |
+9 |     #[conf(about = program_options.len().to_string())]
+  |                    ^^^^^^^^^^^^^^^
+  |
+  = help: use the `|| { ... }` closure form instead

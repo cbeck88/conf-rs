@@ -1649,14 +1649,39 @@ works on that struct. Attributes that are not "top-level only" will still have a
    }
    ```
 
-*  <a name="struct-about"></a> `about` (string argument) (top-level only)
+*  <a name="struct-about"></a> `about` (expr argument) (top-level only)
 
-   example: `#[conf(about = "Frobnicate as a service")]`
+   example: `#[conf(about = "Frobnicate as a service")]`, `#[conf(about = tr("app.about"))]`
 
    The about string is displayed as the first line of the automatically-generated help page, before the usage is displayed.
 
-   The about string can be set by passing `#[conf(about="...")]`.
+   The about string can be set by passing `#[conf(about = ...)]`.
    If it is not set, it defaults to the doc string on the struct.
+
+   The value can be a string literal, or any expression that converts `Into<String>`, such as a call to a function
+   that returns a `String` or `&'static str`. The expression is evaluated at runtime, each time the parser is built,
+   so it can be computed then, e.g. translated according to the user's locale. It can't use `Self`, the struct's
+   generic parameters, or any local variables.
+
+   **Example**:
+   ```rust
+   # use conf::Conf;
+   // Stand-in for a lookup in your i18n library
+   fn tr(key: &str) -> String {
+       match key {
+           "app.about" => "Frobnicate as a service".into(),
+           _ => key.into(),
+       }
+   }
+
+   /// This doc comment is for developers. Users see the translated about string.
+   #[derive(Conf)]
+   #[conf(about = tr("app.about"))]
+   pub struct Config {
+       #[conf(long, env)]
+       pub server_port: u16,
+   }
+   ```
 
    *Note*: This matches the behavior of `clap` very closely.
 

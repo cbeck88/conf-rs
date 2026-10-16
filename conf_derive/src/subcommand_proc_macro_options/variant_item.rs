@@ -3,7 +3,7 @@ use heck::{ToKebabCase, ToSnakeCase};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Fields, FieldsNamed, FieldsUnnamed, Generics, Ident, LitStr, Type, Variant,
+    Error, Expr, Fields, FieldsNamed, FieldsUnnamed, Generics, Ident, LitStr, Type, Variant,
     meta::ParseNestedMeta, spanned::Spanned, token,
 };
 
@@ -68,6 +68,8 @@ pub struct VariantItem {
     command_name: LitStr,
     aliases: Vec<LitStr>,
     serde: Option<VariantSerdeItem>,
+    /// Set by `about = <expr>`, overrides the doc string
+    about: Option<Expr>,
     doc_string: Option<String>,
     /// Struct-level conf attributes to pass through to the generated struct
     /// (e.g., one_of_fields, validation_predicate, etc.)
@@ -137,6 +139,7 @@ impl VariantItem {
             named_fields,
             aliases: Vec::new(),
             serde: None,
+            about: None,
             doc_string: None,
             passthrough_conf_attrs: Vec::new(),
         };
@@ -161,6 +164,12 @@ impl VariantItem {
                         Ok(())
                     } else if path.is_ident("serde") {
                         set_once(&path, &mut result.serde, Some(VariantSerdeItem::new(meta)?))
+                    } else if path.is_ident("about") {
+                        set_once(
+                            &path,
+                            &mut result.about,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if result.named_fields.is_some() {
                         // Pass through unrecognized attributes to the generated struct
                         // (e.g., one_of_fields, validation_predicate, etc.)
@@ -350,10 +359,15 @@ impl VariantItem {
         let command_name = &self.command_name;
         let aliases = &self.aliases;
 
-        // Generate .about() call if we have a doc string
-        let about_call = self.doc_string.as_ref().map(|doc| {
-            quote! { .about(#doc) }
-        });
+        // Generate .about() call if we have an about expression or a doc string
+        let about_call = match (&self.about, &self.doc_string) {
+            (Some(expr), _) => {
+                let about = gen_about_value(expr);
+                Some(quote! { .about(#about) })
+            }
+            (None, Some(doc)) => Some(quote! { .about(#doc) }),
+            (None, None) => None,
+        };
 
         if let Some(ty) = self.variant_type.as_ref() {
             // Single unnamed field variant
