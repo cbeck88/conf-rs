@@ -83,7 +83,7 @@ impl GetSpan for StructTestItem {
 pub struct StructItem {
     pub struct_ident: Ident,
     pub struct_vis: Visibility,
-    pub about: Option<LitStr>,
+    pub about: Option<Expr>,
     pub name: Option<LitStr>,
     /// Override the name shown in error messages. Defaults to struct_ident if not set.
     pub display_name: Option<LitStr>,
@@ -143,7 +143,7 @@ impl StructItem {
                         set_once(
                             &path,
                             &mut result.about,
-                            Some(parse_required_value::<LitStr>(meta)?),
+                            Some(parse_required_value::<Expr>(meta)?),
                         )
                     } else if path.is_ident("name") {
                         set_once(
@@ -262,12 +262,14 @@ impl StructItem {
             .map(|lit_str| lit_str.value())
             .unwrap_or_else(|| std::env::var("CARGO_PKG_NAME").ok().unwrap_or_default());
         let no_help_flag = self.no_help_flag;
-        let about_text = self
-            .about
-            .as_ref()
-            .map(|lit_str| lit_str.value())
-            .or(self.doc_string.clone());
-        let about = quote_opt(&about_text);
+        let about = match (&self.about, &self.doc_string) {
+            (Some(expr), _) => {
+                let about = gen_about_value(expr);
+                quote! { Some(#about) }
+            }
+            (None, Some(doc)) => quote! { Some(::std::string::String::from(#doc)) },
+            (None, None) => quote! { None },
+        };
         let styles = quote_opt(&self.styles);
         let version = match (&self.version, &self.version_fn) {
             (Some(None), None) => quote! { Some(|| env!("CARGO_PKG_VERSION")) },

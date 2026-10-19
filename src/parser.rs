@@ -73,7 +73,10 @@ impl<'a> ParsedArgs<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct ParserConfig {
     /// An optional top-level specified about string
-    pub about: Option<&'static str>,
+    ///
+    /// This is a `String` and not a `&'static str` so that it can be computed at runtime,
+    /// e.g. translated according to the user's locale.
+    pub about: Option<String>,
     /// A name that should be used for the binary
     pub name: &'static str,
     /// True if help flags should not be automatically generated
@@ -154,8 +157,8 @@ impl Parser {
         let mut command = Command::new(parser_config.name);
 
         // Apply settings from parser_config
-        if let Some(about) = parser_config.about.as_ref() {
-            command = command.about(&**about);
+        if let Some(about) = parser_config.about.clone() {
+            command = command.about(about);
         }
         if let Some(ref styles) = parser_config.styles {
             command = command.styles(styles.clone().into_clap_styles());

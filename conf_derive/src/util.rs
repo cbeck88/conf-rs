@@ -1,6 +1,6 @@
 use heck::{ToKebabCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, quote};
+use quote::{ToTokens, quote, quote_spanned};
 use std::{borrow::Borrow, fmt::Display};
 use syn::{
     Error, Expr, ExprLit, GenericArgument, GenericParam, Generics, Ident, Lifetime, LifetimeParam,
@@ -273,6 +273,25 @@ pub fn quote_opt<T: ToTokens>(src: &Option<T>) -> TokenStream {
         quote! { Some(#string) }
     } else {
         quote! { None }
+    }
+}
+
+/// Generate an expression that evaluates the user's `about = <expr>` to a `String`.
+///
+/// The expression goes in its own nested fn, like a parameter's default(...), so that it can't
+/// see our local variables. It's evaluated each time the parser is built, at runtime, so it can
+/// e.g. be translated according to the user's locale.
+pub fn gen_about_value(expr: &Expr) -> TokenStream {
+    let into_string = quote_spanned! {expr.span()=>
+        ::core::convert::Into::<::std::string::String>::into(#expr)
+    };
+    quote! {
+        {
+            fn __about__() -> ::std::string::String {
+                #into_string
+            }
+            __about__()
+        }
     }
 }
 
