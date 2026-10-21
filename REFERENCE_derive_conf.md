@@ -38,6 +38,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [allow_hyphen_values](#parameter-allow-hyphen-values)
     * [allow_negative_numbers](#parameter-allow-negative-numbers)
     * [default_if_missing](#parameter-default-if-missing)
+    * [value_name](#parameter-value-name)
     * [default](#parameter-default)
     * [secret](#parameter-secret)
     * [serde](#parameter-serde)
@@ -62,6 +63,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [no_env_delimiter](#repeat-no-env-delimiter)
     * [allow_hyphen_values](#repeat-allow-hyphen-values)
     * [allow_negative_numbers](#repeat-allow-negative-numbers)
+    * [value_name](#repeat-value-name)
     * [secret](#repeat-secret)
     * [serde](#repeat-serde)
       * [rename](#repeat-serde-rename)
@@ -633,6 +635,16 @@ A parameter represents a single value that can be parsed from a string.
    - `./app --port` - `port` will be `80` (from `default_if_missing`)
    - `./app --port 8080` - `port` will be `8080` (from the command line)
 
+*  <a name="parameter-value-name"></a> `value_name` (string argument)
+
+   example: `#[arg(long, value_name = "URL")]`
+
+   This corresponds to [`clap::Arg::value_name`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.value_name)
+
+   Sets the placeholder for this parameter's value in `--help` output, e.g. `--db-url <URL>`.
+   If not set, the placeholder is the parameter's id, which is the field name, prefixed by the names of any
+   flattened structs it is nested in (e.g. `<db.url>`).
+
 *  <a name="parameter-default"></a> `default` (optional expression argument)
 
    example: `#[arg(default)]`, `#[arg(default(42))]`, `#[arg(default(vec![1, 2, 3]))]`
@@ -1082,6 +1094,16 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    This is a more conservative option than `allow_hyphen_values` because it only permits values that look like negative numbers (start with `-` or `+` followed by digits), not arbitrary hyphenated strings.
 
    `allow_negative_numbers` is automatically enabled when the inner type `T` of `Vec<T>` is a signed number type (`i8`, `i16`, `i32`, `i64`, `i128`, `isize`, `f32`, `f64`), making it unnecessary to specify this attribute explicitly in most cases.
+
+*  <a name="repeat-value-name"></a> `value_name` (string argument)
+
+   example: `#[arg(repeat, long, value_name = "PEER")]`
+
+   This corresponds to [`clap::Arg::value_name`](https://docs.rs/clap/4.5.8/clap/struct.Arg.html#method.value_name)
+
+   Sets the placeholder for this parameter's values in `--help` output, e.g. `--peer <PEER>`.
+   If not set, the placeholder is the parameter's id, which is the field name, prefixed by the names of any
+   flattened structs it is nested in (e.g. `<net.peer>`).
 
 *  <a name="repeat-secret"></a> `secret` (optional bool argument)
 

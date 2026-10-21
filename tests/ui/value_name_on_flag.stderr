@@ -1,0 +1,5 @@
+error: unrecognized conf flag option
+ --> tests/ui/value_name_on_flag.rs:5:18
+  |
+5 |     #[conf(long, value_name = "VALUE")]
+  |                  ^^^^^^^^^^
