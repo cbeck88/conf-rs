@@ -165,6 +165,8 @@ pub struct ParameterItem {
     value_parser_os: Option<Expr>,
     serde: Option<ParameterSerdeItem>,
     test: Option<ParameterTestItem>,
+    /// Set by `help = <expr>`, replaces the doc string
+    help: Option<Expr>,
     doc_string: Option<String>,
     is_positional: Option<Span>,
 }
@@ -201,6 +203,7 @@ impl ParameterItem {
             value_parser_os: None,
             serde: None,
             test: None,
+            help: None,
             doc_string: None,
             is_positional: None,
         };
@@ -212,6 +215,12 @@ impl ParameterItem {
                     let path = meta.path.clone();
                     if path.is_ident("parameter") {
                         Ok(())
+                    } else if path.is_ident("help") {
+                        set_once(
+                            &path,
+                            &mut result.help,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if path.is_ident("short") {
                         set_once(
                             &path,
@@ -516,7 +525,7 @@ impl ParameterItem {
             && self.default_value.is_none()
             && self.default_value_expr.is_none();
         let id = self.field_name.to_string();
-        let description = quote_opt_cow(&self.doc_string);
+        let (description, description_fn) = gen_description(&self.help, &self.doc_string);
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
@@ -574,6 +583,7 @@ impl ParameterItem {
                 id: ::std::borrow::Cow::Borrowed(#id),
                 parse_type: ::conf::ParseType::Parameter,
                 description: #description,
+                description_fn: #description_fn,
                 short_form: #short_form,
                 long_form: #long_form,
                 aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),

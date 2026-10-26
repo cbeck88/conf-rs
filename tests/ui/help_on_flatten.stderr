@@ -1,0 +1,5 @@
+error: `help` isn't supported on a flatten field, since it isn't a single option. Use `help_prefix` to prefix the help of each flattened option
+  --> tests/ui/help_on_flatten.rs:11:21
+   |
+11 |     #[conf(flatten, help = "Inner options")]
+   |                     ^^^^

@@ -18,6 +18,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env](#flag-env)
     * [aliases](#flag-aliases)
     * [env_aliases](#flag-env-aliases)
+    * [help](#flag-help)
     * [serde](#flag-serde)
       * [rename](#flag-serde-rename)
       * [alias](#flag-serde-alias)
@@ -31,6 +32,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env](#parameter-env)
     * [aliases](#parameter-aliases)
     * [env_aliases](#parameter-env-aliases)
+    * [help](#parameter-help)
     * [default_value](#parameter-default-value)
     * [default_value_help_str](#parameter-default-value-help-str)
     * [value_parser](#parameter-value-parser)
@@ -56,6 +58,7 @@ The `#[conf(...)]` attributes conform to [Rust’s structured attribute conventi
     * [env](#repeat-env)
     * [aliases](#repeat-aliases)
     * [env_aliases](#repeat-env-aliases)
+    * [help](#repeat-help)
     * [value_parser](#repeat-value-parser)
     * [value_parser_os](#repeat-value-parser-os)
     * [env_delimiter](#repeat-env-delimiter)
@@ -284,6 +287,12 @@ A flag corresponds to a switch that doesn't take any parameters. It's presence o
 
    example command-line: `OLD_FLAG_NAME=1 ./my_prog` sets the flag to true
 
+*  <a name="flag-help"></a> `help` (expr argument)
+
+   example: `#[arg(long, help = tr("verbose"))]`
+
+   Sets the help text for this option, instead of its doc comment. This works the same as [`help` on a parameter](#parameter-help).
+
 *  <a name="flag-serde"></a> `serde` (optional additional attributes)
 
    example: `#[conf(serde(rename = "foo"))]`
@@ -495,6 +504,38 @@ A parameter represents a single value that can be parsed from a string.
 
    Specifies alternate (fallback) environment variables which should be associated to this parameter. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
+*  <a name="parameter-help"></a> `help` (expr argument)
+
+   example: `#[arg(long, help = "Port to listen on")]`, `#[arg(long, help = tr("port"))]`
+
+   Sets the help text for this option, instead of its doc comment.
+
+   The value can be a string literal, or any expression that converts `Into<String>`, such as a call to a function
+   that returns a `String` or `&'static str`. The expression is evaluated at runtime, each time the program options
+   are listed (for example when `--help` is rendered), so it can be computed then, e.g. translated according to the
+   user's locale. It can't use `Self`, the struct's generic parameters, or any local variables.
+
+   If the field is flattened with a `help_prefix`, the prefix is added to the result of the expression.
+
+   **Example**:
+   ```rust
+   # use conf::Conf;
+   // Stand-in for a lookup in your i18n library
+   fn tr(key: &str) -> String {
+       match key {
+           "port" => "Port to listen on".into(),
+           _ => key.into(),
+       }
+   }
+
+   #[derive(Conf)]
+   pub struct Config {
+       /// This doc comment is for developers. Users see the translated help.
+       #[conf(long, env, help = tr("port"))]
+       pub port: u16,
+   }
+   ```
+
 *  <a name="parameter-default-value"></a> `default_value` (string argument)
 
    example: `#[arg(default_value = "some value")]`
@@ -508,7 +549,7 @@ A parameter represents a single value that can be parsed from a string.
    example: `#[arg(default_value = "actual_value", default_value_help_str = "displayed in help")]`
 
    Overrides how the default value is shown in the help text, i.e. the `[default: ...]` part. This allows displaying a different string in `--help` than the actual default value used for initialization.
-   It only changes how the default value is described. The rest of the help text still comes from the doc comment.
+   It only changes how the default value is described. The rest of the help text still comes from the doc comment, or from [`help`](#parameter-help).
 
    `default_help_str` is an older name for this attribute, and still works.
 
@@ -986,6 +1027,12 @@ is read and split on a delimiter character which defaults to `','`, to produce a
    Specifies alternate (fallback) environment variables which should be associated to this option. These are checked in the order listed, and if a value is found, the later ones are not checked.
 
    example: `#[arg(repeat, env_aliases=["OLD_PARAM_NAME", "OLDER_PARAM_NAME"])]`
+
+*  <a name="repeat-help"></a> `help` (expr argument)
+
+   example: `#[arg(repeat, long, help = tr("peers"))]`
+
+   Sets the help text for this option, instead of its doc comment. This works the same as [`help` on a parameter](#parameter-help).
 
 *  <a name="repeat-env-delimiter"></a> `env_delimiter` (char argument)
 

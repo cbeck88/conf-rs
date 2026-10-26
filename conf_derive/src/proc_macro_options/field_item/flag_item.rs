@@ -3,7 +3,7 @@ use crate::util::*;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Error, Field, Ident, LitChar, LitStr, Path, Type, meta::ParseNestedMeta, parse_quote,
+    Error, Expr, Field, Ident, LitChar, LitStr, Path, Type, meta::ParseNestedMeta, parse_quote,
     spanned::Spanned, token,
 };
 
@@ -92,6 +92,8 @@ pub struct FlagItem {
     env_name: Option<LitStr>,
     env_aliases: Option<LitStrArray>,
     serde: Option<FlagSerdeItem>,
+    /// Set by `help = <expr>`, replaces the doc string
+    help: Option<Expr>,
     doc_string: Option<String>,
 }
 
@@ -110,6 +112,7 @@ impl FlagItem {
             env_name: None,
             env_aliases: None,
             serde: None,
+            help: None,
             doc_string: None,
         };
 
@@ -120,6 +123,12 @@ impl FlagItem {
                     let path = meta.path.clone();
                     if path.is_ident("flag") {
                         Ok(())
+                    } else if path.is_ident("help") {
+                        set_once(
+                            &path,
+                            &mut result.help,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if path.is_ident("short") {
                         set_once(
                             &path,
@@ -242,7 +251,7 @@ impl FlagItem {
 
     pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
         let id = self.field_name.to_string();
-        let description = quote_opt_cow(&self.doc_string);
+        let (description, description_fn) = gen_description(&self.help, &self.doc_string);
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
@@ -264,6 +273,7 @@ impl FlagItem {
                 id: ::std::borrow::Cow::Borrowed(#id),
                 parse_type: ::conf::ParseType::Flag,
                 description: #description,
+                description_fn: #description_fn,
                 short_form: #short_form,
                 long_form: #long_form,
                 aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),

@@ -290,19 +290,22 @@ impl StructItem {
     }
 
     /// Generate the transform function for PROGRAM_OPTIONS.
-    /// Applies struct-level prefixes (currently only env_prefix).
+    /// Resolves any `help = <expr>` descriptions of this struct's own options, then applies
+    /// struct-level prefixes (currently only env_prefix).
     pub fn gen_program_options_transform(&self) -> Result<TokenStream, Error> {
         if let Some(env_prefix) = &self.env_prefix {
             // Apply env_prefix at struct level
             Ok(quote! {
                 |opt: &::conf::ProgramOption| {
-                    opt.clone().apply_flatten_prefixes("", "", #env_prefix, "")
+                    opt.clone()
+                        .resolve_description()
+                        .apply_flatten_prefixes("", "", #env_prefix, "")
                 }
             })
         } else {
-            // Identity function - no transformation at the struct level
+            // No prefixing at the struct level, only resolve the description
             Ok(quote! {
-                |opt: &::conf::ProgramOption| opt.clone()
+                |opt: &::conf::ProgramOption| opt.clone().resolve_description()
             })
         }
     }
