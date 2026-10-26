@@ -170,6 +170,10 @@ impl FlattenItem {
                             parse_optional_value::<LitStr>(meta)?
                                 .or(make_env_prefix(&result.field_name, path.span())),
                         )
+                    } else if path.is_ident("help") {
+                        Err(meta.error(
+                            "`help` isn't supported on a flatten field, since it isn't a single option. Use `help_prefix` to prefix the help of each flattened option",
+                        ))
                     } else if path.is_ident("help_prefix") {
                         set_once(
                             &path,

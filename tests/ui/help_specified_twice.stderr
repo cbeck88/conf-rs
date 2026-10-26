@@ -1,0 +1,11 @@
+error: help cannot be specified twice
+ --> tests/ui/help_specified_twice.rs:5:34
+  |
+5 |     #[conf(long, help = "first", help = "second")]
+  |                                  ^^^^
+
+error: Earlier specified here
+ --> tests/ui/help_specified_twice.rs:5:25
+  |
+5 |     #[conf(long, help = "first", help = "second")]
+  |                         ^^^^^^^

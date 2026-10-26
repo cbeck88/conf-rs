@@ -58,6 +58,11 @@ pub struct ProgramOption {
     pub parse_type: ParseType,
     /// Description (typically its doc string)
     pub description: Option<CowStr>,
+    /// Computes the description at runtime, if `#[conf(help = ...)]` was used. The proc-macro
+    /// can't call this while building `PROGRAM_OPTIONS`, which is a `const`, so the declaring
+    /// struct's transform calls `resolve_description` on the way out of `PROGRAM_OPTIONS.iter()`,
+    /// and everything downstream only sees `description`.
+    pub description_fn: Option<fn() -> String>,
     /// The short-form switch (-) associated to this option, if any
     pub short_form: Option<char>,
     /// The long-form switch (--) associated to this option, if any
@@ -131,6 +136,7 @@ impl ProgramOption {
             mut id,
             parse_type,
             mut description,
+            description_fn,
             short_form,
             mut long_form,
             mut aliases,
@@ -200,6 +206,7 @@ impl ProgramOption {
             id,
             parse_type,
             description,
+            description_fn,
             short_form,
             long_form,
             aliases,
@@ -214,6 +221,18 @@ impl ProgramOption {
             is_positional,
             has_serde_source,
         }
+    }
+
+    /// Evaluate `description_fn`, if any, and use its result as the description.
+    ///
+    /// This is idempotent, which matters because the transforms of every enclosing struct run on
+    /// a flattened option, after the flatten's `help_prefix` was already applied.
+    #[inline]
+    pub fn resolve_description(mut self) -> Self {
+        if let Some(description_fn) = self.description_fn.take() {
+            self.description = Some(Cow::Owned(description_fn()));
+        }
+        self
     }
 
     /// Drop our short form if it belongs to a list of forms to skip.

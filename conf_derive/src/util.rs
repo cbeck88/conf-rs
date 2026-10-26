@@ -276,22 +276,58 @@ pub fn quote_opt<T: ToTokens>(src: &Option<T>) -> TokenStream {
     }
 }
 
-/// Generate an expression that evaluates the user's `about = <expr>` to a `String`.
+/// Generate a nested `fn #fn_name() -> String` that evaluates a user's expression, as for
+/// `about = <expr>` or `help = <expr>`.
 ///
 /// The expression goes in its own nested fn, like a parameter's default(...), so that it can't
-/// see our local variables. It's evaluated each time the parser is built, at runtime, so it can
-/// e.g. be translated according to the user's locale.
-pub fn gen_about_value(expr: &Expr) -> TokenStream {
+/// see our local variables. It's evaluated at runtime, so it can e.g. be translated according to
+/// the user's locale.
+pub fn gen_string_fn(fn_name: &Ident, expr: &Expr) -> TokenStream {
     let into_string = quote_spanned! {expr.span()=>
         ::core::convert::Into::<::std::string::String>::into(#expr)
     };
     quote! {
-        {
-            fn __about__() -> ::std::string::String {
-                #into_string
-            }
-            __about__()
+        fn #fn_name() -> ::std::string::String {
+            #into_string
         }
+    }
+}
+
+/// Generate an expression that evaluates the user's `about = <expr>` to a `String`, each time
+/// the parser is built.
+pub fn gen_about_value(expr: &Expr) -> TokenStream {
+    let fn_name = Ident::new("__about__", Span::call_site());
+    let string_fn = gen_string_fn(&fn_name, expr);
+    quote! {
+        {
+            #string_fn
+            #fn_name()
+        }
+    }
+}
+
+/// Generate the `description` and `description_fn` values of a `ProgramOption`. An explicit
+/// `help = <expr>` replaces the doc string, and becomes a fn pointer, since `PROGRAM_OPTIONS` is a
+/// `const` and can't call it. See `ProgramOption::resolve_description`.
+pub fn gen_description(
+    help: &Option<Expr>,
+    doc_string: &Option<String>,
+) -> (TokenStream, TokenStream) {
+    match help {
+        Some(expr) => {
+            let fn_name = Ident::new("__help__", Span::call_site());
+            let string_fn = gen_string_fn(&fn_name, expr);
+            (
+                quote! { None },
+                quote! {
+                    Some({
+                        #string_fn
+                        #fn_name as fn() -> ::std::string::String
+                    })
+                },
+            )
+        }
+        None => (quote_opt_cow(doc_string), quote! { None }),
     }
 }
 

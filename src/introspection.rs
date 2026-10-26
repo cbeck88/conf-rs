@@ -10,7 +10,8 @@ use core::fmt::Display;
 pub trait ProgramOptionMeta: Sealed {
     /// The id of the program option. This is generally its "rust path" in the config object.
     fn id(&self) -> &dyn Display;
-    /// The description of the program option. This is generally its doc string, plus any prefixing.
+    /// The description of the program option. This is generally its doc string, or the result of
+    /// its `help` expression if it has one, plus any prefixing.
     /// This is also displayed in the help text for the program option.
     fn description(&self) -> Option<&dyn Display>;
     /// The short-form switch (-f, -h) of the option, if any.

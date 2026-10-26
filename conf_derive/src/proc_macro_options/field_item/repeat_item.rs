@@ -126,6 +126,8 @@ pub struct RepeatItem {
     env_delimiter: Option<LitChar>,
     no_env_delimiter: Option<Span>,
     serde: Option<RepeatSerdeItem>,
+    /// Set by `help = <expr>`, replaces the doc string
+    help: Option<Expr>,
     description: Option<String>,
     is_positional: Option<Span>,
 }
@@ -164,6 +166,7 @@ impl RepeatItem {
             env_delimiter: None,
             no_env_delimiter: None,
             serde: None,
+            help: None,
             description: None,
             is_positional: None,
         };
@@ -175,6 +178,12 @@ impl RepeatItem {
                     let path = meta.path.clone();
                     if path.is_ident("repeat") {
                         Ok(())
+                    } else if path.is_ident("help") {
+                        set_once(
+                            &path,
+                            &mut result.help,
+                            Some(parse_required_value::<Expr>(meta)?),
+                        )
                     } else if path.is_ident("short") {
                         set_once(
                             &path,
@@ -429,7 +438,7 @@ impl RepeatItem {
     ///
     pub fn gen_program_option_node(&self) -> Result<Option<TokenStream>, Error> {
         let id = self.field_name.to_string();
-        let description = quote_opt_cow(&self.description);
+        let (description, description_fn) = gen_description(&self.help, &self.description);
         let short_form = quote_opt(&self.short_switch);
         let long_form = quote_opt_cow(&self.long_switch);
         let env_form = quote_opt_cow(&self.env_name);
@@ -455,6 +464,7 @@ impl RepeatItem {
               id: ::std::borrow::Cow::Borrowed(#id),
               parse_type: ::conf::ParseType::Repeat,
               description: #description,
+              description_fn: #description_fn,
               short_form: #short_form,
               long_form: #long_form,
               aliases: ::std::borrow::Cow::Borrowed(&[#aliases]),
